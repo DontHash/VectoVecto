@@ -104,11 +104,19 @@ def save_image(tensor, path):
     tensor = tensor.squeeze(0).permute(1, 2, 0).detach().cpu().numpy()
     tensor = np.clip(tensor * 255.0, 0, 255).astype(np.uint8)
     
+    # --- Artifact Smoothing ---
+    # The ConvTranspose2d upsampling layers can sometimes cause "checkerboard" block artifacts.
+    # We apply a Bilateral Filter, which acts as a "smart blur" that smooths out blocky pixels 
+    # and flat areas while keeping the sharp edges perfectly intact.
+    import cv2
+    tensor = cv2.bilateralFilter(tensor, d=5, sigmaColor=50, sigmaSpace=50)
+
     img = Image.fromarray(tensor)
     
     # --- Quality Enhancement (Math & Lightweight filtering) ---
     # 1. Sharpening (Unsharp Mask: math-based edge enhancement)
-    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+    # Reduced percent from 150 to 100 so it doesn't over-sharpen and bring back blocks.
+    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=100, threshold=3))
     
     # 2. Vibrance (Color Saturation)
     color_enhancer = ImageEnhance.Color(img)
@@ -126,8 +134,8 @@ def save_image(tensor, path):
 # ==========================================
 # You can paste the absolute path to your image here.
 # If you leave this as is, a file dialog will pop up asking you to select an image visually!
-IMAGE_PATH = "./PrakashJI.jpg"
-OUTPUT_PATH = "./upscaled_result.png"
+IMAGE_PATH = "./idbhuntu.jpg"
+OUTPUT_PATH = "./upscaled_result23.png"
 
 
 def main():
@@ -179,13 +187,46 @@ def main():
     img_tensor = img_tensor.to(device)
     print(f"Original dimensions: {orig_size[0]}x{orig_size[1]}")
     
+    # --- BUG FIX: Dimension Padding ---
+    # The UNet downsamples the image twice (2x2 = 4x factor).
+    # Since we scale by 2x, the input image must be divisible by 2 to avoid dimension mismatch.
+    B, C, H, W = img_tensor.shape
+    pad_h = (2 - H % 2) % 2
+    pad_w = (2 - W % 2) % 2
+    if pad_h > 0 or pad_w > 0:
+        import torch.nn.functional as F
+        # Use reflection padding to avoid edge artifacts
+        img_tensor = F.pad(img_tensor, (0, pad_w, 0, pad_h), mode='reflect')
+        print(f"Padded image internally to {W+pad_w}x{H+pad_h} to satisfy UNet architecture.")
+    
     # Mathematical kernel for degradation constraint
     kernel = create_gaussian_kernel(sigma=1.2, channels=3).to(device)
     
     # 5. Run Inference
-    print("\nUpscaling image by 2x... (This might take a moment depending on the image size)")
+    print("\nUpscaling image by 2x using 8-way Test-Time Augmentation (TTA)...")
+    print("Running the lightweight model 8 times to drastically improve quality and destroy artifacts.")
     with torch.no_grad():
-        out_tensor = model(img_tensor, kernel)
+        # Initialize an empty tensor to accumulate the 8 predictions
+        B, C, H, W = img_tensor.shape
+        out_tensor = torch.zeros((B, C, H*2, W*2), device=device, dtype=img_tensor.dtype)
+        
+        for k in range(4):
+            # 1. Standard Rotations
+            rot_img = torch.rot90(img_tensor, k, [2, 3])
+            out_rot = model(rot_img, kernel)
+            out_tensor += torch.rot90(out_rot, -k, [2, 3])
+            
+            # 2. Flipped + Rotations
+            flip_img = torch.flip(rot_img, [3]) # horizontal flip
+            out_flip = model(flip_img, kernel)
+            out_tensor += torch.rot90(torch.flip(out_flip, [3]), -k, [2, 3])
+            
+        # Average the 8 passes
+        out_tensor = out_tensor / 8.0
+        
+    # --- BUG FIX: Remove Padding ---
+    if pad_h > 0 or pad_w > 0:
+        out_tensor = out_tensor[:, :, :H*2, :W*2]
         
     # 6. Save and Finish
     save_image(out_tensor, OUTPUT_PATH)
