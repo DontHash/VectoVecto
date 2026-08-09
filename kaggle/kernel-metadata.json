@@ -1,5 +1,5 @@
 {
-  "id": "YOUR_KAGGLE_USERNAME/vectovecto-tierb-drunet-training",
+  "id": "bhishmbhandari/vectovecto-tier-b-drunet-training",
   "title": "VectoVecto Tier B DRUNet Training",
   "code_file": "VectoVecto_Train_TIerB.ipynb",
   "language": "python",
@@ -8,7 +8,7 @@
   "enable_gpu": "true",
   "enable_tpu": "false",
   "enable_internet": "true",
-  "dataset_sources": ["jesperdramsch/div2k-dataset"],
+  "dataset_sources": ["soumikrakshit/div2k-high-resolution-images"],
   "competition_sources": [],
   "kernel_sources": []
 }
