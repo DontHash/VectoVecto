@@ -4,9 +4,24 @@ import torch.nn.functional as F
 import numpy as np
 import cv2
 import os
+import sys
 from PIL import Image, ImageEnhance, ImageFilter
 import tkinter as tk
 from tkinter import filedialog
+
+# Tier B: support DRUNet-based DeepUnfolding checkpoints
+try:
+    from drunet import DRUNet
+    from deep_unfolding import DeepUnfoldingSR as DeepUnfoldingSRBase
+    _TIER_B_AVAILABLE = True
+except Exception:
+    _TIER_B_AVAILABLE = False
+
+# Default Tier-B checkpoint location (produced by train_deep_sr.py)
+_TIER_B_CHECKPOINT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "artifacts", "deep_sr", "best_checkpoint.pth")
+_TIER_B_SCALE = 4   # Tier B DRUNet model trains at 4x
+_TIER_B_ITERS = 5    # unfolding K — match train_deep_sr default
 
 # ==========================================
 # 1. ARCHITECTURE (From Kaggle Notebook)
@@ -164,73 +179,91 @@ def main():
     # 2. Setup Device and Model
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"\nUsing device: {device}")
-    
+
     print("Initializing Deep Unfolding Math+AI Model...")
-    denoiser = LightweightUNet(in_channels=3).to(device)
-    model = DeepUnfoldingSR(denoiser, iterations=5, scale=2).to(device)
-    
-    # 3. Load Weights
-    checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'artifacts', 'best_checkpoint.pth')
-    if os.path.exists(checkpoint_path):
-        print(f"Loading trained DIV2K weights from: {checkpoint_path}")
-        ckpt = torch.load(checkpoint_path, map_location=device)
-        model.load_state_dict(ckpt['model_state_dict'])
+    # Tier B: prefer DRUNet checkpoint if it exists, else fall back to LightweightUNet
+    use_tier_b = _TIER_B_AVAILABLE and os.path.exists(_TIER_B_CHECKPOINT)
+    if use_tier_b:
+        print(f"Using Tier-B DRUNet checkpoint: {_TIER_B_CHECKPOINT}")
+        denoiser = DRUNet(in_channels=3, num_feat=64, num_blocks=20).to(device)
+        model = DeepUnfoldingSRBase(denoiser, iterations=_TIER_B_ITERS, scale=_TIER_B_SCALE).to(device)
+        ckpt = torch.load(_TIER_B_CHECKPOINT, map_location=device, weights_only=True)
+        if "model_state_dict" in ckpt:
+            model.load_state_dict(ckpt["model_state_dict"], strict=True)
+        else:
+            model.load_state_dict(ckpt, strict=True)
+        model.eval()
+        # scale used by TTA + downstream math
+        sr_scale = _TIER_B_SCALE
     else:
-        print(f"ERROR: Checkpoint not found at {checkpoint_path}")
-        return
-        
-    model.eval()
+        denoiser = LightweightUNet(in_channels=3).to(device)
+        model = DeepUnfoldingSR(denoiser, iterations=5, scale=2).to(device)
+        # 3. Load Weights (Tier A/legacy path)
+        checkpoint_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'artifacts', 'best_checkpoint.pth')
+        if os.path.exists(checkpoint_path):
+            print(f"Loading trained DIV2K weights from: {checkpoint_path}")
+            ckpt = torch.load(checkpoint_path, map_location=device)
+            model.load_state_dict(ckpt['model_state_dict'])
+        else:
+            print(f"ERROR: Checkpoint not found at {checkpoint_path}")
+            print("Run Tier B training: python train_deep_sr.py   (or download checkpoints into artifacts/deep_sr/)")
+            return
+        model.eval()
+        sr_scale = 2
     
     # 4. Load Image
     print(f"\nReading image: {IMAGE_PATH}")
     img_tensor, orig_size = load_image(IMAGE_PATH)
     img_tensor = img_tensor.to(device)
     print(f"Original dimensions: {orig_size[0]}x{orig_size[1]}")
-    
-    # --- BUG FIX: Dimension Padding ---
-    # The UNet downsamples the image twice (2x2 = 4x factor).
-    # Since we scale by 2x, the input image must be divisible by 2 to avoid dimension mismatch.
+
+    # --- Dimension Padding ---
+    # LightweightUNet needs H,W divisible by 4 (two maxpools). DRUNet is fully
+    # convolutional with stride=1, so any size works; but for both paths we
+    # pad to a multiple of `sr_scale` so successive F.interpolate(scale=sr_scale)
+    # gives a clean output and de-pad restores the original aspect ratio.
     B, C, H, W = img_tensor.shape
-    pad_h = (2 - H % 2) % 2
-    pad_w = (2 - W % 2) % 2
+    divisor = max(4, sr_scale)
+    pad_h = (divisor - H % divisor) % divisor
+    pad_w = (divisor - W % divisor) % divisor
     if pad_h > 0 or pad_w > 0:
         import torch.nn.functional as F
         # Use reflection padding to avoid edge artifacts
         img_tensor = F.pad(img_tensor, (0, pad_w, 0, pad_h), mode='reflect')
-        print(f"Padded image internally to {W+pad_w}x{H+pad_h} to satisfy UNet architecture.")
-    
+        print(f"Padded image internally to {W+pad_w}x{H+pad_h} to satisfy architecture (divisor={divisor}).")
+
     # Mathematical kernel for degradation constraint
     kernel = create_gaussian_kernel(sigma=1.2, channels=3).to(device)
-    
+
     # 5. Run Inference
-    print("\nUpscaling image by 2x using 8-way Test-Time Augmentation (TTA)...")
-    print("Running the lightweight model 8 times to drastically improve quality and destroy artifacts.")
+    print(f"\nUpscaling image by {sr_scale}x using 8-way Test-Time Augmentation (TTA)...")
+    print("Running the model 8 times to drastically improve quality and destroy artifacts.")
     with torch.no_grad():
         # Initialize an empty tensor to accumulate the 8 predictions
         B, C, H, W = img_tensor.shape
-        out_tensor = torch.zeros((B, C, H*2, W*2), device=device, dtype=img_tensor.dtype)
-        
+        out_tensor = torch.zeros((B, C, H*sr_scale, W*sr_scale), device=device, dtype=img_tensor.dtype)
+
         for k in range(4):
             # 1. Standard Rotations
             rot_img = torch.rot90(img_tensor, k, [2, 3])
             out_rot = model(rot_img, kernel)
             out_tensor += torch.rot90(out_rot, -k, [2, 3])
-            
+
             # 2. Flipped + Rotations
             flip_img = torch.flip(rot_img, [3]) # horizontal flip
             out_flip = model(flip_img, kernel)
             out_tensor += torch.rot90(torch.flip(out_flip, [3]), -k, [2, 3])
-            
+
         # Average the 8 passes
         out_tensor = out_tensor / 8.0
-        
+
     # --- BUG FIX: Remove Padding ---
     if pad_h > 0 or pad_w > 0:
-        out_tensor = out_tensor[:, :, :H*2, :W*2]
-        
+        out_tensor = out_tensor[:, :, :H*sr_scale, :W*sr_scale]
+
     # 6. Save and Finish
     save_image(out_tensor, OUTPUT_PATH)
-    new_size = (orig_size[0] * 2, orig_size[1] * 2)
+    new_size = (orig_size[0] * sr_scale, orig_size[1] * sr_scale)
     print(f"\nSUCCESS! Upscaled image saved to: {os.path.abspath(OUTPUT_PATH)}")
     print(f"New dimensions: {new_size[0]}x{new_size[1]}")
     print("Compare the results to see the texture preservation!")

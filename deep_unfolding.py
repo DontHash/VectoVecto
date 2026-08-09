@@ -81,6 +81,17 @@ def D_H_transpose(e, kernel, scale=2, out_size=None):
 # 3. Deep Unfolding (Proximal Gradient Descent)
 # ==========================================
 class DeepUnfoldingSR(nn.Module):
+    """
+    Proximal Gradient Unrolling of the SR inverse problem
+        x* = arg min_x  0.5 * || D H x - y ||_2^2  +  R(x)
+    via    x_{k+1} = Denoiser( x_k - alpha_k * grad_data(x_k) )
+    where the Denoiser is the learned proximal operator of the prior R.
+
+    Tier B: now supports DRUNet (with noise-level map input) and TinyDenoiser
+    (back-compat). When the denoiser accepts a noise-level map, it is tiled to
+    the HR grid and passed each iteration (DPIR-style).
+    """
+
     def __init__(self, denoiser, iterations=5, scale=2, step_size=1.0):
         super(DeepUnfoldingSR, self).__init__()
         self.denoiser = denoiser
@@ -88,46 +99,63 @@ class DeepUnfoldingSR(nn.Module):
         self.scale = scale
         # Trainable step sizes for gradient descent per iteration
         self.alphas = nn.Parameter(torch.ones(iterations) * step_size)
-        
-    def forward(self, y, blur_kernel, init_x=None):
+
+    def _denoise(self, x, sigma_map):
+        """Denoise dispatch: DRUNet takes (x, sigma_map); TinyDenoiser takes x."""
+        try:
+            return self.denoiser(x, sigma_map)
+        except TypeError:
+            # TinyDenoiser-style single-arg forward
+            return self.denoiser(x)
+
+    def forward(self, y, blur_kernel, init_x=None, sigma_noise=None):
         """
-        y: Low-res input image
-        blur_kernel: Known or estimated blur kernel
-        init_x: Initial guess for HR image (e.g. bicubic upsampled y)
+        y: Low-res input image (B, C, h, w) in [0,1].
+        blur_kernel: degradation blur kernel (1,1,K,K) for D*H.
+        init_x: Initial guess for HR image (default: bicubic upsample of y).
+        sigma_noise: noise sigma scalar OR (B,) tensor. Tiled to a (B,1,H,W)
+            noise-level map and fed to DRUNet each iteration. If None,
+            defaults to a moderate sigma (0.05) which DPIR uses for blind SR.
         """
         B, C, h, w = y.shape
         out_size = (h * self.scale, w * self.scale)
-        
-        # Initialize x (HR estimate)
+
         if init_x is None:
             x = F.interpolate(y, scale_factor=self.scale, mode='bicubic', align_corners=False)
         else:
             x = init_x
 
-        # Unrolled optimization loop
+        # Build the noise-level map for DRUNet (default 0.05, DPIR blind SR)
+        if sigma_noise is None:
+            sigma_t = torch.tensor(0.05, device=y.device)
+        else:
+            sigma_t = sigma_noise if torch.is_tensor(sigma_noise) else torch.tensor(float(sigma_noise))
+        # Tile to (B, 1, H, W) and clamp to [0,1] -- the SR noise level is
+        # conventionally in [0,1] when pixels are in [0,1] (per DRUNet convention).
+        if sigma_t.dim() == 0:
+            sigma_t = sigma_t.view(1, 1, 1, 1).expand(B, 1, *out_size).contiguous()
+        else:
+            sigma_t = sigma_t.view(-1, 1, 1, 1).expand(-1, -1, *out_size).contiguous()
+        sigma_t = sigma_t.clamp(0.0, 1.0)
+
         for i in range(self.iterations):
-            # 1. Data Projection (Math): gradient of 0.5 * ||DHx - y||^2
             residual = D_H_forward(x, blur_kernel, self.scale) - y
             grad = D_H_transpose(residual, blur_kernel, self.scale, out_size)
             x_half = x - self.alphas[i] * grad
-            
-            # 2. Proximal Step (Lightweight AI): Denoise the mathematically updated image
-            x = self.denoiser(x_half)
-            
+            x_half = x_half.clamp(0.0, 1.0)
+            x = self._denoise(x_half, sigma_t)
+
         return x
 
 if __name__ == "__main__":
     print("Deep Unfolding (Algorithm Unrolling) Model Initialized.")
-    
-    # Quick shape test
-    dummy_lr = torch.randn(1, 1, 128, 128)
+
+    from drunet import DRUNet
+
+    dummy_lr = torch.randn(1, 3, 64, 64)
     kernel = create_gaussian_kernel(sigma=1.2)
-    denoiser = TinyDenoiser(in_channels=1)
-    
-    model = DeepUnfoldingSR(denoiser, iterations=5, scale=2)
-    
-    # Forward pass
-    out_hr = model(dummy_lr, kernel)
-    print(f"LR Input Shape: {dummy_lr.shape}")
-    print(f"HR Output Shape: {out_hr.shape}")
-    print("Architecture validates perfectly! Pure math and lightweight AI successfully bridged.")
+    denoiser = DRUNet(in_channels=3, num_feat=64, num_blocks=20)
+
+    model = DeepUnfoldingSR(denoiser, iterations=3, scale=2)
+    out_hr = model(dummy_lr, kernel, sigma_noise=0.05)
+    print(f"DRUNet path | LR Input: {dummy_lr.shape} -> HR Output: {out_hr.shape}")
