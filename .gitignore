@@ -1,0 +1,79 @@
+# ===== Heavy / generated model weights =====
+weights/*.pth
+weights/*.bin
+weights/*.pt
+weights/*.ckpt
+weights/*.safetensors
+*.pth
+*.bin
+*.pt
+*.ckpt
+*.safetensors
+
+# ===== Training artifacts (checkpoints, logs, curves) =====
+artifacts/
+data/
+
+# ===== Graphify output (knowledge graph builds) =====
+graphify-out/
+
+# ===== Vendored / external repos =====
+upscayl-repo/
+node_modules/
+
+# ===== Upscaled test outputs (regeneratable) =====
+testImg/*_ultrasharp.png
+testImg/*_realesrgan*.png
+testImg/*_compare.png
+testImg/ALL_compare.png
+testImg/foo3_gpu_test.png
+*_upscaled.png
+*_upscaled_pytorch.png
+upscaled_result*.png
+De1_upscaled.png
+PrakashJI_upscaled.png
+idbhuntu_upscaled.png
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs/
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ===== Node (from upscayl-repo if ever pulled in) =====
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ===== OS junk =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ===== IDE / editor =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ===== Jupyter =====
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===== Misc logs =====
+*.log
+training_*.png
