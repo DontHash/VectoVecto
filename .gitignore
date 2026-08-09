@@ -54,6 +54,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ===== Kaggle credentials (NEVER commit these) =====
+kaggle.json
+**/kaggle.json
+.kaggle/
+*.kaggle.json
+KGAT_*
+key_*.txt
+
 # ===== OS junk =====
 .DS_Store
 Thumbs.db
