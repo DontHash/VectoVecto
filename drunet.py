@@ -67,6 +67,14 @@ class DRUNet(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
+        # CRITICAL: zero-init the tail conv so the untrained denoiser is an
+        # IDENTITY function (residual = 0 -> output = input). Without this,
+        # a fresh DRUNet outputs large random residuals and the unfolding
+        # loop explodes (observed: output range [-15000, +1400] after 250 iters).
+        # The denoiser then learns to deviate from identity as training proceeds.
+        nn.init.zeros_(self.tail.weight)
+        nn.init.zeros_(self.tail.bias)
+
     def forward(self, x, noise_level_map):
         """
         x: (B, C, H, W) image in [0,1]

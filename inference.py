@@ -233,7 +233,10 @@ def main():
         print(f"Padded image internally to {W+pad_w}x{H+pad_h} to satisfy architecture (divisor={divisor}).")
 
     # Mathematical kernel for degradation constraint
-    kernel = create_gaussian_kernel(sigma=1.2, channels=3).to(device)
+    # Tier B (deep_unfolding.py) loops per-channel and expects [1,1,K,K];
+    # the legacy path's D_H_forward uses groups=C and expects [C,1,K,K].
+    kernel_ch = 1 if use_tier_b else 3
+    kernel = create_gaussian_kernel(sigma=1.2, channels=kernel_ch).to(device)
 
     # 5. Run Inference
     print(f"\nUpscaling image by {sr_scale}x using 8-way Test-Time Augmentation (TTA)...")

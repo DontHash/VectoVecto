@@ -271,7 +271,7 @@ def train(args):
     # Build networks
     generator = DeepUnfoldingSR(DRUNet(in_channels=3, num_feat=64, num_blocks=20),
                                 iterations=args.unfolding_iters, scale=args.scale,
-                                step_size=0.5).to(device)
+                                step_size=0.2).to(device)
     discriminator = PatchDiscriminator(in_channels=3, num_feat=64).to(device)
     vgg = VGGPerceptualLoss().to(device)
     vgg.eval()

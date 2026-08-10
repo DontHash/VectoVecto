@@ -92,12 +92,14 @@ class DeepUnfoldingSR(nn.Module):
     the HR grid and passed each iteration (DPIR-style).
     """
 
-    def __init__(self, denoiser, iterations=5, scale=2, step_size=1.0):
+    def __init__(self, denoiser, iterations=5, scale=2, step_size=0.2):
         super(DeepUnfoldingSR, self).__init__()
         self.denoiser = denoiser
         self.iterations = iterations
         self.scale = scale
-        # Trainable step sizes for gradient descent per iteration
+        # Trainable step sizes for gradient descent per iteration.
+        # Init LOW (0.2): with an identity-initialized denoiser the data
+        # fidelity step must not overshoot; alphas learn upward as training.
         self.alphas = nn.Parameter(torch.ones(iterations) * step_size)
 
     def _denoise(self, x, sigma_map):
