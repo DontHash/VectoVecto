@@ -45,37 +45,52 @@ def create_gaussian_kernel(sigma=1.2):
     k2d = np.outer(k1d, k1d)
     return torch.from_numpy(k2d).float().unsqueeze(0).unsqueeze(0) # [1, 1, K, K]
 
+def _kernel_to_batch(kernel, B, C):
+    """
+    Normalize kernel to (B*C, 1, K, K) for grouped conv (groups = B*C).
+    Accepts: (K,K), (1,1,K,K) [shared], or (B,1,1,K,K) [per-sample].
+    """
+    if kernel.dim() == 2:
+        kernel = kernel.unsqueeze(0).unsqueeze(0)          # (1,1,K,K)
+    if kernel.dim() == 4:
+        # shared kernel (1,1,K,K) -> tile to (B,1,1,K,K)
+        kernel = kernel.expand(B, 1, kernel.shape[-2], kernel.shape[-1]).unsqueeze(1)
+    # kernel is now (B,1,1,K,K); tile across channels
+    K = kernel.shape[-1]
+    return kernel.expand(B, C, 1, K, K).reshape(B * C, 1, K, K)
+
 def D_H_forward(x, kernel, scale=2):
-    """ Forward degradation: blur (H) then decimate (D). x is [B, C, H, W] """
+    """
+    Forward degradation: blur (H) then decimate (D). x is [B, C, H, W].
+    kernel: (K,K), (1,1,K,K) [shared] or (B,1,1,K,K) [per-sample].
+    """
     B, C, H, W = x.shape
-    out = []
-    for c in range(C):
-        channel = x[:, c:c+1, :, :]
-        # H: Blur
-        blurred = F.conv2d(channel, kernel, padding=kernel.shape[-1]//2)
-        # D: Decimate
-        decimated = blurred[:, :, ::scale, ::scale]
-        out.append(decimated)
-    return torch.cat(out, dim=1)
+    kper = _kernel_to_batch(kernel, B, C)          # (B*C, 1, K, K)
+    xf = x.reshape(1, B * C, H, W)                 # groups=B*C: in=out=B*C
+    blurred = F.conv2d(xf, kper, padding=kernel.shape[-1] // 2, groups=B * C)
+    blurred = blurred.reshape(B, C, H, W)
+    # D: Decimate
+    return blurred[:, :, ::scale, ::scale]
 
 def D_H_transpose(e, kernel, scale=2, out_size=None):
-    """ Transpose degradation (adjoint): zero-insert (D^T) then blur (H^T). e is [B, C, H/s, W/s] """
+    """
+    Transpose degradation (adjoint): zero-insert (D^T) then blur (H^T).
+    e is [B, C, H/s, W/s]; kernel like D_H_forward.
+    """
     B, C, H_e, W_e = e.shape
     if out_size is None:
         out_size = (H_e * scale, W_e * scale)
-        
-    out = []
-    for c in range(C):
-        channel = e[:, c:c+1, :, :]
-        # D^T: Zero insertion
-        upsampled = torch.zeros((B, 1, out_size[0], out_size[1]), device=e.device, dtype=e.dtype)
-        upsampled[:, :, ::scale, ::scale] = channel
-        
-        # H^T: Convolution with flipped kernel
-        flipped_kernel = torch.flip(kernel, dims=[2, 3])
-        gradient = F.conv2d(upsampled, flipped_kernel, padding=kernel.shape[-1]//2)
-        out.append(gradient)
-    return torch.cat(out, dim=1)
+
+    # D^T: zero-insertion
+    upsampled = torch.zeros((B, C, out_size[0], out_size[1]), device=e.device, dtype=e.dtype)
+    upsampled[:, :, ::scale, ::scale] = e
+
+    # H^T: convolution with flipped kernel, per sample/channel
+    flipped = torch.flip(kernel, dims=[-2, -1])
+    kper = _kernel_to_batch(flipped, B, C)         # (B*C, 1, K, K)
+    up_f = upsampled.reshape(1, B * C, out_size[0], out_size[1])
+    grad = F.conv2d(up_f, kper, padding=flipped.shape[-1] // 2, groups=B * C)
+    return grad.reshape(B, C, out_size[0], out_size[1])
 
 # ==========================================
 # 3. Deep Unfolding (Proximal Gradient Descent)
@@ -143,7 +158,11 @@ class DeepUnfoldingSR(nn.Module):
         for i in range(self.iterations):
             residual = D_H_forward(x, blur_kernel, self.scale) - y
             grad = D_H_transpose(residual, blur_kernel, self.scale, out_size)
-            x_half = x - self.alphas[i] * grad
+            # Clamp the learned step size: unbounded alphas let the data-fidelity
+            # step overshoot and the unfolding diverges (observed L1 spikes to
+            # 1000+ at epoch boundaries). Deep-unfolding literature caps these.
+            alpha_i = self.alphas[i].clamp(0.0, 0.5)
+            x_half = x - alpha_i * grad
             x_half = x_half.clamp(0.0, 1.0)
             x = self._denoise(x_half, sigma_t)
 

@@ -30,8 +30,17 @@ def _conv_block(in_ch, out_ch, bias=True):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, num_feat=64):
+    """
+    Residual block with a small learnable/output scaling factor, exactly like
+    RRDB (x5 * scale + x). CRITICAL: without scaling, the 20-block chain
+    multiplies feature norms ~2-3x per block -> norm explodes 121 -> 4.5M,
+    and any non-zero tail weight then amplifies into a huge output residual
+    (observed: denoiser output range up to 178 after ONE training step).
+    """
+
+    def __init__(self, num_feat=64, scale=0.1):
         super().__init__()
+        self.scale = scale
         self.conv1 = nn.Conv2d(num_feat, num_feat, 3, padding=1, bias=True)
         self.conv2 = nn.Conv2d(num_feat, num_feat, 3, padding=1, bias=True)
         self.relu = nn.ReLU(inplace=True)
@@ -39,7 +48,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         out = self.relu(self.conv1(x))
         out = self.conv2(out)
-        return out + x
+        return out * self.scale + x
 
 
 class DRUNet(nn.Module):

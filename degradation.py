@@ -120,6 +120,34 @@ def _sinc_filter(img_tensor, kernel_size=21):
     return _apply_blur(img_tensor, k_t)
 
 
+def degrade_known_kernel(img, scale=4, blur_sigma_range=(0.7, 2.0),
+                         noise_sigma_range=DEFAULT_NOISE_SIGMA_RANGE):
+    """
+    Self-consistent degradation for DEEP UNFOLDING training (USRNet/DPIR style).
+
+    Generates LR with a SINGLE known Gaussian blur + decimation — exactly the
+    degradation D_H_forward() assumes — plus additive noise and JPEG. The caller
+    gets the ACTUAL kernel used, so the data-fidelity term in the unrolled
+    optimizer is consistent with how y was made. Without this, the fixed
+    sigma=1.2 kernel fights a random-blur LR and the unfolding diverges.
+
+    Returns (lr, sigma_noise, kernel): lr (1,C,H/scale,W/scale), sigma (float),
+    kernel (K,K) tensor that was used.
+    """
+    img = img.clone()
+    sigma_blur = random.uniform(*blur_sigma_range)
+    kernel = _random_isotropic_gaussian_kernel(sigma_blur, DEFAULT_BLUR_KERNEL_SIZE)
+    img = _apply_blur(img, kernel.to(img))
+    # decimate exactly like D_H_forward: sample [::scale, ::scale]
+    img = img[:, :, ::scale, ::scale]
+
+    sigma_noise = random.uniform(*noise_sigma_range)
+    img = _add_noise(img, sigma_noise)
+    img = _jpeg_compress(img, DEFAULT_JPEG_RANGE_ORDER2) if random.random() < 0.5 else img
+    img = img.clamp(0.0, 1.0)
+    return img, sigma_noise, kernel
+
+
 def degrade_real_esrgan(img, scale=4):
     """
     Real-ESRGAN second-order degradation on a single float image tensor.

@@ -44,7 +44,7 @@ import cv2
 
 from drunet import DRUNet
 from deep_unfolding import DeepUnfoldingSR, create_gaussian_kernel
-from degradation import degrade_real_esrgan
+from degradation import degrade_known_kernel
 from perceptual_loss import VGGPerceptualLoss
 from discriminator import PatchDiscriminator, gan_loss_generator, gan_loss_discriminator
 
@@ -149,11 +149,14 @@ class DIV2KSRDataset(Dataset):
         hr = img.astype(np.float32) / 255.0
         hr_t = torch.from_numpy(hr).permute(2, 0, 1).unsqueeze(0)  # (1,3,H,W)
 
-        lr_t, sigma_noise, _ = degrade_real_esrgan(hr_t, scale=self.scale)
+        # Self-consistent degradation: returns the ACTUAL blur kernel used so
+        # the unfolding's data-fidelity term matches how y was made.
+        lr_t, sigma_noise, kernel = degrade_known_kernel(hr_t, scale=self.scale)
         return {
             "hr": hr_t.squeeze(0),
             "lr": lr_t.squeeze(0),
             "sigma": torch.tensor(float(sigma_noise)),  # scalar
+            "kernel": kernel,                            # (K,K) tensor
         }
 
 
@@ -196,9 +199,9 @@ def smoke_test(device):
     opt_d = torch.optim.Adam(discriminator.parameters(), lr=1e-4)
 
     hr = torch.rand(1, 3, 256, 256, device=device)
-    lr, sigma, _ = degrade_real_esrgan(hr.cpu(), scale=4)
+    lr, sigma, kernel = degrade_known_kernel(hr.cpu(), scale=4)
     lr = lr.to(device); sigma = torch.tensor(float(sigma), device=device)
-    kernel = _make_kernel(1.2, device, channels=3)
+    kernel = kernel.to(device)
 
     # Generator step
     generator.train()
@@ -297,9 +300,11 @@ def train(args):
             hr = batch["hr"].to(device, non_blocking=True)
             lr = batch["lr"].to(device, non_blocking=True)
             sigma = batch["sigma"].to(device, non_blocking=True)
+            # Per-sample degradation kernels: (B,K,K) -> (B,1,1,K,K)
+            kernel_b = batch["kernel"].to(device).unsqueeze(1).unsqueeze(1)
 
             # ---- Generator step ----
-            sr = generator(lr, kernel, sigma_noise=sigma)
+            sr = generator(lr, kernel_b, sigma_noise=sigma)
             # Align SR to HR (degradation may not yield exactly HR/scale);
             # we crop the larger side down to the smaller, on all spatial dims.
             min_h = min(sr.shape[-2], hr.shape[-2])
@@ -313,7 +318,12 @@ def train(args):
             adv_loss = gan_loss_generator(fake_logits)
             tv_loss = _total_variation(sr)
             g_loss = w_l1 * l1_loss + w_perc * perc_loss + w_adv * adv_loss + w_tv * tv_loss
-            opt_g.zero_grad(); g_loss.backward(); opt_g.step()
+            opt_g.zero_grad(); g_loss.backward()
+            # CRITICAL: unrolled optimization (5 data steps x 5 denoise steps)
+            # compounds gradients -> norms explode 10-100x per iteration without
+            # clipping (observed tail_grad_norm 2.8k -> 246k over 5 iters).
+            torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
+            opt_g.step()
 
             # ---- Discriminator step (every K G steps for stability) ----
             if iter_count % args.d_every == 0:
@@ -322,7 +332,9 @@ def train(args):
                 real_logits = discriminator(hr_a)
                 fake_logits = discriminator(sr_fake)
                 d_loss = gan_loss_discriminator(real_logits, fake_logits)
-                opt_d.zero_grad(); d_loss.backward(); opt_d.step()
+                opt_d.zero_grad(); d_loss.backward()
+                torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
+                opt_d.step()
 
             iter_count += 1
             if iter_count % args.log_every == 0:
