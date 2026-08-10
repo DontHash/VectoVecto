@@ -386,9 +386,15 @@ def parse_args():
     p.add_argument("--lr-g", type=float, default=1e-4)
     p.add_argument("--lr-d", type=float, default=1e-4)
     p.add_argument("--decay-step", type=int, default=50000)
-    p.add_argument("--w-perceptual", type=float, default=0.1)
-    p.add_argument("--w-adv", type=float, default=0.005)
-    p.add_argument("--w-tv", type=float, default=0.001)
+    p.add_argument("--w-perceptual", type=float, default=0.5,
+                   help="VGG perceptual weight. ESRGAN-family uses ~1.0; 0.1 was too weak "
+                        "-> output stayed soft. Sharpness comes mostly from this + GAN.")
+    p.add_argument("--w-adv", type=float, default=0.02,
+                   help="Adversarial weight. 0.005 was negligible -> GAN contributed ~nothing. "
+                        "0.02-0.05 gives the generator real texture pressure. "
+                        "Bump to 0.05 for a GAN finetune once structure converges.")
+    p.add_argument("--w-tv", type=float, default=0.001,
+                   help="Total-variation smoothness (anti-sharpening, keep small).")
     p.add_argument("--blur-sigma", type=float, default=1.2)
     p.add_argument("--d-every", type=int, default=2, help="Run D step every K G steps (GAN stability)")
     p.add_argument("--log-every", type=int, default=50)
