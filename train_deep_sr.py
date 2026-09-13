@@ -34,6 +34,7 @@ import os
 import sys
 import time
 import random
+import signal
 
 import numpy as np
 import torch
@@ -43,7 +44,7 @@ from torch.utils.data import Dataset, DataLoader
 import cv2
 
 from drunet import DRUNet
-from deep_unfolding import DeepUnfoldingSR, create_gaussian_kernel
+from deep_unfolding import DeepUnfoldingSR
 from degradation import degrade_known_kernel
 from perceptual_loss import VGGPerceptualLoss
 from discriminator import PatchDiscriminator, gan_loss_generator, gan_loss_discriminator
@@ -171,20 +172,18 @@ def _total_variation(img):
 
 
 def _checkpoint(state, path):
+    # Atomic write: a Kaggle session can be killed at any moment, and a
+    # half-written .pth would be unusable AND would poison --resume.
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    torch.save(state, path)
+    tmp = path + ".tmp"
+    torch.save(state, tmp)
+    os.replace(tmp, path)
 
 
 def _set_seed(seed):
     random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-
-
-def _make_kernel(sigma, device, channels=3):
-    """Same construction as inference.py, but for batch processing."""
-    k = create_gaussian_kernel(sigma=sigma, channels=channels) if "channels" in create_gaussian_kernel.__code__.co_varnames else create_gaussian_kernel(sigma=sigma)
-    return k.to(device)
 
 
 # ----------------------------------------------------------------------------
@@ -234,6 +233,14 @@ def smoke_test(device):
 # ----------------------------------------------------------------------------
 # Main training loop
 # ----------------------------------------------------------------------------
+class _TimeBudgetReached(Exception):
+    """Raised internally to unwind the training loop cleanly on --time-budget-min."""
+
+
+def _raise_keyboard_interrupt(_signum, _frame):
+    raise KeyboardInterrupt
+
+
 def train(args):
     device = torch.device(args.device)
     if device.type == "cpu":
@@ -287,82 +294,132 @@ def train(args):
 
     scheduler_g = torch.optim.lr_scheduler.StepLR(opt_g, step_size=args.decay_step, gamma=0.5)
 
+    # --- Resume from checkpoint if requested ---
+    # Without this, restarting a Kaggle kernel starts from scratch and
+    # WASTES all previous training (observed: 6000 iters lost on restart).
+    start_iter = 0
+    start_epoch = 0
+    if args.resume and os.path.exists(os.path.join(artifacts_dir, "latest_checkpoint.pth")):
+        ckpt_path = os.path.join(artifacts_dir, "latest_checkpoint.pth")
+        print(f"Resuming from {ckpt_path}")
+        ckpt = torch.load(ckpt_path, map_location=device, weights_only=True)
+        generator.load_state_dict(ckpt["model_state_dict"])
+        discriminator.load_state_dict(ckpt["d_state_dict"])
+        start_iter = ckpt.get("iter", 0)
+        start_epoch = start_iter // args.iters_per_epoch
+        best_loss = ckpt.get("g_loss", float("inf"))
+        print(f"  Resumed at iter {start_iter}, epoch {start_epoch}, best_loss {best_loss:.4f}")
+        # Advance scheduler to the right step
+        for _ in range(start_epoch):
+            scheduler_g.step()
+    else:
+        best_loss = float("inf")
+
+    total_iters = args.iters_per_epoch * args.epochs
     print(f"\nTraining: scale={args.scale} unfolding_iters={args.unfolding_iters} "
-          f"patch={args.patch} batch={args.batch} iters={args.iters_per_epoch * args.epochs}")
-    best_loss = float("inf")
-    iter_count = 0
+          f"patch={args.patch} batch={args.batch} iters={total_iters} "
+          f"(resuming from iter {start_iter})")
+    iter_count = start_iter
     t_lo = time.time()
-    kernel = _make_kernel(args.blur_sigma, device, channels=3)
+    train_t0 = time.time()
 
-    for epoch in range(args.epochs):
-        generator.train()
-        for batch_idx, batch in enumerate(loader):
-            hr = batch["hr"].to(device, non_blocking=True)
-            lr = batch["lr"].to(device, non_blocking=True)
-            sigma = batch["sigma"].to(device, non_blocking=True)
-            # Per-sample degradation kernels: (B,K,K) -> (B,1,1,K,K)
-            kernel_b = batch["kernel"].to(device).unsqueeze(1).unsqueeze(1)
+    def _save_now(iter_n, loss_val, tag=""):
+        """Save latest; promote to best only if improved. Used by periodic saves,
+        time-budget exits, and interrupt handlers."""
+        nonlocal best_loss
+        state = {
+            "iter": iter_n,
+            "model_state_dict": generator.state_dict(),
+            "d_state_dict": discriminator.state_dict(),
+            "g_loss": loss_val,
+        }
+        _checkpoint(state, os.path.join(artifacts_dir, "latest_checkpoint.pth"))
+        if loss_val < best_loss:
+            best_loss = loss_val
+            _checkpoint(state, os.path.join(artifacts_dir, "best_checkpoint.pth"))
+            print(f"   saved best (G={best_loss:.4f}){tag}")
 
-            # ---- Generator step ----
-            sr = generator(lr, kernel_b, sigma_noise=sigma)
-            # Align SR to HR (degradation may not yield exactly HR/scale);
-            # we crop the larger side down to the smaller, on all spatial dims.
-            min_h = min(sr.shape[-2], hr.shape[-2])
-            min_w = min(sr.shape[-1], hr.shape[-1])
-            sr = sr[..., :min_h, :min_w]
-            hr_a = hr[..., :min_h, :min_w]
-            sr_clamped = sr.clamp(0, 1)
-            l1_loss = F.l1_loss(sr, hr_a)
-            perc_loss = vgg(sr_clamped, hr_a)
-            fake_logits = discriminator(sr)
-            adv_loss = gan_loss_generator(fake_logits)
-            tv_loss = _total_variation(sr)
-            g_loss = w_l1 * l1_loss + w_perc * perc_loss + w_adv * adv_loss + w_tv * tv_loss
-            opt_g.zero_grad(); g_loss.backward()
-            # CRITICAL: unrolled optimization (5 data steps x 5 denoise steps)
-            # compounds gradients -> norms explode 10-100x per iteration without
-            # clipping (observed tail_grad_norm 2.8k -> 246k over 5 iters).
-            torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
-            opt_g.step()
+    last_g_loss = best_loss if best_loss != float("inf") else 0.0
+    try:
+        for epoch in range(start_epoch, args.epochs):
+            generator.train()
+            for batch_idx, batch in enumerate(loader):
+                hr = batch["hr"].to(device, non_blocking=True)
+                lr = batch["lr"].to(device, non_blocking=True)
+                sigma = batch["sigma"].to(device, non_blocking=True)
+                # Per-sample degradation kernels: (B,K,K) -> (B,1,1,K,K)
+                kernel_b = batch["kernel"].to(device).unsqueeze(1).unsqueeze(1)
 
-            # ---- Discriminator step (every K G steps for stability) ----
-            if iter_count % args.d_every == 0:
-                with torch.no_grad():
-                    sr_fake = generator(lr, kernel, sigma_noise=sigma).detach()[..., :min_h, :min_w]
-                real_logits = discriminator(hr_a)
-                fake_logits = discriminator(sr_fake)
-                d_loss = gan_loss_discriminator(real_logits, fake_logits)
-                opt_d.zero_grad(); d_loss.backward()
-                torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
-                opt_d.step()
+                # ---- Generator step ----
+                sr = generator(lr, kernel_b, sigma_noise=sigma)
+                # Align SR to HR (degradation may not yield exactly HR/scale);
+                # we crop the larger side down to the smaller, on all spatial dims.
+                min_h = min(sr.shape[-2], hr.shape[-2])
+                min_w = min(sr.shape[-1], hr.shape[-1])
+                sr = sr[..., :min_h, :min_w]
+                hr_a = hr[..., :min_h, :min_w]
+                sr_clamped = sr.clamp(0, 1)
+                l1_loss = F.l1_loss(sr, hr_a)
+                perc_loss = vgg(sr_clamped, hr_a)
+                fake_logits = discriminator(sr)
+                adv_loss = gan_loss_generator(fake_logits)
+                tv_loss = _total_variation(sr)
+                g_loss = w_l1 * l1_loss + w_perc * perc_loss + w_adv * adv_loss + w_tv * tv_loss
+                opt_g.zero_grad(); g_loss.backward()
+                # CRITICAL: unrolled optimization (5 data steps x 5 denoise steps)
+                # compounds gradients -> norms explode 10-100x per iteration without
+                # clipping (observed tail_grad_norm 2.8k -> 246k over 5 iters).
+                torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
+                opt_g.step()
 
-            iter_count += 1
-            if iter_count % args.log_every == 0:
-                dt = time.time() - t_lo
-                t_lo = time.time()
-                print(f"[e{epoch:03d} i{iter_count:06d}] "
-                      f"G={g_loss.item():.4f} (L1={l1_loss.item():.4f} "
-                      f"perc={perc_loss.item():.4f} adv={adv_loss.item():.4f} "
-                      f"tv={tv_loss.item():.4f}) D={d_loss.item():.4f} "
-                      f"[{dt/args.log_every:.2f}s/it]")
+                # ---- Discriminator step (every K G steps for stability) ----
+                if iter_count % args.d_every == 0:
+                    with torch.no_grad():
+                        sr_fake = generator(lr, kernel_b, sigma_noise=sigma).detach()[..., :min_h, :min_w]
+                    real_logits = discriminator(hr_a)
+                    fake_logits = discriminator(sr_fake)
+                    d_loss = gan_loss_discriminator(real_logits, fake_logits)
+                    opt_d.zero_grad(); d_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
+                    opt_d.step()
 
-            # ---- Checkpoint ----
-            if iter_count % args.save_every == 0:
-                state = {
-                    "iter": iter_count,
-                    "model_state_dict": generator.state_dict(),
-                    "d_state_dict": discriminator.state_dict(),
-                    "g_loss": g_loss.item(),
-                }
-                _checkpoint(state, os.path.join(artifacts_dir, "latest_checkpoint.pth"))
-                if g_loss.item() < best_loss:
-                    best_loss = g_loss.item()
-                    _checkpoint(state, os.path.join(artifacts_dir, "best_checkpoint.pth"))
-                    print(f"   saved best (G={best_loss:.4f})")
+                iter_count += 1
+                last_g_loss = g_loss.item()
+                if iter_count % args.log_every == 0:
+                    dt = time.time() - t_lo
+                    t_lo = time.time()
+                    print(f"[e{epoch:03d} i{iter_count:06d}] "
+                          f"G={g_loss.item():.4f} (L1={l1_loss.item():.4f} "
+                          f"perc={perc_loss.item():.4f} adv={adv_loss.item():.4f} "
+                          f"tv={tv_loss.item():.4f}) D={d_loss.item():.4f} "
+                          f"[{dt/args.log_every:.2f}s/it]")
 
-        scheduler_g.step()
+                # ---- Checkpoint ----
+                if iter_count % args.save_every == 0:
+                    _save_now(iter_count, g_loss.item())
+
+                # ---- Time budget (Kaggle session limit) ----
+                # Stop cleanly BEFORE Kaggle kills the session, so progress is
+                # always persisted instead of dying mid-epoch.
+                if args.time_budget_min > 0 and (time.time() - train_t0) >= args.time_budget_min * 60:
+                    print(f"\n[budget] {args.time_budget_min:g} min reached at iter {iter_count}; "
+                          f"saving and exiting cleanly.")
+                    _save_now(iter_count, g_loss.item(), tag=" (budget exit)")
+                    raise _TimeBudgetReached
+
+            scheduler_g.step()
+    except _TimeBudgetReached:
+        print("Stopped by time budget. Resume with --resume to continue.")
+        return
+    except KeyboardInterrupt:
+        # Ctrl-C or SIGTERM (Kaggle "stop session") -> persist before dying.
+        print("\nInterrupted -> saving latest checkpoint before exit...")
+        _save_now(iter_count, last_g_loss, tag=" (interrupt)")
+        print(f"Checkpoint saved at iter {iter_count}. Resume with --resume.")
+        return
 
     print("Training complete. Final checkpoint saved.")
+    _save_now(iter_count, last_g_loss, tag=" (final)")
     _checkpoint({
         "iter": iter_count,
         "model_state_dict": generator.state_dict(),
@@ -374,6 +431,10 @@ def train(args):
 def parse_args():
     p = argparse.ArgumentParser(description="Tier B training: Deep Unfolding SR")
     p.add_argument("--smoke", action="store_true", help="Run 1-iter synthetic smoke test and exit")
+    p.add_argument("--resume", action="store_true",
+                   help="Resume from latest_checkpoint.pth in artifacts dir. "
+                        "CRITICAL for Kaggle: without this, restarting the kernel "
+                        "starts from scratch and wastes all previous training.")
     p.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"])
     p.add_argument("--allow-cpu", action="store_true", help="Run full training on CPU (very slow)")
     p.add_argument("--seed", type=int, default=42)
@@ -395,10 +456,13 @@ def parse_args():
                         "Bump to 0.05 for a GAN finetune once structure converges.")
     p.add_argument("--w-tv", type=float, default=0.001,
                    help="Total-variation smoothness (anti-sharpening, keep small).")
-    p.add_argument("--blur-sigma", type=float, default=1.2)
     p.add_argument("--d-every", type=int, default=2, help="Run D step every K G steps (GAN stability)")
     p.add_argument("--log-every", type=int, default=50)
     p.add_argument("--save-every", type=int, default=5000)
+    p.add_argument("--time-budget-min", type=float, default=0.0,
+                   help="Stop cleanly after N minutes and save a checkpoint (0 = no limit). "
+                        "Kaggle kills sessions at ~12h: set ~600 so every run persists its "
+                        "progress and can --resume next session.")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--artifacts-dir", default=None,
                    help="Where to save checkpoints. Default: ./artifacts/deep_sr. "
@@ -410,6 +474,12 @@ def main():
     args = parse_args()
     if args.device == "auto":
         args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Kaggle/supervisors stop sessions with SIGTERM; route it through the same
+    # save-then-exit path as Ctrl-C so no training progress is lost.
+    try:
+        signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
+    except (ValueError, OSError, AttributeError):
+        pass  # not supported on this platform/thread
     train(args)
 
 
