@@ -21,8 +21,14 @@ graphify-out/
 upscayl-repo/
 node_modules/
 
+# ===== Kaggle CLI working dirs (downloads, logs, cloned output) =====
+kaggle_*/
+kaggle_out*/
+verify_clone/
+
 # ===== Upscaled test outputs (regeneratable) =====
 testImg/*_ultrasharp.png
+testIMg/
 testImg/*_realesrgan*.png
 testImg/*_compare.png
 testImg/ALL_compare.png
@@ -85,3 +91,7 @@ desktop.ini
 # ===== Misc logs =====
 *.log
 training_*.png
+
+# ===== Local media (large, dump only) =====
+Kholakhola.mp4
+*.mp4
