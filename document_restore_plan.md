@@ -474,3 +474,31 @@ hidden by reporting a prettier image.
 **Next:** Phase D (Gradio default = document, `SmartUpscaler(mode="document")`,
 cheap page classifier) and the public-receipt sanity set (SROIE/CORD) for
 real-photo validation.
+
+---
+
+## Appendix C — Phase D status (2026-09-20)
+
+**Shipped**
+
+- `SmartUpscaler(mode="document")` + `page_likeness()/is_document()` classifier:
+  synthetic invoices score **0.72–0.77**, photos (De1, PrakashJI, foo1) and
+  noise score **0.0** — clean separation with no models, no OCR.
+- `document_pipeline.py` — one implementation for CLI and app (restore →
+  dual-stream OCR → flags → outputs); deskew=True keeps boxes aligned by
+  running primary OCR on the rotated display.
+- **Gradio studio is document-first**: "Document (recommended)" tab (image or
+  PDF, OCR engine picker, deskew, overlay/PDF/TXT toggles, transcript with
+  "Review these" list) with the photo studio moved to "Photo (Advanced)".
+- **OCR performance**: RapidOCR is now DirectML-enabled automatically when
+  `onnxruntime-directml` is present, with a one-time warm-up. Measured on the
+  RTX 2050: CPU **9–15 s/page**, DirectML 25 s first call then **0.78 s/page**.
+  Full pipeline (restore + both OCR streams + export): **6.6 s cold / 3.8 s
+  warm** per A4@150dpi page — inside the 4 s stretch goal when warm.
+- 35 tests green (documents, routing, exports, CLI, app, photo regression).
+
+**Remaining for v1**
+
+1. Real-photo sanity set (SROIE/CORD) — synthetic pages still flatter us.
+2. Phase E mixed-page router (text + logo + signature + photo on one page).
+3. Photo fine-tune checkpoint → Advanced tab (L4 run at ~8.1k/30k iterations).
