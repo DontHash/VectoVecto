@@ -7,3 +7,9 @@ scikit-image
 matplotlib
 Pillow
 tqdm
+gradio
+pyiqa
+onnx
+onnxruntime
+onnxconverter-common
+pytest

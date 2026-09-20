@@ -128,3 +128,35 @@ if __name__ == "__main__":
     psnr_fft = calculate_psnr(hr_source, upscaled_fft)
     ssim_fft = calculate_ssim(hr_source, upscaled_fft)
     print(f"Naive FFT Upscale -> PSNR: {psnr_fft:.2f} dB, SSIM: {ssim_fft:.4f}")
+
+    # 4. Phase 6: TV Minimization & ROF Refinement
+    try:
+        from tv_refinement import tv_super_resolution_refine
+        upscaled_tv = tv_super_resolution_refine(lr_simulated, upscaled_bicubic, scale=scale, lambda_tv=0.02, num_iters=6)
+        psnr_tv = calculate_psnr(hr_source, upscaled_tv)
+        ssim_tv = calculate_ssim(hr_source, upscaled_tv)
+        print(f"Phase 6 TV Minimization (ROF) -> PSNR: {psnr_tv:.2f} dB, SSIM: {ssim_tv:.4f}")
+    except Exception as e:
+        print(f"Phase 6 TV Minimization error: {e}")
+
+    # 5. Phase 4.5: Hybrid Vector / Raster Decomposition
+    try:
+        from vector_raster_hybrid import hybrid_vector_raster_upscale
+        upscaled_hybrid = hybrid_vector_raster_upscale(lr_simulated, scale=scale, raster_engine="bicubic")
+        psnr_hybrid = calculate_psnr(hr_source, upscaled_hybrid)
+        ssim_hybrid = calculate_ssim(hr_source, upscaled_hybrid)
+        print(f"Phase 4.5 Hybrid Vector/Raster -> PSNR: {psnr_hybrid:.2f} dB, SSIM: {ssim_hybrid:.4f}")
+    except Exception as e:
+        print(f"Phase 4.5 Hybrid Vector/Raster error: {e}")
+
+    # 6. Phase 7: Unified Autonomous Smart Router
+    try:
+        from smart_upscaler import smart_upscale
+        upscaled_smart = smart_upscale(lr_simulated, scale=scale, mode="auto", fast=True)
+        psnr_smart = calculate_psnr(hr_source, upscaled_smart)
+        ssim_smart = calculate_ssim(hr_source, upscaled_smart)
+        print(f"Phase 7 Smart Router Pipeline -> PSNR: {psnr_smart:.2f} dB, SSIM: {ssim_smart:.4f}")
+    except Exception as e:
+        print(f"Phase 7 Smart Router error: {e}")
+
+
