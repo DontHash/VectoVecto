@@ -504,9 +504,10 @@ real-photo validation.
 
 **Remaining for v1**
 
-1. Phase E mixed-page router (text + logo + signature + photo on one page).
-2. P2 reading order (XY-cut) and P3 orientation — see Appendix D priorities.
-3. P4 Deva nagari (ne/hi) with vendored models; P6 multi-page PDF; P7 license gate.
+1. P4 Devanagari (ne/hi) with vendored models; P4b re-measure the 2× re-pass
+   with the engine fix and fold it into the review queue.
+2. Phase E mixed-page router (text + logo + signature + photo on one page).
+3. P6 multi-page PDF; P7 license gate + packaging + tag v1.1.0.
 
 ---
 
@@ -627,3 +628,47 @@ single-column pages). 11 layout tests; full suite 57 green.
 **Known limitation (documented):** a full-width title that shares its row with
 another token (e.g. a page number) is not used as a band separator; such pages
 fall back to identity. Acceptable until a real case appears.
+
+---
+
+## Appendix F — P3 orientation shipped (2026-09-20)
+
+**Evidence gathered before shipping** (`document_orientation.py` docstring):
+
+- RapidOCR reads 180°/90° pages as garbage (CER **0.80–0.85** vs 0.09–0.39
+  upright) while token confidences stay ~99 — OCR confidence cannot detect
+  rotation, and the line classifier does not fix page-level 180°.
+- Tesseract OSD is exact on clean pages ≥1500 px but WRONG on small receipts
+  even upscaled (3/6 upright receipts called 180° at conf up to 4.8); a later
+  synthetic batch scored as low as 4.55 — confidence alone does not separate
+  across content, and one large upright receipt still scored OSD 180° at 4.9.
+- No GT-free text feature separates upright from 180° OCR (aggregate token
+  stats were identical on synthetic pages; receipts varied by noise only).
+
+**Shipped policy (safe by construction, no blind flips):**
+
+1. EXIF orientation applied at load (`load_image_bgr`) — phone photos,
+   including 180° via EXIF orientation 3.
+2. OSD auto-rotation ONLY for 90°/270° on pages with long side ≥1500 px
+   (receipts/small scans excluded by size; detector geometry guarantees the
+   axis, OSD supplies direction), conf ≥3.0.
+3. 180° is never auto-rotated from OSD: the opinion is recorded
+   (`source="osd-180"`) and surfaced as `orientation_suspect`.
+4. 90°/270° on small inputs get the geometry suspect marker (vertical text
+   lines ≥60%), no auto action.
+5. `meta["auto_rotate"]` and `meta["orientation_suspect"]` on every result;
+   status line shows `· orientation?`; CLI `--rotate auto|off`.
+
+**Measured**
+
+| check | result |
+|---|---|
+| 90°/270° auto-rotation, synthetic pages | **8/8** (conf 3.98–6.29) |
+| upright receipts rotated | **0/30** |
+| upright receipts flagged 180-suspect | 1/30 (honest flag, no damage) |
+| CER after auto-rotation vs upright | equal (0.00 on clean synthetic) |
+| original "≥95% of rotated pages incl. 180°" gate | **FAILED on 180° by design** — replaced by refusal + suspect flag; recorded, not hidden |
+
+**Limitation (documented):** 180° for EXIF-less images needs a dedicated
+orientation classifier (4-way, rendered pages) — parked with this evidence.
+65 tests green (8 orientation).
