@@ -771,3 +771,29 @@ sweeping 0.2–0.4 showed 0.3 keeps every true split and removes the false one.
 the band/wide-token rules bail out safely; the text-layer GT is content-stream
 order (its floor noise is measured by `clean@rapidocr`, heavy on equation
 pages). 3-column generalization remains deferred until a case demands it.
+
+---
+
+## Open truth items (recorded 2026-09-20, truth check)
+
+Three gaps were found auditing the claims against the reports; none are hidden
+in the appendices above:
+
+1. **Latency gate unmet on dense pages.** The shipped pipeline runs 8.0 s/page
+   on the arXiv two-column set (dual-stream OCR + votes + restore) against the
+   pre-registered <= 4 s/page warm gate. Measured cost lines: OCR ~1.1-2.2 s,
+   votes ~0-0.3 s, restore + audit stream the rest. Deferred to P5/P7 with a
+   known lever (skip the audit OCR pass on pages without digit tokens).
+2. **rapidocr primary stream under-evidenced.** `RECOMMENDED_STREAM` says "raw"
+   on evidence that only rules out clahe, while current reports show
+   restore_gray better by CER on all three corpora (synthetic 0.0150 vs 0.0937;
+   SROIE 0.3618 vs 0.3635; CORD 0.5748 vs 0.5872) but worse by bagCER on
+   synthetics (0.1049 vs 0.0269). Re-measured in P4b; the table changes only if
+   no corpus regresses on CER *and* bagCER.
+3. **Review-queue usefulness never measured.** Appendix D set "share of true
+   digit errors in the top-5 per page" as the revised P1 metric; no number
+   existed yet. Measured in P4b (see Appendix I).
+
+Also stale and fixed with this record: the `--repass-digits` help ("measured
+redundant" - invalidated by the state-leak bug) and `--rotate` help (removed
+OSD-first policy), commit f4d325b.
