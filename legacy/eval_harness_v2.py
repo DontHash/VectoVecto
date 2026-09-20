@@ -28,6 +28,12 @@ Examples:
 """
 from __future__ import annotations
 
+
+# repo root: legacy/ scripts import modules that live at the repo root
+import os as _os, sys as _sys
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
 import argparse
 import csv
 import glob
@@ -44,7 +50,7 @@ import cv2
 import numpy as np
 import torch
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 import degradation_v2 as deg  # noqa: E402

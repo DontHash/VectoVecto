@@ -16,6 +16,9 @@ import cv2
 import xml.etree.ElementTree as ET
 import pytest
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
 from smart_upscaler import SmartUpscaler, smart_upscale, ContentAnalysis
 
 @pytest.fixture(scope="module")

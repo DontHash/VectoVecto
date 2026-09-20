@@ -14,7 +14,8 @@ import numpy as np
 import cv2
 import pytest
 
-sys.path.insert(0, r"d:\VectorScaling")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 import app
 
 def make_test_input():

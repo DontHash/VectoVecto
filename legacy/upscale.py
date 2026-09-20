@@ -15,6 +15,12 @@ Examples:
   python upscale.py De1.jpg De1_out.png --export-mask De1_mask.png
 """
 
+
+# repo root: legacy/ scripts import modules that live at the repo root
+import os as _os, sys as _sys
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
 import os
 import sys
 import argparse

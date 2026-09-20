@@ -15,6 +15,9 @@ import numpy as np
 import cv2
 import xml.etree.ElementTree as ET
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
 from vector_raster_hybrid import (
     Point2D, CubicBezier, fit_cubic_bezier_segment, fit_curve_recursive,
     vectorize_contour, compute_structure_tensor, segment_flat_and_graphic_regions,

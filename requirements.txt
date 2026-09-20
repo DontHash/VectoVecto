@@ -1,15 +1,14 @@
+# Runtime dependencies (document restore + photo upscaler + app)
 numpy
 opencv-python
 scipy
+scikit-image
 torch
 torchvision
-scikit-image
-matplotlib
-Pillow
-tqdm
-gradio
-pyiqa
 onnx
 onnxruntime
-onnxconverter-common
-pytest
+Pillow
+gradio
+rapidocr
+reportlab
+pypdfium2

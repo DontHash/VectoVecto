@@ -1,0 +1,8 @@
+# Development / evaluation tooling (not needed to run the product)
+pytest
+matplotlib
+tqdm
+pyiqa
+datasets
+huggingface_hub
+onnxconverter-common

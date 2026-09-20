@@ -23,6 +23,12 @@ Usage:
     python eval_deep_sr.py --hr-size 0 --num-images 10   # full-resolution images
     python eval_deep_sr.py --save-crops eval_out --json eval_out/metrics.json
 """
+
+# repo root: legacy/ scripts import modules that live at the repo root
+import os as _os, sys as _sys
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
 import argparse
 import json
 import os

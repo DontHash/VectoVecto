@@ -13,6 +13,12 @@ Usage:
     python prepare_div2k.py          # download train + val
     python prepare_div2k.py --val    # only validation
 """
+
+# repo root: legacy/ scripts import modules that live at the repo root
+import os as _os, sys as _sys
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
 import argparse
 import os
 import sys
