@@ -84,6 +84,20 @@ class OCRBackend:
         digit re-pass. Returns (text, conf 0-100)."""
         raise NotImplementedError
 
+    def line_orientation_votes(self, img_bgr: np.ndarray,
+                               result: OCRResult) -> Optional[Tuple[float, float, int]]:
+        """Page-flip evidence from the PP-LCNet line classifier: (frac180, hi180, n).
+
+        `frac180` = share of line crops classed 180; `hi180` = share classed 180
+        with score >= 0.9. Measured on 60 real pages, both orientations
+        (2026-09-20): flipped pages score frac 0.73-1.00 / hi 0.45-1.00 while
+        upright pages stay below frac 0.5 / hi 0.25 - except classifier-hard
+        pages (blurry CORD photos) that vote high BOTH ways; the action rule in
+        `document_orientation.infer_angle` (frac >= 0.6 AND hi >= 0.4) keeps
+        those out (0 false flips / 60 upright, 59/60 flipped detected).
+        """
+        return None
+
 
 # ---------------------------------------------------------------------------
 # RapidOCR (default)
@@ -196,6 +210,41 @@ class RapidOCRBackend(OCRBackend):
         if not txts:
             return "", 0.0
         return str(txts[0]), float(scores[0]) * 100.0 if len(scores) else 0.0
+
+    def line_orientation_votes(self, img_bgr: np.ndarray,
+                               result: OCRResult) -> Optional[Tuple[float, float, int]]:
+        """Re-run the PP-LCNet line classifier on the detected line crops.
+
+        RapidOCR 3.x applies the classifier internally (rotating crops), but
+        does not surface the labels; re-running it on our own crops is cheap
+        and gives page-flip evidence the public output lacks. Returns
+        (frac180, hi_conf_180, n_lines) - see the base-class docstring.
+        """
+        if not result.tokens:
+            return None
+        self._ensure()
+        h, w = img_bgr.shape[:2]
+        crops: List[np.ndarray] = []
+        for tok in result.tokens:
+            x0, y0, x1, y1 = tok.bbox
+            x0, y0 = max(0, x0 - 2), max(0, y0 - 2)
+            x1, y1 = min(w, x1 + 2), min(h, y1 + 2)
+            if x1 > x0 and y1 > y0:
+                crops.append(img_bgr[y0:y1, x0:x1])
+        if not crops:
+            return None
+        try:
+            out = self._engine.text_cls(crops)
+        except Exception:  # noqa: BLE001
+            return None
+        labels = getattr(out, "cls_res", None) or []
+        if not labels:
+            return None
+        n = len(labels)
+        n180 = sum(1 for lab, _score in labels if str(lab) == "180")
+        hi180 = sum(1 for lab, score in labels
+                    if str(lab) == "180" and float(score) >= 0.9)
+        return n180 / n, hi180 / n, n
 
 
 # ---------------------------------------------------------------------------
