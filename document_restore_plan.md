@@ -730,3 +730,44 @@ high-confidence (>=0.9) votes as well keeps every classifier-hard page out.
 with low hi-conf) exists on blurry pages; those get the suspect flag instead
 of an action. OSD remains the fallback for the tesseract backend (no line
 classifier) and for inconclusive probes. 71 tests green (13 orientation).
+
+---
+
+## Appendix H — P2 real-layout verdict (2026-09-20)
+
+**Why this appendix exists.** Appendix E's −82% WER was measured on a fixture
+this repo renders; the sorter had never seen a real multi-column page. Fixed
+by an internal-only eval set (never redistributed): 8 arXiv PDFs downloaded
+once into `data/doc_eval/pdf_sources/` (7 confirmed 2-column CVPR/ICCV/ECCV +
+Attention as a single-column control; layout verified per-paper via text-layer
+line extents), rendered at 200 dpi with mild/medium degradation, first 4 pages
+each → `data/doc_eval/real_two_column` (32 pages).
+
+**What the real pages broke.** The union-gap gutter rule had no operating
+point: OCR line boxes extend into the gutter (clean gaps 8–52 px at 200 dpi vs
+a 2×-line-height = 78–80 px requirement) and a single wide token zeroed the
+page-wide gap. Replaced with a **coverage gutter** (`document_layout.py`):
+widest x-run crossed by ≤5% of boxes, ≥ max(8 px, 0.3 × median line height),
+centred in the content; existing guards kept (≥6 tokens/side, right side
+ragged, not number-dominated) plus each side must span ≥30% of content width —
+a receipt label strip (24%) had columnized a SROIE page (`sroie_00003`);
+sweeping 0.2–0.4 showed 0.3 keeps every true split and removes the false one.
+
+**Measured (order-isolated, one OCR per page)**
+
+| corpus | result |
+|---|---|
+| SROIE + CORD real single-column (60 pages) | **60/60 unchanged** (identity gate) |
+| arXiv real 2-column (32 pages) | splits fired on 19/32 (13 are figure/table-heavy or the 1-column control, left as identity) |
+| ... on those 19 pages | WER **0.870 → 0.268** (−69.1%), CER **0.702 → 0.086** (−87.7%) |
+| regressions | **none** (no page worse by >2% WER) |
+| shipped pipeline, whole set | CER 0.6065 → **0.2407**, bagCER 0.2524 unchanged (order repaired, content preserved) |
+
+**Telemetry** (commit 19e9aaf): `meta["reading_order_splits"]` and
+`meta["reading_order_changed"]` so future regressions are observable.
+13 layout tests (2 new: thin-label-strip identity, box-padding tolerance).
+
+**Honest limits:** the 13 unsorted pages include figure/table-heavy pages where
+the band/wide-token rules bail out safely; the text-layer GT is content-stream
+order (its floor noise is measured by `clean@rapidocr`, heavy on equation
+pages). 3-column generalization remains deferred until a case demands it.
