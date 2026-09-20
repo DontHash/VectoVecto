@@ -633,6 +633,12 @@ fall back to identity. Acceptable until a real case appears.
 
 ## Appendix F — P3 orientation shipped (2026-09-20)
 
+> **CORRECTED the same day — see Appendix G.** The central claim below
+> ("RapidOCR reads 180°/90° pages as garbage") was a measurement artifact:
+> order-sensitive CER hid perfect line text behind reversed line order. The
+> OSD-first policy and the "never flip 180" rule it justified were wrong and
+> have been replaced by an evidence-first design with full real-corpus gates.
+
 **Evidence gathered before shipping** (`document_orientation.py` docstring):
 
 - RapidOCR reads 180°/90° pages as garbage (CER **0.80–0.85** vs 0.09–0.39
@@ -672,3 +678,55 @@ fall back to identity. Acceptable until a real case appears.
 **Limitation (documented):** 180° for EXIF-less images needs a dedicated
 orientation classifier (4-way, rendered pages) — parked with this evidence.
 65 tests green (8 orientation).
+
+---
+
+## Appendix G — P3b orientation, evidence-first (2026-09-20, same day)
+
+**What was wrong in Appendix F.** Three linked errors, all from one artifact:
+
+1. "180° reads as garbage" — false. The text is *perfect*, line for line
+   (verified: all 23 tokens of the synthetic page, `INVOICE` → `Thank you for
+   your business.`); only the line ORDER is reversed (detection walks the
+   flipped image top-to-bottom). Order-sensitive CER read this as garbage.
+2. "cls does not fix page-level 180°" — false. The line classifier works
+   perfectly (`INVOICE` flipped → classed `180` at conf 0.9999999, re-OCR
+   returns `INVOICE` vs `INVIOCCE` without it). RapidOCR *applies* it but does
+   not expose the labels; the backend now re-runs it on our crops.
+3. "90/270° is garbage" — false. Detected boxes are perspective-unrotated, so
+   the text is largely readable; the failure was page-level direction only.
+
+**Shipped design (commit 06380fa + 10a379e).**
+
+```
+pass1 OCR -> votes = (frac180, hi-conf-180, n) from line classifier + geometry
+  frac180 >= 0.6 AND hi-conf >= 0.4          -> rotate 180, one re-run
+  vertical token fraction >= 0.6             -> OCR the 90°-cw probe
+      probe vertical < 0.6: probe votes pick 270 (action rule) vs 90
+      probe still vertical                  -> OSD fallback, else suspect
+  frac180 >= 0.5 but not actionable          -> vote-ambiguous suspect (no act)
+  else                                       -> upright
+```
+
+**Why two vote statistics**: raw frac180 alone cannot separate — the flipped
+minimum (0.73, sroie_00010) sits BELOW the upright maximum (0.79, cord_00005,
+a blurry 4096px photo where the classifier votes high BOTH ways). Requiring
+high-confidence (>=0.9) votes as well keeps every classifier-hard page out.
+
+**Measured (SROIE 30 + CORD 30, both orientations; synthetic 4 angles × 4 seeds)**
+
+| gate | result |
+|---|---|
+| synthetic: decision + CER < 0.05 + no suspect flags | **16/16** (post-fix CER 0.000) |
+| SROIE upright: false rotations / false suspects | **0/30 / 0/30** |
+| SROIE rotated (90cw/90ccw/180): decisions | **90/90** |
+| SROIE rotated: CER <= upright + 0.05 | **90/90** |
+| CORD upright: false rotations | **0/30** |
+| CORD up+flip fully correct | 29/30 — the miss (cord_00011, 10 blurry tokens) is `vote-ambiguous` flagged, never flipped |
+| passes per page | upright 1 (no extra OCR), 180: 2, 90ccw: 2, 90cw: 3 |
+| votes overhead | ~0–300 ms/page (cls pass on ~50 crops) |
+
+**Honest limits:** the ambiguous zone between the two clusters (frac 0.5–0.73
+with low hi-conf) exists on blurry pages; those get the suspect flag instead
+of an action. OSD remains the fallback for the tesseract backend (no line
+classifier) and for inconclusive probes. 71 tests green (13 orientation).
