@@ -176,8 +176,21 @@ class RapidOCRBackend(OCRBackend):
                                "n_tokens": len(tokens), "lang": lang or "default"})
 
     def recognize_crop(self, crop_bgr: np.ndarray, lang: Optional[str] = None) -> Tuple[str, float]:
+        """Recognition-only read of one crop.
+
+        Upstream RapidOCR 3.x bug: `__call__` forwards use_det/use_cls to
+        `update_params`, which setattr()s them on the engine *permanently* (no
+        restore after the call). One rec-only call therefore disables detection
+        for every later page — silently yielding zero tokens. We save/restore
+        the flags around the call (verified by test_document_ocr_state.py).
+        """
         self._ensure()
-        out = self._engine(crop_bgr, use_det=False, use_cls=False, use_rec=True)
+        saved = (self._engine.use_det, self._engine.use_cls, self._engine.use_rec)
+        try:
+            out = self._engine(crop_bgr, use_det=False, use_cls=False, use_rec=True)
+        finally:
+            (self._engine.use_det, self._engine.use_cls,
+             self._engine.use_rec) = saved
         txts = getattr(out, "txts", None) or ()
         scores = getattr(out, "scores", None) or ()
         if not txts:
