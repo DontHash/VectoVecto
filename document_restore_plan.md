@@ -1,8 +1,13 @@
 # VectorScaling — Faithful Document Restore
 
-**Status:** Product plan. Execute in order. Do not skip the eval harness.
-**Decision date:** 2026-09-20
+**Status:** Product plan v2 (researched). Execute in order. Do not skip the eval harness.
+**Decision date:** 2026-09-20 (v2 revisions same day)
 **Relationship to old roadmap:** This *replaces* photo-SR as the default product. The math roadmap (`math_based_image_upscaling_roadmap.md`) remains a research appendix. Phase 4.5 (vector/raster split) and Phase 8 (reconstruction constraint) are reused, aimed at pages instead of portraits.
+
+**v2 research corrections (verified, see §9a):**
+1. `PyMuPDF` is **AGPL-3.0** → banned from the shipped path; searchable PDF is written with **reportlab (BSD-3)**.
+2. Tesseract is an external install and is **not present** on the dev machine → **RapidOCR (PP-OCRv6, ONNX, Apache-2.0)** ships as default, Tesseract is an optional second adapter, both measured per language.
+3. Per-glyph OCR confidence does not exist in either engine → per-line confidence + **digit re-pass** + (v2) two-pipeline agreement gate.
 
 ---
 
@@ -13,7 +18,7 @@ Sharp when we are sure. Honest when we are not.
 
 **Job to be done:** Drop a scan, phone photo of a bill, screenshot, or PDF page. Get a cleaner image **and** searchable text, with low-confidence glyphs marked instead of invented.
 
-**Not the job:** 4× cinematic photos, anime, license plates, “looks sharper than Upscayl.”
+**Not the job:** 4× cinematic photos, anime, license plates, "looks sharper than Upscayl."
 
 ---
 
@@ -24,12 +29,12 @@ Sharp when we are sure. Honest when we are not.
 | Photo 4× SR | Yes (Upscayl exists) | No | Kill as homepage |
 | Anime SVG | Weak | Overclaimed | Kill |
 | CCTV plates | Only with a dedicated camera | No | Kill |
-| Generic “document upscaler” | Yes | No (Adobe Scan, Lens, DocRes) | Insufficient |
+| Generic "document upscaler" | Yes | No (Adobe Scan, Lens, DocRes) | Insufficient |
 | **Faithful mixed-page restore + OCR confidence** | Yes (bills, contracts, archives, UI) | Yes as a *consumer local* product | **This** |
 
 Novelty is not a new backbone. It is three things composed:
 
-1. **Do not invent glyphs.** Reconstruction / agreement gate. Ambiguous `8`/`B` stays soft and flagged.
+1. **Do not invent glyphs.** Confidence flags + agreement gate. Ambiguous `8`/`B` stays soft and flagged.
 2. **Route the page.** Text → restore + OCR. Logos/stamps → vectors. Signatures/photos → freeze (no GAN).
 3. **Dual output.** Searchable PDF (the work) + optional SVG of true graphics (the bonus).
 
@@ -42,9 +47,10 @@ Usability is one loop: drop file → preview with warnings → download PDF/text
 - Do not train another Real-ESRGAN clone on DIV2K.
 - Do not ship UltraSharp / Remacri / grain as document defaults.
 - Do not vectorize letters as the primary representation (traced `A` blobs are not searchable).
-- Do not claim forensic plate recovery or “enhance CCTV.”
+- Do not claim forensic plate recovery or "enhance CCTV."
 - Do not require cloud APIs for v1.
 - Do not optimize PSNR as the north-star metric.
+- **Do not ship any AGPL/GPL library in the product path** (license gate, §9a).
 
 Photo engines (`sr_engine.py`, ncnn models, `train_v2.py`) may stay in the repo under **Advanced / Photo**. They are not the product.
 
@@ -52,13 +58,13 @@ Photo engines (`sr_engine.py`, ncnn models, `train_v2.py`) may stay in the repo 
 
 ## 4. Users and slices
 
-**Primary (v1–v2)**
+**Primary (v1)**
 
 - People digitizing bills, receipts, invoices (amounts must not hallucinate).
 - Students / researchers with phone photos of papers and old PDFs.
 - Anyone who needs a searchable PDF without uploading to a cloud.
 
-**Secondary (v2+)**
+**Secondary (v1.1+)**
 
 - Mixed pages: letterhead + stamp + table + a small photo.
 - UI / error-message screenshots (high-contrast type).
@@ -66,7 +72,7 @@ Photo engines (`sr_engine.py`, ncnn models, `train_v2.py`) may stay in the repo 
 **Not a user yet**
 
 - Industrial ALPR.
-- Full archive shops that already run ScanTailor + ABBYY (we can learn from them; we will not beat them on batch in v1).
+- Full archive shops that already run ScanTailor + ABBYY (we learn from them; we do not beat them on batch in v1).
 
 ---
 
@@ -74,63 +80,58 @@ Photo engines (`sr_engine.py`, ncnn models, `train_v2.py`) may stay in the repo 
 
 North star: **character error rate (CER)** on a frozen eval set, plus **hallucination rate**.
 
-| Metric | Definition | v1 bar | v2 bar |
-|---|---|---|---|
-| CER | `edit_distance(ocr, gt) / len(gt)` | Beat raw Tesseract on the same page by ≥20% relative | Beat ScanTailor-ish baseline; competitive with DocRes *on our set* |
-| WER | word-level edit rate | Track; secondary | Track |
-| Hallucination rate | OCR tokens that do not appear in GT *and* were not in raw OCR either (invented digits/letters) | **Must not rise** vs raw OCR | Must fall |
-| Ambiguity coverage | fraction of true errors that were flagged low-confidence | ≥50% of remaining errors flagged | ≥70% |
-| Time | page-to-PDF on CPU, 1× A4 scan ~150–200 DPI | < 8 s median | < 4 s or GPU optional |
-| Privacy | no network on the happy path | Required | Required |
+| Metric | Definition | v1 bar |
+|---|---|---|
+| CER | `edit_distance(ocr, gt) / len(gt)` (jiwer) | Beat raw OCR on the same page by ≥20% relative |
+| WER | word-level edit rate | Track; secondary |
+| Hallucination rate | restored-OCR tokens absent from GT alignment **and** absent from raw-OCR | **Must not rise** vs raw OCR |
+| Digit hallucination | same, restricted to tokens containing digits (amounts/dates) | Must not rise |
+| Ambiguity coverage | fraction of true token errors flagged low-confidence | ≥50% |
+| False-alarm rate | fraction of flagged tokens that were actually correct | ≤25% |
+| Calibration | ECE of line confidence vs correctness (10 bins) | Track; improve over raw |
+| Time | page-to-PDF on CPU, 1× A4 ~150–200 DPI | < 8 s median (target <4 s) |
+| Privacy | no network on the happy path | Required (air-gap test) |
 
 PSNR/SSIM on glyphs may be logged. They must not decide shipping.
 
-**Kill criteria:** if after Phase 3 (app wired) CER does not beat raw OCR + a simple adaptive-threshold baseline on *real* bills/scans we collect, stop adding models. Fix restore and OCR config first.
+**Kill criteria:** if after Phase D the pipeline does not beat raw OCR + a Sauvola baseline on synthetic pages *and* at least one public real-receipt set, stop adding models and fix restore/OCR config first.
 
 ---
 
 ## 6. Eval harness first (do not skip)
 
-Mirror the old Phase 0, with text as ground truth.
+### 6.1 Datasets — zero human transcription
 
-### 6.1 Datasets
+| Source | GT | Generation cost | Committed? |
+|---|---|---|---|
+| Synthetic invoices (our renderer) | Exact strings we draw | Free, seeded | Yes (`data/doc_eval/synthetic`) |
+| Open PDFs rendered via pypdfium2 | **Text layer** extracted from the PDF | Free, download once | GT + manifest yes, PDFs no |
+| Demo PDFs (reportlab-generated round-trip) | Text layer | Free, offline | Test fixture only |
+| Public real sets (SROIE / CORD / FUNSD / DocVQA) | Existing annotations | Download | Optional, sanity checks only; never redistributed |
 
-**Synthetic (always on in CI)**
-
-- Render 40–80 pages from public-domain / generated invoices (known UTF-8 GT).
-- Fonts: Arial, Times, Courier, one Devanagari if we care about Nepali/Hindi later (Phase 4).
-- Degrade with a *document* pipeline (new module, not `degradation_v2` photo kernels):
-  - JPEG q=30–70
-  - slight perspective / barrel
-  - uneven illumination (smooth gradient + shadow)
-  - Gaussian/motion blur 1–2.5 px
-  - downscale 0.4–0.7 then upscale (phone photo)
-  - optional speckle / paper texture *low amplitude*
-
-**Real (offline, not in git if personal)**
-
-- 20+ real pages: bills, book photos, screenshot UI, one stamped letter.
-- Transcribe GT by hand into `data/doc_eval/gt/*.txt`.
-- Never commit private bills. Use `data/doc_eval/` gitignored except synthetic.
+Normalization rules for GT and hypotheses: CRLF→LF, collapse runs of spaces/tabs, strip. Keep case and punctuation (CER is meaningful). Multi-column PDFs may extract in non-reading order — record the clean-render→text-layer **CER floor** for each PDF page and report every method relative to that floor so extraction order noise affects all methods equally.
 
 ### 6.2 Scripts
 
-| New file | Role |
+| File | Role |
 |---|---|
-| `degradation_document.py` | Deterministic document degradations (seeded) |
-| `eval_document.py` | Restore → OCR → CER/WER/hallucination vs GT |
-| `data/doc_eval/synthetic/` | Rendered clean pages + GT |
-| `tests/test_document_restore.py` | Unit tests on synthetic “INVOICE 1200.00” |
+| `degradation_document.py` | Deterministic document degradations (seeded): JPEG 30–70, uneven illumination + shadow, motion blur, perspective, downscale/re-up, speckle |
+| `doc_data.py` | Synthetic invoice renderer, PDF→page GT builder, dataset manifests, demo PDF generator |
+| `document_ocr.py` | OCR adapter registry: RapidOCR (default) + Tesseract (optional) → tokens with conf/bbox |
+| `doc_metrics.py` | CER/WER, hallucination, digit hallucination, coverage, false-alarm, ECE |
+| `eval_document.py` | Restore/baseline → OCR → metrics → JSON report |
+| `tests/test_document_eval_smoke.py` | Unit + smoke tests on synthetic "INVOICE 1200.00" |
 
 Baselines in the harness, always:
 
-1. Raw image + Tesseract
-2. Adaptive threshold (Sauvola) + Tesseract
-3. Lanczos 2× + Tesseract
-4. Current `SmartUpscaler(mode=auto)` + Tesseract (prove photo SR *hurts* or does nothing)
+1. Raw image + OCR
+2. Sauvola threshold (`skimage`) + OCR
+3. Lanczos 2× + OCR
+4. `SmartUpscaler(mode="auto")` + OCR (proves photo SR *hurts* or does nothing; opt-in flag)
 5. Our document pipeline (the thing we ship)
+6. Optional external: OCRmyPDF (dev machine only, not a dependency)
 
-Ship a JSON report like `out/smoke_metrics.json`.
+Ship a JSON report like `out/doc_smoke.json`.
 
 ---
 
@@ -140,7 +141,7 @@ Ship a JSON report like `out/smoke_metrics.json`.
 PDF / image
     │
     ▼
-ingest (render PDF page @ 150–300 DPI, EXIF rotate)
+ingest (pypdfium2 render @150–300 DPI, EXIF rotate)
     │
     ▼
 page router (v2; v1 = treat whole page as text)
@@ -150,12 +151,12 @@ page router (v2; v1 = treat whole page as text)
     └─ background paper         → flatten illumination only
     │
     ▼
-confidence map (per-glyph OCR conf + optional recon disagreement)
+confidence audit (per-line OCR conf, digit re-pass, v2: recon disagreement)
     │
     ▼
 outputs
     ├─ restored PNG
-    ├─ searchable PDF (text layer + image)
+    ├─ searchable PDF (image + invisible text by bbox; reportlab)
     ├─ .txt / .json (tokens, boxes, conf)
     ├─ overlay PNG (low-conf glyphs highlighted)
     └─ optional SVG (graphics only, not the alphabet)
@@ -175,57 +176,66 @@ outputs
 
 | Current piece | Fate |
 |---|---|
-| `app.py` Gradio slider | Keep. Default mode `document`. Photo models → Advanced accordion. Grain default 0 (already). Hide UltraSharp as default. |
+| `app.py` Gradio slider | Keep. Default mode `document`. Photo models → Advanced accordion. Grain default 0 (already). |
 | `smart_upscaler.py` | Add `mode="document"` (and treat `auto` as document if page-like). Photo path remains `mode="photo"`. |
 | `vector_raster_hybrid.py` | Keep. v2: run on *non-text* masks only (logos/stamps). Do not vectorize glyph interiors in v1. |
 | `sr_engine.py` / x4plus / x4v3 | Advanced photo only. Not called from document default. |
 | `deep_unfolding.py` fidelity | Candidate *inner* prior later if CER plateaus; not v1. |
 | `eval_harness_v2.py` | Keep for photo regression; not the product scoreboard. |
-| `train_v2.py` / DIV2K | Frozen unless Phase 5 opens. |
+| `train_v2.py` / DIV2K | Frozen unless Phase F opens. |
 | `cli.py` | Add `--mode document`, PDF in/out, `--ocr`, `--lang`. |
 | `test_smart_upscaler.py` | Keep photo/vector tests. Add document tests; do not break PrakashJI skin gates for `mode=photo`. |
-| Examples De1 / PrakashJI | Move to “Photo examples”. Document examples: synthetic invoice + one public scan. |
+| Examples De1 / PrakashJI | Move to "Photo examples". Document examples: synthetic invoice + one public scan. |
 
 ---
 
-## 9. Technical choices (defaults)
+## 9. Technical choices (v1 defaults)
 
 | Concern | v1 default | Why | Revisit |
 |---|---|---|---|
-| OCR engine | Tesseract via `pytesseract` | Local, boring, good enough to measure restore | PaddleOCR if Latin CER stalls or we need boxes/conf more easily |
-| PDF read | `pypdfium2` | Lightweight render | PyMuPDF if write+read in one lib is simpler |
-| Searchable PDF write | PyMuPDF (`fitz`) insert image + invisible text | One dependency for write | reportlab if fitz fights us |
-| Restore | Classical OpenCV: rotate, illumination (background subtract / morphological black-hat), denoise (bilateral or NLM light), Sauvola binarize *as a side stream* (keep grayscale for display) | Matches ScanTailor’s actual gains; no training | DocRes weights only if harness says we lose on dewarp/shadow |
-| Languages | `eng` + `osd` | Tesseract lang packs documented | `nep`/`hin` as v2 flag |
-| Scale | Restore at native / 2× max | 4× is rarely the bottleneck | User toggle |
+| OCR engine | **RapidOCR 3.9.x (PP-OCRv6 ONNX), Apache-2.0, models bundled in the wheel (~31 MB)** | Zero external install, offline, per-line conf + boxes, DML/CUDA optional | Tesseract adapter measured per language |
+| OCR engine #2 | Tesseract 5 via subprocess (`tesseract --tsv`), optional | Comparison baseline, extra languages, OSD | Promote if it wins a language on the harness |
+| PDF read | `pypdfium2` | BSD-3/Apache, fast render, text-layer GT extraction | — |
+| Searchable PDF write | **`reportlab` (BSD-3)**, invisible text (`setTextRenderMode(3)`) | Permissive; no AGPL hazard | `pikepdf` (MPL-2.0) if we must edit existing PDFs |
+| Restore | Classical OpenCV + skimage: rotate, illumination flatten (morphological background division), light edge-preserving denoise, Sauvola/CLAHE as OCR side stream | Matches ScanTailor's actual gains; no training | DocRes weights only if harness says we lose on dewarp/shadow |
+| Text SR / heavy models | Not in v1 | Text SR hallucinates digits | Phase F, behind the same API, MIT DocRes |
+| Languages | `ch_en` RapidOCR default; Tesseract `eng` optional | Both offline | `nep`/`hin` as v2 flag (extra model download, then vendored) |
+| Scale | Restore at native / 2× max | 4× is rarely the OCR bottleneck | User toggle |
 | UI | Existing Gradio | Already shipped | — |
 
 **Display vs OCR:** show a cleaned *grayscale* page (readable). Feed OCR a *binarized or contrast-normalized* sibling. Do not force the user to look at a harsh binary unless they opt in.
+
+### 9a. Verified stack & licenses (shipped path = all permissive)
+
+| Component | Version installed | License | Notes |
+|---|---|---|---|
+| RapidOCR | 3.9.2 | Apache-2.0 | PP-OCRv6 det/rec/cls ONNX bundled in package |
+| onnxruntime (+directml) | 1.20.1 / 1.24.4 | MIT | CPU default; DML optional on RTX 2050 |
+| pypdfium2 | 5.10.1 | BSD-3 / Apache-2.0 | Render + text layer |
+| reportlab | 4.5.1 | BSD-3 | Searchable PDF writer |
+| OpenCV contrib | 4.13.0 | Apache-2.0 | classical restore |
+| scikit-image | 0.26.0 | BSD-3 | Sauvola/Niblack |
+| jiwer | 4.0.0 | Apache-2.0 | CER/WER |
+| Tesseract (optional) | not installed | Apache-2.0 | dev/baseline only |
+| DocRes (Phase F) | — | MIT | weights via OneDrive; mirror to GCS if adopted |
+
+**Banned from shipped path:** PyMuPDF (AGPL-3.0), Ghostscript (AGPL), any GPL OCR/model.
+
+**Air-gap requirement:** full pipeline must run with networking disabled (CI test). Pin `rapidocr==3.9.*` and vendor models so future releases never silently download.
 
 ---
 
 ## 10. Phases
 
-### Phase A — Harness (week 1)
+### Phase A — Harness (2–3 days)
 
-**Build**
+**Build:** `degradation_document.py`, `doc_data.py` (synthetic invoice + PDF text-layer GT), `document_ocr.py` (both adapters), `doc_metrics.py`, `eval_document.py` with baselines 1–4, smoke tests.
 
-- `degradation_document.py`
-- Synthetic invoice renderer (PIL/cv2: title, table, total `1200.00`, address)
-- `eval_document.py` with baselines 1–4
-- `tests/test_document_eval_smoke.py` (2 pages, CER computed)
+**Done when:** `python eval_document.py --json out/doc_smoke.json` runs on CPU; JSON includes CER + hallucination for raw/sauvola/lanczos; a written note records photo-SR CER vs raw (expected: not better).
 
-**Done when**
-
-- `python eval_document.py --json out/doc_smoke.json` runs on CPU in CI-like time
-- JSON includes CER for raw / sauvola / lanczos / smart-photo
-- We have a written note: photo SR CER vs raw (expected: photo SR ≥ raw, i.e. not better)
-
-### Phase B — Classical restore core (week 1–2)
+### Phase B — Classical restore core (3–5 days)
 
 **New module:** `document_restore.py`
-
-API:
 
 ```python
 restore_document(img_bgr, *, scale=1) -> dict
@@ -234,7 +244,7 @@ restore_document(img_bgr, *, scale=1) -> dict
 
 Steps (each function independently testable):
 
-1. EXIF/array orientation; optional 90/180 via Tesseract OSD later
+1. EXIF/array orientation; optional 90/180 via OCR cls/OSD later
 2. Downscale huge scans to max side 2500 for speed (record scale)
 3. Estimate skew (min-area rect of text-like edges or projection profile); rotate
 4. Illumination flatten (large-kernel median / morphological closing)
@@ -243,114 +253,47 @@ Steps (each function independently testable):
 7. Build `display_bgr`: illumination-corrected grayscale, *not* over-binarized
 8. If `scale==2`, Lanczos on display; OCR on the 2× binary
 
-**Done when**
-
-- CER on synthetic degraded invoices beats raw and beats Lanczos-only
-- Hallucination rate does not increase
-- Unit tests: known skew 5°, known shadow gradient
+**Done when:** CER on synthetic degraded invoices beats raw and Lanczos; hallucination does not increase; unit tests (known 5° skew, known shadow gradient) pass.
 
 **Do not** call `sr_engine` here.
 
-### Phase C — OCR + confidence + files (week 2)
+### Phase C — OCR confidence + files + CLI (3–4 days)
 
-**New module:** `document_ocr.py`
+- `document_ocr.py`: `ocr_page(ocr_bgr, backend="rapidocr", lang=...) -> list[Token]` with `text, conf, bbox`; flag `conf < 60` (tune on harness)
+- Digit-run detector: tokens matching `[0-9]{2,}` get a **recognition-only second pass** on an upscaled crop; disagreement → `flag="digit_conflict"`
+- `document_export.py`: searchable PDF (reportlab), overlay PNG (green high conf, amber low, red conflict), transcript.txt, ocr.json
+- CLI: `python cli.py --mode document --input scan.jpg --output out_dir --ocr --pdf`
 
-- `ocr_page(ocr_bgr, lang="eng") -> list[Token]` with `text, conf, bbox`
-- Flag `conf < 60` (tune on harness)
-- Digit-run detector: tokens matching `[0-9]{2,}` get a second pass (Tesseract `--psm 7` on crop) ; disagreement → `flag="digit_conflict"`
+**Done when:** PDF text is selectable and roughly aligned; overlay exists; our pipeline is baseline 5 in the harness and wins on synthetic CER.
 
-**New module:** `document_export.py`
+### Phase D — App default (2–3 days)
 
-- Write `searchable.pdf` (image + hidden text at bboxes)
-- Write `overlay.png` (boxes: green high conf, amber low, red conflict)
-- Write `transcript.txt` and `ocr.json`
-
-**CLI**
-
-```
-python cli.py --mode document --input scan.jpg --output out_dir --ocr --pdf
-python cli.py --mode document --input pack.pdf --output out_dir --ocr --pdf
-```
-
-**Done when**
-
-- PDF text is selectable and roughly aligned
-- Overlay exists
-- `eval_document.py` includes our pipeline as baseline 5 and wins on synthetic CER
-
-### Phase D — App default (week 2–3)
-
-**`app.py`**
-
-- Default routing: **Document (recommended)**
-- Inputs: image *and* PDF (first page in v1; “all pages” v1.1 if cheap)
-- Outputs: slider (original vs display restore), overlay, transcript markdown, files (PNG, PDF, TXT). SVG checkbox: **off by default**; “graphics only”
-- Remove grain slider from the document pane
-- Photo engine dropdown lives under Advanced
-- Examples: synthetic invoice + public document scan; portraits demoted
-
-**`smart_upscaler.py`**
-
-- `mode="document"` calls `restore_document` (scale 1 or 2)
-- `mode="auto"`: cheap page classifier (see below); if document-like → document, else current photo+vector
-- `mode="photo"` / `"vector"` / `"fidelity"` unchanged
-
-**Page classifier (cheap, v1)**
-
-- Gray, high connected-component count of text-sized blobs, low color saturation, little skin → document
-- Else photo
-- Bias: **prefer document** if uncertain (product is documents now)
-
-**Done when**
-
-- `test_web_app.py` still passes for a synthetic text image
-- New test: invoice → overlay + pdf path returned
-- Manual 10-minute pass on 5 real pages (not committed)
+- `app.py`: default routing **Document (recommended)**; image *and* PDF (first page in v1); outputs slider + overlay + transcript + files; SVG checkbox off by default; grain slider removed from document pane; photo engines under Advanced
+- `smart_upscaler.py`: `mode="document"`, `mode="auto"` page classifier (text-line area + saturation + skin; bias → document)
+- Tests: `test_web_app.py` passes for synthetic text; new invoice → overlay + pdf path test
 
 ### Phase E — Mixed-page router (the wedge) (week 3–4)
 
-This is the demo that is not “ScanTailor in a Gradio skin.”
-
-1. Segment:
-   - Text lines (MSER / EAST-lite / Tesseract layout / contour aspect)
-   - Graphic blobs (existing `segment_flat_and_graphic_regions` minus text boxes)
-   - Photo-like (high local variance, skin, or large texture) **and signatures** (ink, connected, in a typical signature band)
-2. Text boxes → restore+OCR
-3. Graphic blobs → current vector export (stamps, logos). Do **not** OCR them.
-4. Signature/photo boxes → copy pixels through (maybe mild denoise). **No SR.**
-5. Recompose display image
-6. Digit-conflict gate on amounts (regex for currency / totals)
-
-**Done when**
-
-- A constructed page (photo thumbnail + invoice text + colored logo) OCRs the table, vectorizes the logo, leaves the photo un-GANed
-- Test in `test_document_router.py`
-- Hallucination rate on synthetic amounts still ≤ raw
+Text boxes (from the OCR det pass) → restore+OCR; graphic blobs → existing Bézier export; signature/photo boxes → copy pixels (no SR); paper → flatten; recompose; amount gate on digit conflicts. Test in `tests/test_document_router.py`.
 
 ### Phase F — Only if CER plateaus (optional research)
 
-- Try DocRes (or similar) **weights as a module** behind the same API; keep the gate
+- DocRes (MIT) **weights as a module** behind the same API; keep the gate
 - Small text-SR (TSRN-class) **inside text boxes only**, reconstruction-constrained
-- Unfolding/fidelity as a digit prior — only if it *lowers* hallucination, not just PSNR
-
-If a borrowed model wins CER without raising hallucination, **use it**. Do not retrain a photo GAN to “be DocRes.”
+- If a borrowed model lowers CER without raising hallucination, **use it** — do not retrain a photo GAN to "be DocRes"
 
 ### Phase G — Product polish
 
-- Multi-page PDF
-- Language pack UI (`eng`, `nep`, `hin`, `fra`…)
-- Batch folder in CLI (already almost there)
-- “I’m not sure” summary at the top: list of flagged amounts/dates
-- Desktop README: Tesseract install on Windows
+Multi-page PDF (v1.1), language packs UI, batch folder in CLI, "I'm not sure" summary of flagged amounts/dates, Windows packaging.
 
 ---
 
 ## 11. UX copy (ship this tone)
 
 - Title: **VectorScaling — Document Restore**
-- Subtitle: Local. Searchable. Won’t invent the numbers on your bill.
+- Subtitle: Local. Searchable. Won't invent the numbers on your bill.
 - Primary button: **Restore & read**
-- Status line: `CER proxy: n low-confidence glyphs · k digit conflicts · t seconds`
+- Status line: `n low-confidence glyphs · k digit conflicts · t seconds`
 - If digit conflict: show original crop and restored crop side by side, neither auto-picked.
 
 ---
@@ -359,12 +302,15 @@ If a borrowed model wins CER without raising hallucination, **use it**. Do not r
 
 | Risk | Mitigation |
 |---|---|
-| Tesseract install hell on Windows | Document `winget install Tesseract-OCR`; skip OCR tests if binary missing; restore still works |
-| Classical restore fails on heavy curl/dewarp | Phase F DocRes dewarp only; don’t block v1 |
-| Users still judge “prettiness” | Overlay + transcript make OCR the visible product |
+| RapidOCR API/model drift | Pin `rapidocr==3.9.*`, vendor ONNX models, single adapter file |
+| Offline guarantee regresses | Air-gap CI test; models vendored |
+| Tesseract install hell on Windows | It is optional now; `winget install -e --id tesseract-ocr.tesseract` documented; tests skip when absent |
+| Classical restore fails on heavy curl/dewarp | Phase F DocRes dewarp only; do not block v1 |
+| Users still judge "prettiness" | Overlay + transcript make OCR the visible product |
 | Photo users feel abandoned | Advanced → Photo mode, old engines intact |
-| Private eval data | gitignore; synthetic CI only |
-| Scope creep (plates, anime) | This document’s non-goals; refuse in UI |
+| Synthetic/PDF GT skews to clean typography | Photo-realistic print simulation; public receipt sets as real-world sanity check |
+| Multi-column PDF text order inflates CER | Report the extraction floor; compare methods relative to it |
+| Scope creep (plates, anime) | This document's non-goals; refuse in UI |
 
 ---
 
@@ -380,17 +326,12 @@ If a borrowed model wins CER without raising hallucination, **use it**. Do not r
 
 ---
 
-## 14. First implementation slice (when coding starts)
+## 14. Distribution & packaging
 
-Do this in one PR, in order:
-
-1. `degradation_document.py` + synthetic invoice + `eval_document.py` smoke
-2. `document_restore.py` + unit tests
-3. Wire `SmartUpscaler.upscale(..., mode="document")` without breaking `photo`/`vector`
-4. `eval_document.py` compares document mode vs raw vs photo-smart
-5. Only then touch `app.py`
-
-No new neural training in that PR.
+- **Open core:** CLI + Gradio OSS (this repo), Apache-2.0-friendly dependency set.
+- **Paid Pro desktop:** signed portable Windows build (PyInstaller is fine for proprietary apps), batch mode, multi-language packs, priority updates. No cloud requirement, ever, for the happy path.
+- Bundle the RapidOCR ONNX models and reportlab fonts; attribution in `MODEL_LICENSES.md`.
+- Naming: repo is `VectoVecto`, UI says VectorScaling — pick one brand before Pro launch (open decision).
 
 ---
 
@@ -398,24 +339,38 @@ No new neural training in that PR.
 
 | Question | Default unless we revisit |
 |---|---|
-| Tesseract vs PaddleOCR | Tesseract v1 |
+| OCR engine | RapidOCR default; Tesseract optional; harness decides per language |
 | Binarize for display? | No; grayscale display, binary for OCR |
 | Default scale | 1× restore; 2× optional |
 | `auto` means | Document if page-like, else photo |
 | SVG default | Off |
-| Languages | English first |
+| Languages | English/Chinese first |
 | Cloud | Never in v1 |
+| v1 scope | Single page; multi-page = v1.1 |
 
 ---
 
-## 16. Definition of “we shipped the product”
+## 16. Definition of "we shipped the product"
 
 A stranger can:
 
-1. Install Tesseract + `pip install -r requirements.txt`
+1. `pip install -r requirements.txt` (no external binaries required)
 2. Open the Gradio app
 3. Drop a phone photo of a printed invoice
 4. Download a searchable PDF
-5. See any shaky totals highlighted instead of silently “fixed”
+5. See any shaky totals highlighted instead of silently "fixed"
 
-And on the synthetic harness, document mode has **lower CER than raw and lower CER than current photo SmartUpscaler, with hallucination rate no worse than raw.**
+And on the frozen harness, document mode has **lower CER than raw OCR and lower CER than photo SmartUpscaler, with hallucination rate no worse than raw**, while the pipeline runs with networking disabled.
+
+---
+
+## 17. First implementation slice (one PR series)
+
+1. `degradation_document.py` + synthetic invoice + `doc_data.py` + `eval_document.py` smoke
+2. `document_ocr.py` (RapidOCR + Tesseract adapters) + `doc_metrics.py`
+3. `document_restore.py` + unit tests
+4. Wire `SmartUpscaler.upscale(..., mode="document")` without breaking `photo`/`vector`
+5. `eval_document.py` compares document mode vs raw vs photo-smart
+6. Only then touch `app.py`
+
+No new neural training in that PR series.
