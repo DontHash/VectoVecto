@@ -1,16 +1,22 @@
 """
-cli.py — batch folder super-resolution CLI.
+cli.py — batch super-resolution / document-restore CLI.
 
-Examples:
+Photo mode (default):
   python cli.py --input photos --output photos_x4 --recursive --skip-existing
   python cli.py --input shot.jpg --output out --model auto --tta
   python cli.py --input icons --output icons_x4 --model ncnn:ultrasharp-4x --format png --report run.json
   python cli.py --input catalog --output catalog_x4 --format webp --quality 95 --suffix _hd
 
+Document mode (searchable PDF + overlay + transcript, local):
+  python cli.py --mode document --input scan.jpg --output out_dir
+  python cli.py --mode document --input pack.pdf --output out_dir --max-pages 5 --ocr rapidocr
+  python cli.py --mode document --input photos_dir --output out_dir --recursive --skip-existing
+
 Notes:
   * Alpha channels are preserved (RGB upscaled by the model, alpha by Lanczos).
   * `--workers` >1 is only used for CPU-side engines (ncnn/classical); GPU
     engines (torch/ONNX-DirectML) run single-process to avoid device contention.
+  * Document mode never needs the cloud: OCR models are bundled with RapidOCR.
 """
 from __future__ import annotations
 
@@ -75,12 +81,144 @@ def out_name(src: str, out_dir: str, suffix: str, ext: str, flat: bool,
     return os.path.join(sub, f"{stem}{suffix}.{ext}")
 
 
+# ---------------------------------------------------------------------------
+# document mode
+# ---------------------------------------------------------------------------
+
+DOC_EXTS = IMG_EXTS + (".pdf",)
+
+
+def _list_doc_inputs(path: str, recursive: bool) -> List[str]:
+    if os.path.isfile(path):
+        return [path]
+    files: List[str] = []
+    if recursive:
+        for dirpath, _dirs, names in os.walk(path):
+            for n in names:
+                if n.lower().endswith(DOC_EXTS):
+                    files.append(os.path.join(dirpath, n))
+    else:
+        for n in os.listdir(path):
+            p = os.path.join(path, n)
+            if os.path.isfile(p) and n.lower().endswith(DOC_EXTS):
+                files.append(p)
+    return sorted(files)
+
+
+def run_document_mode(args) -> int:
+    import doc_data
+    from document_export import export_document_outputs
+    from document_ocr import available_backends, compare_digit_streams, ocr_page
+    from document_restore import restore_document
+
+    backend = args.ocr
+    if not backend:
+        avail = available_backends()
+        if not avail:
+            raise SystemExit("no OCR backend available (pip install rapidocr)")
+        backend = "rapidocr" if "rapidocr" in avail else avail[0]
+
+    files = _list_doc_inputs(args.input, args.recursive)
+    if args.limit:
+        files = files[:args.limit]
+    if not files:
+        raise SystemExit("no input documents found")
+
+    dpi = args.dpi or None
+    records: List[Dict] = []
+    ok = skipped = failed = 0
+    t_start = time.time()
+    print(f"[cli] document mode | {len(files)} inputs | ocr={backend} "
+          f"deskew={args.deskew} pdf={not args.no_pdf}")
+
+    def process(img: np.ndarray, name: str, src: str):
+        nonlocal ok, failed
+        pdf_path = os.path.join(args.output, f"{name}.pdf")
+        if args.skip_existing and os.path.exists(pdf_path):
+            records.append({"src": src, "name": name, "status": "skipped"})
+            return "skipped"
+        t0 = time.time()
+        restored = restore_document(img, deskew=args.deskew)
+        display = restored["display_bgr"]
+        if args.deskew:
+            primary_img, audit_img = display, img
+        else:
+            primary_img, audit_img = img, display
+
+        result = ocr_page(primary_img, backend=backend, lang=args.lang,
+                          recheck_digits=args.repass_digits)
+        conflicts = 0
+        try:
+            audit = ocr_page(audit_img, backend=backend, lang=args.lang)
+            conflicts = compare_digit_streams(result, audit)
+        except Exception as e:  # noqa: BLE001
+            print(f"    [warn] audit stream failed: {e}")
+        result.meta["digit_conflicts"] = conflicts
+        result.meta["primary_stream"] = "display" if args.deskew else "raw"
+        result.meta["source"] = src
+        result.meta["skew_angle"] = restored["debug"]["skew_angle"]
+
+        os.makedirs(args.output, exist_ok=True)
+        written = export_document_outputs(
+            args.output, name, display, result, dpi=dpi,
+            make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
+            make_txt=not args.no_txt, make_json=True, overlay_source=display)
+
+        low = sum(1 for t in result.tokens if "low_conf" in t.flags)
+        dt = time.time() - t0
+        ok += 1
+        records.append({"src": src, "name": name, "status": "ok",
+                        "tokens": len(result.tokens), "low_conf": low,
+                        "digit_conflicts": conflicts, "seconds": round(dt, 3),
+                        "outputs": written, "skew_angle": restored["debug"]["skew_angle"]})
+        print(f"  {name}: {len(result.tokens)} tokens · {low} low-conf · "
+              f"{conflicts} digit conflicts · {dt:.1f}s")
+        return "ok"
+
+    for src in files:
+        try:
+            if src.lower().endswith(".pdf"):
+                pages = list(doc_data.pdf_to_pages(src, dpi=args.dpi or 200))
+                if args.max_pages:
+                    pages = pages[:args.max_pages]
+                stem = os.path.splitext(os.path.basename(src))[0]
+                for idx, page_img, _gt in pages:
+                    process(page_img, f"{stem}_p{idx:03d}", f"{src}#p{idx}")
+            else:
+                img = cv2.imread(src, cv2.IMREAD_COLOR)
+                if img is None:
+                    raise ValueError("unreadable image")
+                stem = os.path.splitext(os.path.basename(src))[0]
+                status = process(img, stem, src)
+                if status == "skipped":
+                    skipped += 1
+        except SystemExit:
+            raise
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            records.append({"src": src, "status": "error", "error": str(e)})
+            print(f"  FAILED {src}: {e}")
+
+    total = time.time() - t_start
+    print(f"[cli] document mode done: {ok} ok, {skipped} skipped, {failed} failed "
+          f"in {total:.1f}s")
+    if args.report:
+        os.makedirs(os.path.dirname(os.path.abspath(args.report)), exist_ok=True)
+        with open(args.report, "w", encoding="utf-8") as f:
+            json.dump({"summary": {"inputs": len(files), "ok": ok, "skipped": skipped,
+                                   "failed": failed, "seconds": round(total, 2),
+                                   "ocr": backend}, "records": records}, f, indent=2)
+        print(f"[cli] report: {args.report}")
+    return 1 if failed else 0
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Batch SR folder upscaler")
-    ap.add_argument("--input", required=True, help="file or folder")
+    ap = argparse.ArgumentParser(description="Batch SR upscaler / document restore")
+    ap.add_argument("--mode", choices=["photo", "document"], default="photo")
+    ap.add_argument("--input", required=True, help="file or folder (document mode also accepts .pdf)")
     ap.add_argument("--output", required=True, help="output folder")
     ap.add_argument("--model", default="auto",
-                    help="auto | <path>.pth | <path>.onnx | ncnn:<name> | bicubic | lanczos")
+                    help="photo mode: auto | <path>.pth | <path>.onnx | ncnn:<name> | bicubic | lanczos")
     ap.add_argument("--scale", type=int, default=4)
     ap.add_argument("--recursive", action="store_true")
     ap.add_argument("--flat", action="store_true", help="do not mirror subfolders")
@@ -98,7 +236,23 @@ def main():
     ap.add_argument("--workers", type=int, default=1,
                     help=">1 only for ncnn/classical engines")
     ap.add_argument("--limit", type=int, default=0)
+    doc = ap.add_argument_group("document mode")
+    doc.add_argument("--ocr", default=None, help="rapidocr | tesseract (default: best available)")
+    doc.add_argument("--lang", default=None, help="OCR language (backend dependent)")
+    doc.add_argument("--deskew", action="store_true",
+                     help="rotate to deskew; OCR then runs on the display for alignment")
+    doc.add_argument("--repass-digits", action="store_true", dest="repass_digits",
+                     help="re-read digit tokens (recognition-only); off by default (measured redundant)")
+    doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
+                     help="max pages per PDF input (default 1)")
+    doc.add_argument("--dpi", type=int, default=0, help="source DPI for PDF page size (0 = auto)")
+    doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
+    doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
+    doc.add_argument("--no-txt", action="store_true", dest="no_txt")
     args = ap.parse_args()
+
+    if args.mode == "document":
+        sys.exit(run_document_mode(args))
 
     if not os.path.exists(args.input):
         raise SystemExit(f"input not found: {args.input}")
