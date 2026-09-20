@@ -27,9 +27,10 @@ from typing import Dict, Optional
 import numpy as np
 
 from document_ocr import (RECOMMENDED_STREAM, OCRResult, available_backends,
-                          compare_digit_streams, ocr_page, review_queue)
-from document_orientation import (RotationInfo, detect_rotation,
-                                  orientation_suspect, rotate_bgr)
+                          compare_digit_streams, get_backend, ocr_page, review_queue)
+from document_orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
+                                  RotationInfo, detect_rotation, infer_angle,
+                                  rotate_bgr, vertical_fraction)
 from document_restore import restore_document
 
 
@@ -67,6 +68,18 @@ def pick_backend(backend: Optional[str] = None) -> str:
     return "rapidocr" if "rapidocr" in avail else avail[0]
 
 
+@dataclass
+class _Pass:
+    """One full restore + dual-stream OCR pass (orientation may re-run it)."""
+    restored: Dict
+    display: np.ndarray
+    primary_img: np.ndarray
+    primary_name: str
+    result: OCRResult
+    conflicts: int
+    audit_error: Optional[str]
+
+
 def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           lang: Optional[str] = None, deskew: bool = False,
                           scale: int = 1, repass_digits: bool = False,
@@ -79,75 +92,136 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           conf_threshold: float = 60.0) -> DocumentResult:
     t0 = time.time()
     backend = pick_backend(backend)
+    be = get_backend(backend)
 
-    rot = RotationInfo()
-    if auto_rotate:
-        rot = detect_rotation(img_bgr)
+    def _run_pass(image: np.ndarray) -> _Pass:
+        restored = restore_document(image, scale=scale, deskew=deskew)
+        display = restored["display_bgr"]
+
+        # Primary stream follows the measured table (RECOMMENDED_STREAM); the
+        # other stream audits digit tokens. deskew=True forces the display.
+        stream = RECOMMENDED_STREAM.get(backend, "raw")
+        if deskew:
+            primary_img, audit_img, primary_name = display, image, "display"
+        elif stream.startswith("restore"):
+            primary_img, audit_img, primary_name = display, image, "restored"
+        else:
+            primary_img, audit_img, primary_name = image, display, "raw"
+
+        result = ocr_page(primary_img, backend=backend, lang=lang,
+                          conf_threshold=conf_threshold, recheck_digits=repass_digits)
+        conflicts = 0
+        audit_error = None
+        try:
+            audit = ocr_page(audit_img, backend=backend, lang=lang,
+                             conf_threshold=conf_threshold)
+            conflicts = compare_digit_streams(result, audit)
+        except Exception as e:  # noqa: BLE001
+            audit_error = str(e)
+        return _Pass(restored, display, primary_img, primary_name, result,
+                     conflicts, audit_error)
+
+    # Pass 1 doubles as the orientation-evidence pass: the line classifier
+    # votes and token geometry are read off its tokens (no extra OCR on the
+    # common upright case). A rotation re-runs the pass on the rotated page.
+    p = _run_pass(img_bgr)
+    passes = 1
+    votes = be.line_orientation_votes(p.primary_img, p.result)
+    vfrac = vertical_fraction(p.result.tokens)
+    info = infer_angle(p.result.tokens, votes, auto_rotate=auto_rotate)
+    rot = info
+    if info.source == "votes-180":
+        p = _run_pass(rotate_bgr(img_bgr, 180))
+        passes = 2
+    elif info.source == "probe-needed" and backend == "rapidocr":
+        # Sideways page: re-read it rotated 90° clockwise. If the probe is
+        # upright, its votes pick 90 (low) vs 270 (high); if the probe is
+        # still vertical, fall back to OSD and otherwise flag for review.
+        probe = rotate_bgr(img_bgr, 90)
+        pp = _run_pass(probe)
+        passes = 2
+        pvotes = be.line_orientation_votes(pp.primary_img, pp.result)
+        if vertical_fraction(pp.result.tokens) < VERTICAL_ACTION:
+            p = pp
+            if (pvotes and pvotes[0] >= VOTE180_FRAC and pvotes[1] >= VOTE180_HI):
+                p = _run_pass(rotate_bgr(probe, 180))
+                passes = 3
+                rot = RotationInfo(270, round(pvotes[0], 3), "probe-270", raw_angle=270)
+            else:
+                conf = round(pvotes[0], 3) if pvotes else 0.0
+                rot = RotationInfo(90, conf, "probe-90", raw_angle=90)
+        else:
+            rot = _osd_sideways(img_bgr)
+            if rot.angle:
+                p = _run_pass(rotate_bgr(img_bgr, rot.angle))
+                passes = 2
+    elif info.source == "probe-needed":
+        rot = _osd_sideways(img_bgr)
         if rot.angle:
-            img_bgr = rotate_bgr(img_bgr, rot.angle)
+            p = _run_pass(rotate_bgr(img_bgr, rot.angle))
+            passes = 2
 
-    restored = restore_document(img_bgr, scale=scale, deskew=deskew)
-    display = restored["display_bgr"]
-
-    # Primary stream follows the measured table (RECOMMENDED_STREAM); the other
-    # stream audits digit tokens. deskew=True forces the display (raw is rotated).
-    stream = RECOMMENDED_STREAM.get(backend, "raw")
-    if deskew:
-        primary_img, audit_img = display, img_bgr
-        primary_name = "display"
-    elif stream.startswith("restore"):
-        primary_img, audit_img = display, img_bgr
-        primary_name = "restored"
-    else:
-        primary_img, audit_img = img_bgr, display
-        primary_name = "raw"
-
-    result = ocr_page(primary_img, backend=backend, lang=lang,
-                      conf_threshold=conf_threshold, recheck_digits=repass_digits)
-    conflicts = 0
-    audit_error = None
-    try:
-        audit = ocr_page(audit_img, backend=backend, lang=lang,
-                         conf_threshold=conf_threshold)
-        conflicts = compare_digit_streams(result, audit)
-    except Exception as e:  # noqa: BLE001
-        audit_error = str(e)
-
-    result.meta["digit_conflicts"] = conflicts
-    result.meta["primary_stream"] = primary_name
-    if audit_error:
-        result.meta["audit_error"] = audit_error
-    result.meta["skew_angle"] = restored["debug"]["skew_angle"]
+    result = p.result
+    result.meta["digit_conflicts"] = p.conflicts
+    result.meta["primary_stream"] = p.primary_name
+    if p.audit_error:
+        result.meta["audit_error"] = p.audit_error
+    result.meta["skew_angle"] = p.restored["debug"]["skew_angle"]
 
     if reading_order:
         from document_layout import sort_reading_order, text_in_order
         result.tokens = sort_reading_order(result.tokens)
         result.text = text_in_order(result.tokens)
     result.meta["reading_order"] = reading_order
-    suspect = orientation_suspect(result.tokens) or rot.source == "osd-180"
+
+    vfinal = vertical_fraction(result.tokens)
+    suspect = bool(
+        vfinal >= VERTICAL_ACTION
+        or rot.source in ("inconclusive", "osd-180", "vote-ambiguous")
+        or (not auto_rotate and info.raw_angle in (90, 180))
+    )
     result.meta["orientation_suspect"] = suspect
     result.meta["auto_rotate"] = rot.as_dict()
+    result.meta["orientation_evidence"] = {
+        "vote180": round(votes[0], 3) if votes else None,
+        "vote180_hi": round(votes[1], 3) if votes else None,
+        "n_votes": votes[2] if votes else 0,
+        "vertical": round(vfrac, 3),
+        "passes": passes,
+    }
 
     outputs: Dict[str, str] = {}
     if out_dir:
         from document_export import export_document_outputs
         outputs = export_document_outputs(
-            out_dir, stem, display, result, dpi=dpi,
+            out_dir, stem, p.display, result, dpi=dpi,
             make_pdf=make_pdf, make_overlay=make_overlay, make_txt=make_txt,
-            make_json=make_json, overlay_source=display)
+            make_json=make_json, overlay_source=p.display)
 
     meta = {
         "seconds": round(time.time() - t0, 2),
         "backend": backend,
-        "skew_angle": restored["debug"]["skew_angle"],
+        "skew_angle": p.restored["debug"]["skew_angle"],
         "primary_stream": result.meta["primary_stream"],
-        "digit_conflicts": conflicts,
+        "digit_conflicts": p.conflicts,
         "reading_order": reading_order,
         "orientation_suspect": suspect,
         "auto_rotate": rot.as_dict(),
+        "orientation_evidence": result.meta["orientation_evidence"],
         "repass_digits": repass_digits,
     }
-    return DocumentResult(display_bgr=display, ocr=result, meta=meta, outputs=outputs)
+    return DocumentResult(display_bgr=p.display, ocr=result, meta=meta, outputs=outputs)
+
+
+def _osd_sideways(img_bgr: np.ndarray) -> RotationInfo:
+    """OSD fallback for 90/270 when OCR evidence is inconclusive/unavailable."""
+    osd = detect_rotation(img_bgr)
+    if osd.angle in (90, 270):
+        return RotationInfo(osd.angle, osd.confidence, "osd-sideways",
+                            raw_angle=osd.angle)
+    if osd.source == "osd-180":
+        return osd
+    return RotationInfo(0, 0.0, "inconclusive")
 
 
 if __name__ == "__main__":

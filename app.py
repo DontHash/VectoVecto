@@ -86,7 +86,7 @@ def _transcript_md(result) -> str:
 
 
 def process_document(
-    input_img: Optional[np.ndarray],
+    input_img: Optional[Union[np.ndarray, str]],
     pdf_file: Optional[str],
     ocr_backend: str = "auto",
     deskew_flag: bool = False,
@@ -95,6 +95,9 @@ def process_document(
     want_txt: bool = True,
 ):
     """Gradio handler for the document tab.
+
+    `input_img` is a file path from the filepath-typed upload (EXIF applied via
+    `load_image_bgr`); a numpy RGB array is still accepted for API/tests.
 
     Returns: (slider_tuple, overlay_rgb, transcript_md, pdf_path, txt_path, status_md)
     """
@@ -114,7 +117,13 @@ def process_document(
         _idx, img_bgr, _gt = pages[0]
         stem = f"pdf_{ts}"
     else:
-        img_bgr = cv2.cvtColor(input_img, cv2.COLOR_RGB2BGR)
+        if isinstance(input_img, str):
+            from document_orientation import load_image_bgr
+            img_bgr = load_image_bgr(input_img)
+            if img_bgr is None:
+                return None, None, None, None, None, "Could not read that image."
+        else:
+            img_bgr = cv2.cvtColor(input_img, cv2.COLOR_RGB2BGR)
         stem = f"doc_{ts}"
 
     try:
@@ -289,7 +298,7 @@ def create_app():
                     with gr.Column(scale=4):
                         doc_input = gr.Image(
                             label="Page photo / scan (or use the PDF slot below)",
-                            type="numpy",
+                            type="filepath",
                             sources=["upload", "clipboard"],
                             height=260,
                         )

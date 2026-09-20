@@ -1,28 +1,34 @@
 """
-document_orientation.py — page orientation handling (EXIF, OSD, geometry).
+document_orientation.py — page orientation handling.
 
-Measured 2026-09-20 (this repo):
-  * RapidOCR reads 180°/90° pages as garbage (CER 0.80-0.85 vs 0.09-0.39
-    upright) while token confidences stay ~99 — OCR confidence cannot detect
-    rotation, and RapidOCR's line classifier does not fix page-level 180°.
-  * Tesseract OSD is exact on clean pages on the order of >=1500 px
-    (0/90/180/270, confidence >= 5.7) but WRONG on small receipts even when
-    upscaled (3/6 upright receipts reported 180° at confidence up to 4.8).
+Corrected findings 2026-09-20 (the first P3 pass misread reverse line ORDER as
+garbage TEXT — order-sensitive CER hid it):
+  * RapidOCR reads 180° pages perfectly, line for line (cls flips each crop,
+    conf 0.9999); the lines come out in reversed order because detection walks
+    the flipped image top-to-bottom. Re-OCR after a 180° image rotation is
+    clean (synthetic CER 0.000).
+  * 90°/270° pages: detection perspective-unrotates the line boxes, so the
+    TEXT is also largely correct, but the line classifier votes 0/180 per box
+    ambiguously (fractions 0.12-0.55) and vertical boxes dominate (h/w >= 1.5
+    on 0.91-1.00 of tokens vs <0.6 on upright receipts).
+  * Page-level evidence that works (measured):
+      - cls votes (share of lines classed 180; share with score >= 0.9):
+        flipped 0.73-1.00 / 0.45-1.00, upright <=0.50 / <=0.25; action needs
+        frac >= 0.6 AND hi >= 0.4 (0 false flips / 60 upright pages, 59/60
+        flipped detected on SROIE+CORD). Classifier-hard photos vote high BOTH
+        ways and land in `vote-ambiguous` (flag, never act);
+      - vertical token fraction: >=0.91 sideways vs <0.6 upright (0/30 SROIE);
+      - a 90°-clockwise probe pass resolves the axis (probe verticality drops
+        to 0) and its votes then pick the direction (270° vs 90°).
+  * OSD (tesseract) stays only as a fallback: no cls votes (tesseract backend)
+    or inconclusive probes. RapidOCR never needs it.
 
-Policy (each rule exists because of the measurements above):
-  * EXIF orientation is applied at load (`load_image_bgr`) — free, and the
-    common case for phone photos (orientation 3 = 180° included).
-  * OSD auto-rotation is applied ONLY for 90°/270° on pages with long side
-    >= OSD_MIN_SIDE (receipts and small scans are excluded by construction).
-    For these the detector geometry itself guarantees the axis; OSD only
-    supplies the direction.
-  * 180° is NEVER auto-rotated from OSD: the false-positive that rotated an
-    upright large receipt 180° (conf 4.9) and the probe that found no GT-free
-    text feature separating upright from 180° OCR (aggregate token stats were
-    identical) make blind flipping destructive. OSD's 180° opinion is recorded
-    as source `osd-180` and surfaces as `orientation_suspect`.
-  * 90°/270° on small inputs also get the geometry `orientation_suspect`
-    marker (no auto action: direction is ambiguous without OSD).
+Policy:
+  * EXIF orientation is applied at load (`load_image_bgr`) — phone photos.
+  * Evidence-first: OCR once, then votes/verticality decide 0/90/180/270
+    (see `infer_angle`); a rotation re-runs the pipeline once on the rotated
+    page. No blind flips: every decision rests on per-line classifier votes
+    or measured geometry.
 """
 from __future__ import annotations
 
@@ -31,15 +37,20 @@ import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
 
-OSD_MIN_SIDE = 1500      # long side, px — receipts are below this on purpose
+OSD_MIN_SIDE = 1500      # long side, px — OSD fallback only trusts large pages
 OSD_MIN_CONF = 3.0       # clean pages score >=4.5; below this OSD is noise
 VERTICAL_RATIO = 1.5     # token h/w above this counts as a vertical line
-VERTICAL_FRACTION = 0.6  # ... and this fraction of tokens makes the page suspect
+VERTICAL_FRACTION = 0.6  # ... and this fraction makes the page sideways
+VERTICAL_ACTION = 0.6    # measured: sideways 0.91-1.00, upright <0.6 (0/30)
+VOTE180_FRAC = 0.6       # flipped frac180: 0.73-1.00 | upright: <=0.50 (60 pages)
+VOTE180_HI = 0.4         # flipped hi-conf 180: 0.45-1.00 | upright: <=0.25
+VOTE180_AMBIG_FRAC = 0.5  # >= this but not actionable -> suspect, never act
+MIN_TOKENS = 5           # below this there is no reliable page-level evidence
 
 
 @dataclass
@@ -111,7 +122,11 @@ def rotate_bgr(img: np.ndarray, degrees: int) -> np.ndarray:
 
 
 def detect_rotation(img_bgr: np.ndarray) -> RotationInfo:
-    """Decide the page rotation to apply before restore/OCR (see module docstring)."""
+    """OSD-only fallback (tesseract backend / inconclusive OCR evidence).
+
+    Kept for backends without a line classifier; the rapidocr path uses
+    `vertical_fraction` + `line_orientation_votes` instead (see module docstring).
+    """
     h, w = img_bgr.shape[:2]
     if max(h, w) < OSD_MIN_SIDE:
         return RotationInfo(0, 0.0, "skipped-small")
@@ -125,22 +140,68 @@ def detect_rotation(img_bgr: np.ndarray) -> RotationInfo:
                             raw_angle=osd["rotate"] % 360)
     angle = osd["rotate"] % 360
     if angle == 180:
-        # never flip on OSD alone (see module docstring); surface for review
+        # OSD false-positived 180 on a large upright receipt (conf 4.9); the
+        # rapidocr evidence path handles 180 properly, this fallback does not.
         return RotationInfo(0, osd["confidence"], "osd-180", raw_angle=180)
     return RotationInfo(angle, osd["confidence"], "osd", raw_angle=angle)
 
 
-def orientation_suspect(tokens: Sequence, min_tokens: int = 5) -> bool:
-    """True when token geometry says the page is 90/270 (vertical text lines)."""
+def vertical_fraction(tokens: Sequence, min_tokens: int = MIN_TOKENS) -> float:
+    """Share of tokens whose bbox is taller than wide (sideways text lines)."""
     if len(tokens) < min_tokens:
-        return False
+        return 0.0
     vertical = 0
     for tok in tokens:
         x0, y0, x1, y1 = tok.bbox
         tw, th = max(1, x1 - x0), max(1, y1 - y0)
         if th / tw >= VERTICAL_RATIO:
             vertical += 1
-    return vertical / len(tokens) >= VERTICAL_FRACTION
+    return vertical / len(tokens)
+
+
+def orientation_suspect(tokens: Sequence, min_tokens: int = MIN_TOKENS) -> bool:
+    """True when token geometry still says the page is 90/270."""
+    return vertical_fraction(tokens, min_tokens) >= VERTICAL_ACTION
+
+
+def infer_angle(tokens: Sequence, votes: Optional[Tuple[float, float, int]], *,
+                auto_rotate: bool = True) -> RotationInfo:
+    """Evidence-only orientation decision (no OCR, no I/O).
+
+    `votes` = (frac180, hi_conf_180, n_lines) from the backend, or None when it
+    has no line classifier. Measured separation (60 real pages, both ways):
+      * flipped: frac180 0.73-1.00, hi-conf 0.45-1.00; vertical ~0
+      * upright: frac180 <=0.50, hi-conf <=0.25 (except classifier-hard pages
+        that vote high BOTH ways - excluded by requiring hi-conf too);
+      * sideways: >=0.91 of tokens have tall boxes; votes are mixed.
+    The action rule (frac >= 0.6 AND hi >= 0.4) gave 0 false flips / 60 upright
+    and 59/60 flipped detected; the miss and the both-ways-confused pages get
+    the `vote-ambiguous` suspect flag instead of an action.
+
+    Returns source:
+      votes-180      -> rotate 180
+      vote-ambiguous -> classifier cannot be trusted; flag, do not act
+      probe-needed   -> rotate 90cw and re-read to resolve axis/direction
+      upright        -> no action
+      off            -> auto-rotate disabled; raw_angle carries the suggestion
+    """
+    vfrac = vertical_fraction(tokens)
+    frac = votes[0] if votes else 0.0
+    hi = votes[1] if votes else 0.0
+    authoritative = len(tokens) >= MIN_TOKENS and votes is not None
+    if authoritative and frac >= VOTE180_FRAC and hi >= VOTE180_HI:
+        if auto_rotate:
+            return RotationInfo(180, round(frac, 3), "votes-180", raw_angle=180)
+        return RotationInfo(0, round(frac, 3), "off", raw_angle=180)
+    if vfrac >= VERTICAL_ACTION:
+        if auto_rotate:
+            return RotationInfo(0, round(vfrac, 3), "probe-needed", raw_angle=90)
+        return RotationInfo(0, round(vfrac, 3), "off", raw_angle=90)
+    if authoritative and frac >= VOTE180_AMBIG_FRAC:
+        if auto_rotate:
+            return RotationInfo(0, round(frac, 3), "vote-ambiguous", raw_angle=180)
+        return RotationInfo(0, round(frac, 3), "off", raw_angle=180)
+    return RotationInfo(0, round(frac, 3), "upright")
 
 
 def load_image_bgr(path: str) -> Optional[np.ndarray]:
@@ -170,4 +231,17 @@ if __name__ == "__main__":
     assert rotate_bgr(img, 180).shape[:2] == (100, 300)
     assert rotate_bgr(img, 270).shape[:2] == (300, 100)
     assert detect_rotation(img).source == "skipped-small"
+
+    class _Tok:
+        def __init__(self, box):
+            self.bbox = box
+    flat = [_Tok((0, 0, 100, 20))] * 6
+    tall = [_Tok((0, 0, 20, 100))] * 6
+    assert infer_angle(flat, (0.1, 0.1, 6)).source == "upright"
+    assert infer_angle(flat, (1.0, 1.0, 6)).angle == 180
+    assert infer_angle(flat, (1.0, 1.0, 6), auto_rotate=False).raw_angle == 180
+    assert infer_angle(flat, (0.8, 0.2, 6)).source == "vote-ambiguous"
+    assert infer_angle(tall, (0.4, 0.1, 6)).source == "probe-needed"
+    assert infer_angle(tall, (0.4, 0.1, 6), auto_rotate=False).source == "off"
+    assert infer_angle(flat[:3], (1.0, 1.0, 3)).source == "upright"
     print("document_orientation OK")

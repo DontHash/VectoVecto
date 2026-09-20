@@ -48,3 +48,25 @@ def test_process_document_no_input():
     slider, overlay, transcript, pdf, txt, status = app.process_document(
         None, None, "auto", False, True, True, True)
     assert slider is None and "Upload" in status
+
+
+@pytest.mark.skipif(not __import__("document_ocr").available_backends(),
+                    reason="no OCR backend available")
+def test_process_document_accepts_filepath_with_exif(tmp_path):
+    import app
+    from PIL import Image
+
+    page, _gt = doc_data.render_synthetic_invoice(seed=96, dpi=150)
+    stored = cv2.rotate(page, cv2.ROTATE_90_CLOCKWISE)  # content 90 CW
+    rgb = cv2.cvtColor(stored, cv2.COLOR_BGR2RGB)
+    im = Image.fromarray(rgb)
+    exif = Image.Exif()
+    exif[274] = 8  # stored is 90 CW, display must rotate 90 CCW -> upright page
+    path = tmp_path / "photo.jpg"
+    im.save(path, exif=exif)
+
+    slider, _overlay, _tr, _pdf, _txt, status = app.process_document(
+        str(path), None, "auto", False, False, False, False)
+    assert slider is not None, status
+    assert slider[0].shape[:2] == page.shape[:2], \
+        "the handler input must be EXIF-corrected before the pipeline"
