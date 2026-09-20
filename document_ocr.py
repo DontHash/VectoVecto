@@ -89,12 +89,31 @@ class OCRBackend:
 # RapidOCR (default)
 # ---------------------------------------------------------------------------
 
+def _dml_enabled() -> bool:
+    """RAPIDOCR_USE_DML: 'auto' (default) uses DirectML when available.
+
+    Measured on the RTX 2050: CPU ~9-15 s/page, DirectML 25 s first call
+    (kernel compile) then **0.78 s/page**. Worth a one-time warm-up.
+    """
+    env = os.environ.get("RAPIDOCR_USE_DML", "auto").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
+        return True
+    try:
+        import onnxruntime as ort
+        return "DmlExecutionProvider" in ort.get_available_providers()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class RapidOCRBackend(OCRBackend):
     name = "rapidocr"
 
     def __init__(self):
         self._engine = None
         self._error: Optional[str] = None
+        self.using_dml = False
 
     def available(self) -> Tuple[bool, str]:
         try:
@@ -107,11 +126,33 @@ class RapidOCRBackend(OCRBackend):
         if self._engine is None and self._error is None:
             try:
                 from rapidocr import RapidOCR
-                self._engine = RapidOCR()
+                params: Dict = {"Global.log_level": os.environ.get("RAPIDOCR_LOG_LEVEL", "error")}
+                self.using_dml = _dml_enabled()
+                if self.using_dml:
+                    params["EngineConfig.onnxruntime.use_dml"] = True
+                max_side = os.environ.get("RAPIDOCR_MAX_SIDE")
+                if max_side:
+                    params["Global.max_side_len"] = int(max_side)
+                self._engine = RapidOCR(params=params)
+                if self.using_dml:
+                    self._warmup()
             except Exception as e:  # noqa: BLE001
                 self._error = str(e)
         if self._engine is None:
             raise RuntimeError(f"RapidOCR unavailable: {self._error}")
+
+    def _warmup(self):
+        """Pay DirectML's kernel-compile cost once (first call is ~25 s, then <1 s)."""
+        t0 = time.time()
+        warm = np.full((64, 320, 3), 255, dtype=np.uint8)
+        cv2.putText(warm, "warmup 123", (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+        try:
+            self._engine(warm)
+            print(f"[document_ocr] RapidOCR DirectML warm-up: {time.time() - t0:.1f}s "
+                  f"(subsequent pages ~0.8s)")
+        except Exception as e:  # noqa: BLE001
+            print(f"[document_ocr] DirectML warm-up failed ({e}); falling back to CPU")
+            self.using_dml = False
 
     def run(self, img_bgr: np.ndarray, lang: Optional[str] = None) -> OCRResult:
         self._ensure()
@@ -238,6 +279,7 @@ class TesseractBackend(OCRBackend):
 # ---------------------------------------------------------------------------
 
 _BACKENDS = {"rapidocr": RapidOCRBackend, "tesseract": TesseractBackend}
+_INSTANCES: Dict[str, OCRBackend] = {}
 
 
 def available_backends() -> List[str]:
@@ -250,13 +292,18 @@ def available_backends() -> List[str]:
 
 
 def get_backend(name: str) -> OCRBackend:
+    """Cached backend instance. Engine construction (ONNX sessions) is expensive;
+    re-creating it per call was measurable overhead in batch runs."""
     if name not in _BACKENDS:
         raise ValueError(f"unknown OCR backend {name!r}; have {sorted(_BACKENDS)}")
-    backend = _BACKENDS[name]()
-    ok, why = backend.available()
+    inst = _INSTANCES.get(name)
+    if inst is None:
+        inst = _BACKENDS[name]()
+        _INSTANCES[name] = inst
+    ok, why = inst.available()
     if not ok:
         raise RuntimeError(f"OCR backend {name!r} unavailable: {why}")
-    return backend
+    return inst
 
 
 def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
