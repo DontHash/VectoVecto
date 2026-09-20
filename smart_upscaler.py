@@ -55,6 +55,72 @@ _DEFAULT_CHECKPOINT = os.path.join(
 )
 
 
+# ---------------------------------------------------------------------------
+# cheap page classifier (document vs photo) — no models, no OCR
+# ---------------------------------------------------------------------------
+
+def _skin_ratio(img_bgr: np.ndarray) -> float:
+    ycrcb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YCrCb)
+    cr, cb = ycrcb[:, :, 1], ycrcb[:, :, 2]
+    mask = (cr >= 133) & (cr <= 175) & (cb >= 77) & (cb <= 130)
+    return float(mask.mean())
+
+
+def page_likeness(img_bgr: np.ndarray) -> float:
+    """How much does this look like a document page? [0..1], higher = page.
+
+    Signals: low color saturation, many text-sized connected components,
+    components aligned in rows, little skin. Deliberately biased toward
+    "document" when uncertain (documents are the product).
+    """
+    h, w = img_bgr.shape[:2]
+    if max(h, w) > 1000:
+        f = 1000.0 / max(h, w)
+        img = cv2.resize(img_bgr, (int(w * f), int(h * f)), interpolation=cv2.INTER_AREA)
+    else:
+        img = img_bgr
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    sat = float(hsv[:, :, 1].mean()) / 255.0
+    skin = _skin_ratio(img)
+
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    n, _labels, stats, _centroids = cv2.connectedComponentsWithStats(binary, 8)
+    total = float(img.shape[0] * img.shape[1])
+    comps = []
+    for i in range(1, n):
+        x, y, ww, hh, area = stats[i]
+        if 3 <= hh <= max(60, img.shape[0] // 20) and 2 <= ww <= 400 and area >= 6:
+            if area / max(ww * hh, 1) > 0.08:
+                patch = gray[y:y + hh, x:x + ww]
+                # real text is high-contrast ink; blurred texture blobs are not
+                spread = float(np.percentile(patch, 90) - np.percentile(patch, 10))
+                if spread >= 70.0:
+                    comps.append((x, y, ww, hh, area))
+    if not comps:
+        return 0.0
+    density = sum(c[4] for c in comps) / total
+    heights = sorted(c[3] for c in comps)
+    med_h = heights[len(heights) // 2]
+
+    rows = {}
+    for _x, y, _ww, hh, _area in comps:
+        key = int((y + hh / 2) / max(med_h * 1.4, 1))
+        rows.setdefault(key, 0)
+        rows[key] += 1
+    in_rows = sum(v for v in rows.values() if v >= 3)
+    row_frac = in_rows / len(comps)
+
+    low_sat = 1.0 - min(sat * 3.0, 1.0)
+    text_energy = min(density * 25.0, 1.0)
+    score = 0.45 * low_sat + 0.35 * text_energy + 0.20 * row_frac - 1.2 * skin
+    return float(np.clip(score, 0.0, 1.0))
+
+
+def is_document(img_bgr: np.ndarray, threshold: float = 0.45) -> bool:
+    return page_likeness(img_bgr) >= threshold
+
+
 class ContentAnalysis:
     """Encapsulates the semantic decomposition of an image into content domains."""
 
@@ -236,6 +302,22 @@ class SmartUpscaler:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def _upscale_document(self, img_bgr: np.ndarray, scale: int) -> np.ndarray:
+        """Document path: classical restore (+ OCR classification if available).
+
+        Returns the cleaned display page. Falls back to restore-only when no OCR
+        backend is installed (restore still works offline).
+        """
+        try:
+            from document_pipeline import run_document_pipeline
+            res = run_document_pipeline(img_bgr, deskew=False, scale=scale)
+            print(f"  [SmartUpscaler] document mode: {res.status_line}")
+            return res.display_bgr
+        except Exception as e:  # noqa: BLE001
+            print(f"  [SmartUpscaler] document pipeline unavailable ({e}); restore-only")
+            from document_restore import restore_document
+            return restore_document(img_bgr, scale=scale)["display_bgr"]
+
     def upscale(self, img: np.ndarray, scale: int = 4, mode: str = "auto",
                 fast: bool = True, grain_strength: float = 0.0,
                 export_svg_path: Optional[str] = None,
@@ -248,6 +330,16 @@ class SmartUpscaler:
 
         H, W = img_bgr.shape[:2]
         out_H, out_W = H * scale, W * scale
+
+        # Document is the product: explicit mode, or auto-detect a page.
+        if mode == "document" or (mode == "auto" and is_document(img_bgr)):
+            doc_out = self._upscale_document(img_bgr, scale)
+            print(f"  [SmartUpscaler] document {H}x{W} -> {doc_out.shape[1]}x{doc_out.shape[0]} "
+                  f"in {time.time() - t0:.2f}s")
+            out_res = cv2.cvtColor(doc_out, cv2.COLOR_BGR2GRAY) if is_mono else doc_out
+            if not is_uint8:
+                return out_res.astype(np.float32) / 255.0
+            return out_res
 
         analysis = self.analyze_content(img_bgr)
 

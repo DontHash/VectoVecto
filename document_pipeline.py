@@ -57,7 +57,8 @@ def pick_backend(backend: Optional[str] = None) -> str:
 
 def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           lang: Optional[str] = None, deskew: bool = False,
-                          repass_digits: bool = False, dpi: Optional[int] = None,
+                          scale: int = 1, repass_digits: bool = False,
+                          dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
                           make_txt: bool = True, make_json: bool = True,
@@ -65,7 +66,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     t0 = time.time()
     backend = pick_backend(backend)
 
-    restored = restore_document(img_bgr, deskew=deskew)
+    restored = restore_document(img_bgr, scale=scale, deskew=deskew)
     display = restored["display_bgr"]
 
     if deskew:
