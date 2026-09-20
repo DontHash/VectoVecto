@@ -107,16 +107,12 @@ def _list_doc_inputs(path: str, recursive: bool) -> List[str]:
 
 def run_document_mode(args) -> int:
     import doc_data
-    from document_export import export_document_outputs
-    from document_ocr import available_backends, compare_digit_streams, ocr_page
-    from document_restore import restore_document
+    from document_pipeline import pick_backend, run_document_pipeline
 
-    backend = args.ocr
-    if not backend:
-        avail = available_backends()
-        if not avail:
-            raise SystemExit("no OCR backend available (pip install rapidocr)")
-        backend = "rapidocr" if "rapidocr" in avail else avail[0]
+    try:
+        backend = pick_backend(args.ocr)
+    except RuntimeError as e:
+        raise SystemExit(str(e))
 
     files = _list_doc_inputs(args.input, args.recursive)
     if args.limit:
@@ -137,43 +133,29 @@ def run_document_mode(args) -> int:
         if args.skip_existing and os.path.exists(pdf_path):
             records.append({"src": src, "name": name, "status": "skipped"})
             return "skipped"
-        t0 = time.time()
-        restored = restore_document(img, deskew=args.deskew)
-        display = restored["display_bgr"]
-        if args.deskew:
-            primary_img, audit_img = display, img
-        else:
-            primary_img, audit_img = img, display
-
-        result = ocr_page(primary_img, backend=backend, lang=args.lang,
-                          recheck_digits=args.repass_digits)
-        conflicts = 0
-        try:
-            audit = ocr_page(audit_img, backend=backend, lang=args.lang)
-            conflicts = compare_digit_streams(result, audit)
-        except Exception as e:  # noqa: BLE001
-            print(f"    [warn] audit stream failed: {e}")
-        result.meta["digit_conflicts"] = conflicts
-        result.meta["primary_stream"] = "display" if args.deskew else "raw"
-        result.meta["source"] = src
-        result.meta["skew_angle"] = restored["debug"]["skew_angle"]
-
         os.makedirs(args.output, exist_ok=True)
-        written = export_document_outputs(
-            args.output, name, display, result, dpi=dpi,
-            make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
-            make_txt=not args.no_txt, make_json=True, overlay_source=display)
-
-        low = sum(1 for t in result.tokens if "low_conf" in t.flags)
-        dt = time.time() - t0
-        ok += 1
-        records.append({"src": src, "name": name, "status": "ok",
-                        "tokens": len(result.tokens), "low_conf": low,
-                        "digit_conflicts": conflicts, "seconds": round(dt, 3),
-                        "outputs": written, "skew_angle": restored["debug"]["skew_angle"]})
-        print(f"  {name}: {len(result.tokens)} tokens · {low} low-conf · "
-              f"{conflicts} digit conflicts · {dt:.1f}s")
-        return "ok"
+        try:
+            res = run_document_pipeline(
+                img, backend=backend, lang=args.lang, deskew=args.deskew,
+                repass_digits=args.repass_digits, dpi=dpi,
+                out_dir=args.output, stem=name,
+                make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
+                make_txt=not args.no_txt, make_json=True)
+            ok += 1
+            low = sum(1 for t in res.ocr.tokens if "low_conf" in t.flags)
+            records.append({"src": src, "name": name, "status": "ok",
+                            "tokens": len(res.ocr.tokens), "low_conf": low,
+                            "digit_conflicts": res.meta["digit_conflicts"],
+                            "seconds": res.meta["seconds"],
+                            "skew_angle": res.meta["skew_angle"],
+                            "outputs": res.outputs})
+            print(f"  {name}: {res.status_line}")
+            return "ok"
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            records.append({"src": src, "name": name, "status": "error", "error": str(e)})
+            print(f"  FAILED {name}: {e}")
+            return "error"
 
     for src in files:
         try:
