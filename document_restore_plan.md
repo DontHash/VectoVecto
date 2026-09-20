@@ -445,6 +445,13 @@ Decision so far: `recheck_digits` stays available but **off by default**; the
 **dual-stream** comparison (raw pixels vs restored pixels) is the primary digit
 evidence. Re-measure the re-pass before promoting it.
 
+**RE-MEASURED (P4b, 2026-09-20) — see Appendix I.** With the engine fixed, the
+re-pass genuinely adds conflicts, and the pre-registered queue gate decides its
+default: top-5 precision reached only **0.325** (conditional on pages with
+errors) against the **≥0.5 bar** → `recheck_digits` stays **off by default**.
+The corrected per-mode numbers live in Appendix I and
+`out/doc_p4b_repass.json`.
+
 ---
 
 ## Appendix B — Phase C status (2026-09-20)
@@ -775,9 +782,11 @@ pages). 3-column generalization remains deferred until a case demands it.
 ---
 
 ## Open truth items (recorded 2026-09-20, truth check)
-
 Three gaps were found auditing the claims against the reports; none are hidden
 in the appendices above:
+
+*(all three resolved in Appendix I below; kept as the record of what was
+unknown at the time)*
 
 1. **Latency gate unmet on dense pages.** The shipped pipeline runs 8.0 s/page
    on the arXiv two-column set (dual-stream OCR + votes + restore) against the
@@ -797,3 +806,59 @@ in the appendices above:
 Also stale and fixed with this record: the `--repass-digits` help ("measured
 redundant" - invalidated by the state-leak bug) and `--rotate` help (removed
 OSD-first policy), commit f4d325b.
+
+---
+
+## Appendix I — P4b: re-pass, queue usefulness, stream re-verify (2026-09-20)
+
+Resolves the three open truth items. All numbers are reproducible:
+`out/doc_p4b_repass.json`, `out/doc_p4b_stream.json` (definition below).
+
+**Setup.** RapidOCR on SROIE+CORD degraded pages (60). A digit-token *error* is
+an OCR token whose digit sequence (all digit runs concatenated) is absent from
+the page's GT digit multiset; 224 errors on 48/60 pages. The review queue is
+`review_queue()` (risk ranking: flags × weights + re-read disagreement). The
+pre-registered enable gate for the re-pass was: **top-5 precision >= 0.5** and
+no CER/bagCER/digCER regression (text is never changed by the re-pass, so only
+the first half can fail).
+
+| mode | micro R@5 | micro R@10 | digit coverage | digit FA | P@5* | R@5* |
+|---|---|---|---|---|---|---|
+| off (shipped) | 0.049 | 0.049 | 0.049 | 0.353 | 0.208 | 0.052 |
+| re-pass conf<95 | 0.121 | 0.121 | 0.121 | 0.386 | 0.312 | 0.132 |
+| re-pass all | 0.228 | 0.268 | 0.268 | 0.434 | 0.325 | 0.216 |
+
+\* mean over the 48 pages that have >=1 digit error (precision: of the top-5
+items, the share that are true errors; recall: of the true errors, the share in
+the top-5).
+
+**Verdict 1 — `recheck_digits` stays off by default.** Best top-5 precision
+0.325 < 0.5. The queue is honest but weak: it surfaces ~1 in 4 digit errors at
+best (R@5 0.216) and the ranker needs better signals. Recorded, not hidden —
+this is the revised P1 honesty metric finally measured, and it fails its bar
+the same way the original coverage bar did.
+
+**Verdict 2 — `RECOMMENDED_STREAM["rapidocr"]` stays "raw".** A/B via the new
+`primary_stream` override under the shipped pipeline (reading order on):
+
+| corpus | raw CER / bag / digBAG | restored CER / bag / digBAG |
+|---|---|---|
+| synthetic (6 p) | 0.0937 / **0.0269** / **0.0866** | **0.0917** / 0.0906 / 0.2023 |
+| SROIE (30 p) | 0.3635 / 0.4012 / 0.2672 | **0.3614** / **0.3917** / **0.2402** |
+| CORD (30 p) | 0.5872 / 0.5357 / **0.1689** | **0.5856** / **0.5304** / 0.1874 |
+
+Restored wins CER marginally everywhere, but on clean synthetics it costs
+bagCER 3.4x (0.0269 -> 0.0906) — token merging that CER hides. Gate was "no
+corpus regresses on CER *and* bagCER" → **fails** → raw stays.
+
+**Verdict 3 — the perf gap stands** (8.0 s/page dense 2-col vs <= 4 s gate,
+recorded in the open items) — deferred to P5/P7 with the known lever (skip the
+audit pass on digit-free pages).
+
+**Cleanup in the same pass** (commit 2fc1b8a): 15 orphaned photo-era scripts
+-> `legacy/` (self-contained root-path guards, README, smoke-tested),
+3 root tests -> `tests/` (single 77-test run), `requirements.txt` split into
+runtime + `requirements-dev.txt` (a fresh install previously could not run
+document mode: rapidocr/reportlab/pypdfium2 were missing), README with the
+measured capability table, 26 regenerable root PNGs deleted.
+
