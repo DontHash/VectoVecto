@@ -134,7 +134,9 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             continue
         images = {"clean": clean if clean is not None else degraded, "raw": degraded}
 
-        raw_results: Dict[str, str] = {}
+        # pass 1: every method@backend OCRs the page
+        ocr_results: Dict[str, object] = {}
+        elapsed_by_key: Dict[str, float] = {}
         for method in methods:
             if method == "photo" and not with_photo:
                 continue
@@ -156,46 +158,65 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 except Exception as e:  # noqa: BLE001
                     print(f"  [skip] {method}@{backend}: {e}")
                     continue
-                elapsed = time.time() - t0
                 key = f"{method}@{backend}"
-                if method == "raw":
-                    raw_results[backend] = res.text
-                raw_text = raw_results.get(backend, "")
-                stats = doc_metrics.token_stats(res.tokens, gt)
-                hall = doc_metrics.hallucination_report(gt, raw_text, res.text) if raw_text else {}
-                row = {
-                    "page": entry["id"], "method": method, "backend": backend,
-                    "cer": doc_metrics.cer(gt, res.text),
-                    "wer": doc_metrics.wer(gt, res.text),
-                    "token_err": stats.token_error_rate,
-                    "coverage": stats.coverage,
-                    "false_alarm": stats.false_alarm_rate,
-                    "ece": doc_metrics.ece(res.tokens, gt),
-                    "tokens": stats.total,
-                    "flagged": stats.flagged,
-                    "invented": hall.get("invented", 0),
-                    "invented_digits": hall.get("invented_digits", 0),
-                    "repass_conflicts": res.meta.get("digit_repass_conflicts", 0),
-                    "seconds": round(elapsed, 3),
-                    "gt_chars": len(gt),
-                }
-                per_page.append(row)
-                agg = results.setdefault(key, {"cer": [], "wer": [], "token_err": [],
-                                               "coverage": [], "false_alarm": [],
-                                               "ece": [], "seconds": [], "invented": 0,
-                                               "invented_digits": 0, "repass_conflicts": 0,
-                                               "pages": 0})
-                agg["cer"].append(row["cer"])
-                agg["wer"].append(row["wer"])
-                agg["token_err"].append(row["token_err"])
-                agg["coverage"].append(row["coverage"])
-                agg["false_alarm"].append(row["false_alarm"])
-                agg["ece"].append(row["ece"])
-                agg["seconds"].append(row["seconds"])
-                agg["invented"] += row["invented"]
-                agg["invented_digits"] += row["invented_digits"]
-                agg["repass_conflicts"] += row["repass_conflicts"]
-                agg["pages"] += 1
+                ocr_results[key] = res
+                elapsed_by_key[key] = time.time() - t0
+
+        # pass 2: score. On real sets (incomplete GT) peer methods' text counts
+        # as evidence the token is real, so hallucination only counts tokens no
+        # method produced and the annotator missed.
+        peer_refs = bool(entry.get("real", False))
+        for key, res in ocr_results.items():
+            method, backend = key.split("@", 1)
+            raw_res = ocr_results.get(f"raw@{backend}")
+            raw_text = raw_res.text if raw_res is not None else ""
+            others = [r.text for k, r in ocr_results.items()
+                      if k != key and k.endswith("@" + backend)]
+            stats = doc_metrics.token_stats(res.tokens, gt)
+            hall = doc_metrics.hallucination_report(
+                gt, raw_text, res.text, extra_refs=others if peer_refs else ())
+            row = {
+                "page": entry["id"], "method": method, "backend": backend,
+                "cer": doc_metrics.cer(gt, res.text),
+                "cer_bag": doc_metrics.cer_bag(gt, res.text),
+                "digit_cer": doc_metrics.digit_cer(gt, res.text),
+                "digit_cer_bag": doc_metrics.digit_cer(gt, res.text, bag=True),
+                "wer": doc_metrics.wer(gt, res.text),
+                "token_err": stats.token_error_rate,
+                "coverage": stats.coverage,
+                "false_alarm": stats.false_alarm_rate,
+                "ece": doc_metrics.ece(res.tokens, gt),
+                "tokens": stats.total,
+                "flagged": stats.flagged,
+                "invented": hall.get("invented", 0),
+                "invented_digits": hall.get("invented_digits", 0),
+                "repass_conflicts": res.meta.get("digit_repass_conflicts", 0),
+                "seconds": round(elapsed_by_key[key], 3),
+                "gt_chars": len(gt),
+            }
+            per_page.append(row)
+            agg = results.setdefault(key, {"cer": [], "cer_bag": [],
+                                           "digit_cer": [], "digit_cer_bag": [],
+                                           "wer": [],
+                                           "token_err": [],
+                                           "coverage": [], "false_alarm": [],
+                                           "ece": [], "seconds": [], "invented": 0,
+                                           "invented_digits": 0, "repass_conflicts": 0,
+                                           "pages": 0})
+            agg["cer"].append(row["cer"])
+            agg["cer_bag"].append(row["cer_bag"])
+            agg["digit_cer"].append(row["digit_cer"])
+            agg["digit_cer_bag"].append(row["digit_cer_bag"])
+            agg["wer"].append(row["wer"])
+            agg["token_err"].append(row["token_err"])
+            agg["coverage"].append(row["coverage"])
+            agg["false_alarm"].append(row["false_alarm"])
+            agg["ece"].append(row["ece"])
+            agg["seconds"].append(row["seconds"])
+            agg["invented"] += row["invented"]
+            agg["invented_digits"] += row["invented_digits"]
+            agg["repass_conflicts"] += row["repass_conflicts"]
+            agg["pages"] += 1
         print(f"  [{i}/{len(entries)}] {entry['id']} done", flush=True)
 
     summary = {}
@@ -203,6 +224,10 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
         summary[key] = {
             "pages": agg["pages"],
             "cer": float(np.mean(agg["cer"])) if agg["cer"] else None,
+            "cer_bag": float(np.mean(agg["cer_bag"])) if agg["cer_bag"] else None,
+            "digit_cer": float(np.mean(agg["digit_cer"])) if agg["digit_cer"] else None,
+            "digit_cer_bag": (float(np.mean(agg["digit_cer_bag"]))
+                              if agg["digit_cer_bag"] else None),
             "wer": float(np.mean(agg["wer"])) if agg["wer"] else None,
             "token_err": float(np.mean(agg["token_err"])) if agg["token_err"] else None,
             "coverage": float(np.mean(agg["coverage"])) if agg["coverage"] else None,
@@ -216,15 +241,20 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
     return {"summary": summary, "per_page": per_page}
 
 
+def _fmt(v) -> str:
+    return f"{v:.4f}" if isinstance(v, (int, float)) else "n/a"
+
+
 def print_summary(summary: Dict) -> None:
     order = sorted(summary.items(), key=lambda kv: (kv[1]["cer"] if kv[1]["cer"] is not None else 9))
-    header = (f"{'method@backend':<22}{'CER':>8}{'WER':>8}{'tok_err':>9}"
-              f"{'cover':>7}{'false_al':>9}{'ECE':>7}{'invent':>7}{'repas':>6}{'s/page':>8}")
+    header = (f"{'method@backend':<22}{'CER':>8}{'bagCER':>8}{'digCER':>8}{'digBAG':>8}"
+              f"{'WER':>8}{'cover':>7}{'falseAl':>9}{'ECE':>7}{'invent':>7}{'repas':>6}{'s/page':>8}")
     print("\n=== DOCUMENT EVAL (sorted by CER) ===")
     print(header)
     print("-" * len(header))
     for key, m in order:
-        print(f"{key:<22}{m['cer']:>8.4f}{m['wer']:>8.4f}{m['token_err']:>9.4f}"
+        print(f"{key:<22}{m['cer']:>8.4f}{_fmt(m.get('cer_bag')):>8}{_fmt(m.get('digit_cer')):>8}"
+              f"{_fmt(m.get('digit_cer_bag')):>8}{m['wer']:>8.4f}"
               f"{m['coverage']:>7.3f}{m['false_alarm']:>9.3f}{m['ece']:>7.3f}"
               f"{m['invented']:>7d}{m.get('repass_conflicts', 0):>6d}{m['seconds']:>8.2f}")
 

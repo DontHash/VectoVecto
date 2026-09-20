@@ -6,7 +6,9 @@ Zero human transcription strategy:
   2. Any openly-licensed PDF rendered at high DPI -> ground truth comes from the
      PDF's own text layer (pypdfium2). The clean-render -> text-layer CER is the
      extraction noise floor and is recorded per page.
-  3. A demo PDF built with reportlab exercises the PDF path fully offline (tests).
+  3. Real photos from public HF datasets with upstream text annotation (SROIE,
+     CORD) -> no clean reference; internal eval only, never redistributed.
+  4. A demo PDF built with reportlab exercises the PDF path fully offline (tests).
 
 Dataset layout (written under --out, gitignored):
     <out>/<name>/pages/<id>_clean.png
@@ -17,6 +19,7 @@ Dataset layout (written under --out, gitignored):
 CLI:
     python doc_data.py --out data/doc_eval --synthetic 20 --levels mild,medium
     python doc_data.py --out data/doc_eval --pdf openbook.pdf --dpi 250
+    python doc_data.py --out data/doc_eval --hf sroie cord --hf-pages 30
     python doc_data.py --demo-pdf out/demo_invoice.pdf
 """
 from __future__ import annotations
@@ -272,6 +275,132 @@ def build_synthetic_dataset(out_dir: str, n: int = 20,
 
 
 # ---------------------------------------------------------------------------
+# real-photo datasets from Hugging Face (annotations, no clean reference)
+# ---------------------------------------------------------------------------
+
+# Verified mirrors (2026-09): parquet with embedded PIL images + text.
+HF_SOURCES = {
+    "sroie": "jsdnrs/ICDAR2019-SROIE",   # ICDAR'19 scanned receipts, line words
+    "cord": "naver-clova-ix/cord-v2",    # receipts, structured JSON GT (CC-BY-4.0)
+}
+
+
+def _collect_text_leaves(node, out: List[str]) -> None:
+    if isinstance(node, dict):
+        for v in node.values():
+            _collect_text_leaves(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_text_leaves(v, out)
+    elif isinstance(node, str) and node.strip():
+        out.append(node.strip())
+
+
+def gt_from_sroie(example: Dict) -> str:
+    """Line-level `words` annotation -> newline text."""
+    words = example.get("words") or []
+    return normalize_text("\n".join(str(w) for w in words))
+
+
+def gt_from_cord(example: Dict) -> str:
+    """CORD `ground_truth` JSON (gt_parse tree) -> text leaves in JSON order."""
+    raw = example.get("ground_truth")
+    if not raw:
+        return ""
+    data = raw
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return normalize_text(raw)
+    gt = data.get("gt_parse", data) if isinstance(data, dict) else data
+    leaves: List[str] = []
+    _collect_text_leaves(gt, leaves)
+    return normalize_text("\n".join(leaves))
+
+
+def gt_from_generic(example: Dict) -> str:
+    """Any HF repo: words / text / label / ground_truth fields."""
+    if example.get("words"):
+        return gt_from_sroie(example)
+    for key in ("text", "label", "ground_truth"):
+        v = example.get(key)
+        if isinstance(v, str) and v.strip():
+            return gt_from_cord(example) if key == "ground_truth" else normalize_text(v)
+    return ""
+
+
+def _example_image(example: Dict):
+    """First PIL image field; falls back to readable image_path strings."""
+    from PIL import Image as PILImage
+    for v in example.values():
+        if hasattr(v, "mode") and hasattr(v, "size"):
+            return v if v.mode == "RGB" else v.convert("RGB")
+    for key in ("image", "image_path"):
+        p = example.get(key)
+        if isinstance(p, str) and os.path.exists(p):
+            return PILImage.open(p).convert("RGB")
+    return None
+
+
+def build_hf_dataset(source: str, out_dir: str, max_pages: int = 30,
+                     split: str | None = None, offset: int = 0) -> Dict:
+    """Stream real photos + text GT from Hugging Face into the eval layout.
+
+    Real captures are *not* degraded: clean == degraded == the original photo,
+    so 'clean' is not an extraction ceiling here — judge raw vs restore and use
+    cer_bag / bag digit CER (annotation order is not guaranteed to match the
+    visual reading order). Internal evaluation only; never redistribute.
+    """
+    from datasets import load_dataset
+
+    repo = HF_SOURCES.get(source, source)
+    gt_fn, default_split = {
+        "sroie": (gt_from_sroie, "train"),
+        "cord": (gt_from_cord, "train"),
+    }.get(source, (gt_from_generic, "train"))
+    slug = source.replace("/", "__")
+    ds = load_dataset(repo, split=split or default_split, streaming=True)
+
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_dir = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_dir, exist_ok=True)
+    entries: List[Dict] = []
+    for idx, example in enumerate(ds):
+        if idx < offset:
+            continue
+        if max_pages and len(entries) >= max_pages:
+            break
+        gt = gt_fn(example)
+        img = _example_image(example)
+        if img is None or len(gt) < 20:
+            continue
+        pid = f"{slug}_{idx:05d}"
+        page_path = os.path.join(pages_dir, f"{pid}.png")
+        gt_path = os.path.join(gt_dir, f"{pid}.txt")
+        arr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        cv2.imwrite(page_path, arr)
+        with open(gt_path, "w", encoding="utf-8") as f:
+            f.write(gt)
+        entries.append({
+            "id": pid, "source": repo, "page": idx, "level": "real", "real": True,
+            "seed": None, "gt_chars": len(gt),
+            "clean": os.path.relpath(page_path, out_dir),
+            "degraded": os.path.relpath(page_path, out_dir),
+            "gt": os.path.relpath(gt_path, out_dir),
+        })
+    manifest = {
+        "kind": "real", "name": f"real_{slug}", "source": repo,
+        "split": split or default_split, "offset": offset,
+        "created": time.strftime("%Y-%m-%d %H:%M:%S"), "entries": entries,
+    }
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
 # demo PDF (offline PDF-path exercise)
 # ---------------------------------------------------------------------------
 
@@ -316,6 +445,11 @@ def main():
     ap.add_argument("--max-pages", type=int, default=0)
     ap.add_argument("--seed", type=int, default=100)
     ap.add_argument("--demo-pdf", default=None)
+    ap.add_argument("--hf", nargs="*", default=[],
+                    help="HF sources for real photos: sroie, cord, or a repo id")
+    ap.add_argument("--hf-pages", type=int, default=30)
+    ap.add_argument("--hf-split", default=None)
+    ap.add_argument("--hf-offset", type=int, default=0)
     args = ap.parse_args()
 
     if args.demo_pdf:
@@ -332,6 +466,12 @@ def main():
         m = build_pdf_dataset(args.pdf, os.path.join(args.out, "pdf"), dpi=args.dpi,
                               levels=levels, max_pages=args.max_pages, seed=args.seed)
         print(f"pdf: {len(m['entries'])} pages -> {os.path.join(args.out, 'pdf')}")
+    for source in args.hf:
+        slug = source.replace("/", "__")
+        out = os.path.join(args.out, f"real_{slug}")
+        m = build_hf_dataset(source, out, max_pages=args.hf_pages,
+                             split=args.hf_split, offset=args.hf_offset)
+        print(f"real[{source}]: {len(m['entries'])} pages -> {out}")
 
 
 if __name__ == "__main__":

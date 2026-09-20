@@ -5,6 +5,7 @@ Fast by default: 2 synthetic pages, RapidOCR only (Tesseract optional/skip).
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -52,6 +53,53 @@ def test_metrics_known_values():
     assert stats.false_alarm_rate == 1.0
     hall = doc_metrics.hallucination_report(gt, hyp, "INVOICE 1200.00 Total 4m0unt")
     assert hall["invented"] == 1 and hall["invented_digits"] == 1
+
+
+def test_bag_cer_is_order_insensitive():
+    gt = "TOTAL 9.00 TAX 1.20"
+    reordered = "TAX 1.20 TOTAL 9.00"
+    assert doc_metrics.cer(gt, reordered) > 0.4
+    assert doc_metrics.cer_bag(gt, reordered) == 0.0
+
+
+def test_hallucination_peer_refs_ignore_corroborated_text():
+    gt = "TOTAL 9.00"
+    raw = "TOTAL 9.00"
+    restored = "TOTAL 9.00 CASHIER Ravi"
+    strict = doc_metrics.hallucination_report(gt, raw, restored)
+    assert strict["invented"] == 2, "synthetic/strict mode counts every unseen token"
+    lenient = doc_metrics.hallucination_report(gt, raw, restored,
+                                               extra_refs=["CASHIER 500.00"])
+    assert lenient["invented"] == 1, "peer-confirmed CASHIER is not an invention"
+
+
+def test_digit_cer_isolates_money_errors():
+    gt = "Subtotal 1200.00 VAT 156.00 TOTAL 1356.00"
+    same_words_bad_digits = "Subtotal 1200.08 VAT 156.00 TOTAL 1356.00"
+    assert doc_metrics.digit_cer(gt, same_words_bad_digits) > 0.0
+    assert doc_metrics.digit_cer(gt, gt) == 0.0
+    assert doc_metrics.digit_cer(gt, "1356.00 156.00 1200.00 TOTAL VAT Subtotal",
+                                 bag=True) == 0.0
+
+    no_gt_digits = doc_metrics.digit_cer("TOTAL DUE", "TOTAL DUE")
+    assert no_gt_digits == 0.0
+    assert doc_metrics.digit_cer("TOTAL DUE", "TOTAL 42") == 1.0
+
+
+def test_hf_gt_adapters():
+    sroie = {"words": ["TAN WOON YANN", "DOCUMENT NO : TD01167104", "TOTAL 9.00"]}
+    gt = doc_data.gt_from_sroie(sroie)
+    assert gt.startswith("TAN WOON YANN") and "TOTAL 9.00" in gt
+
+    cord = {"ground_truth": json.dumps({"gt_parse": {
+        "menu": [{"nm": "Nasi Campur", "price": "75,000"}],
+        "total": {"total_price": "75,000"},
+    }})}
+    gt = doc_data.gt_from_cord(cord)
+    assert "Nasi Campur" in gt and "75,000" in gt and "total_price" not in gt
+
+    assert doc_data.gt_from_generic({"text": "hello world"}) == "hello world"
+    assert doc_data.gt_from_generic({"nope": 1}) == ""
 
 
 def test_pdf_text_layer_roundtrip(tmp_path):

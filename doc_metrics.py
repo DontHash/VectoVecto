@@ -54,6 +54,40 @@ def wer(gt: str, hyp: str) -> float:
     return float(jiwer.wer(gt, hyp))
 
 
+def cer_bag(gt: str, hyp: str) -> float:
+    """Order-insensitive CER: sort tokens alphabetically before comparing.
+
+    Use when the ground-truth order is unreliable (word-level annotations,
+    receipts). 'total 9.00 tax 1.20' vs 'tax 1.20 total 9.00' scores 0 here
+    but would score like a total miss with plain character CER.
+    """
+    gt_bag = " ".join(sorted(tokens_of(gt)))
+    hyp_bag = " ".join(sorted(tokens_of(hyp)))
+    if not gt_bag:
+        return 0.0 if not hyp_bag else 1.0
+    return float(jiwer.cer(gt_bag, hyp_bag))
+
+
+def digit_tokens(text: str) -> List[str]:
+    return [t for t in tokens_of(text) if any(ch.isdigit() for ch in t)]
+
+
+def digit_cer(gt: str, hyp: str, bag: bool = False) -> float:
+    """CER over digit-bearing tokens only (amounts, dates, invoice numbers).
+
+    This is the 'money metric': a 0.01 vs 0.07 misread changes the total.
+    """
+    gt_toks = digit_tokens(gt)
+    hyp_toks = digit_tokens(hyp)
+    if bag:
+        gt_toks, hyp_toks = sorted(gt_toks), sorted(hyp_toks)
+    gt_d = " ".join(gt_toks)
+    hyp_d = " ".join(hyp_toks)
+    if not gt_d:
+        return 0.0 if not hyp_d else 1.0
+    return float(jiwer.cer(gt_d, hyp_d))
+
+
 @dataclass
 class TokenStats:
     total: int = 0
@@ -108,10 +142,19 @@ def token_stats(tokens: Sequence[Token], gt_text: str) -> TokenStats:
     return stats
 
 
-def hallucination_report(gt_text: str, raw_text: str, restored_text: str) -> Dict[str, float]:
-    """Tokens present in restored but neither in GT nor in raw."""
+def hallucination_report(gt_text: str, raw_text: str, restored_text: str,
+                         extra_refs: Sequence[str] = ()) -> Dict[str, float]:
+    """Tokens present in restored but neither in GT nor in raw.
+
+    For real-photo sets the GT annotation is incomplete, so a token no method
+    but this one produced is more likely a genuine invention — pass the other
+    methods' texts as `extra_refs` there (peer-confirmed text is not invented).
+    On synthetic sets, where GT is exact, leave extra_refs empty.
+    """
     gt = {_norm_tok(t) for t in tokens_of(gt_text)}
     raw = {_norm_tok(t) for t in tokens_of(raw_text)}
+    for ref in extra_refs:
+        raw |= {_norm_tok(t) for t in tokens_of(ref)}
     rest = tokens_of(restored_text)
     invented = [t for t in rest if _norm_tok(t) not in gt and _norm_tok(t) not in raw]
     invented_digits = [t for t in invented if any(ch.isdigit() for ch in t)]
