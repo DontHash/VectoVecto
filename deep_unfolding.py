@@ -142,18 +142,33 @@ class DeepUnfoldingSR(nn.Module):
         else:
             x = init_x
 
-        # Build the noise-level map for DRUNet (default 0.05, DPIR blind SR)
-        if sigma_noise is None:
-            sigma_t = torch.tensor(0.05, device=y.device)
+        # Build per-iteration noise levels for DRUNet (DPIR schedule)
+        # Early iterations aggressively clean coarse reconstruction artifacts (high sigma);
+        # later iterations preserve and refine sharp micro-textures (low sigma).
+        if isinstance(sigma_noise, (list, tuple)):
+            if len(sigma_noise) == self.iterations:
+                sigmas = [float(s) for s in sigma_noise]
+            elif len(sigma_noise) == 2:
+                sigmas = np.geomspace(float(sigma_noise[0]), float(sigma_noise[1]), self.iterations).tolist()
+            else:
+                sigmas = [float(sigma_noise[0])] * self.iterations
+        elif sigma_noise is not None and not torch.is_tensor(sigma_noise):
+            s = float(sigma_noise)
+            s_start = min(max(2.5 * s, 0.08), 0.20)
+            s_end = max(0.4 * s, 0.015)
+            sigmas = np.geomspace(s_start, s_end, self.iterations).tolist()
+        elif sigma_noise is not None and torch.is_tensor(sigma_noise):
+            if sigma_noise.numel() == 1:
+                s = float(sigma_noise.item())
+                s_start = min(max(2.5 * s, 0.08), 0.20)
+                s_end = max(0.4 * s, 0.015)
+                sigmas = np.geomspace(s_start, s_end, self.iterations).tolist()
+            else:
+                decay = torch.logspace(float(np.log10(2.0)), float(np.log10(0.4)), steps=self.iterations, device=sigma_noise.device)
+                sigmas = [sigma_noise * decay[i] for i in range(self.iterations)]
         else:
-            sigma_t = sigma_noise if torch.is_tensor(sigma_noise) else torch.tensor(float(sigma_noise))
-        # Tile to (B, 1, H, W) and clamp to [0,1] -- the SR noise level is
-        # conventionally in [0,1] when pixels are in [0,1] (per DRUNet convention).
-        if sigma_t.dim() == 0:
-            sigma_t = sigma_t.view(1, 1, 1, 1).expand(B, 1, *out_size).contiguous()
-        else:
-            sigma_t = sigma_t.view(-1, 1, 1, 1).expand(-1, -1, *out_size).contiguous()
-        sigma_t = sigma_t.clamp(0.0, 1.0)
+            # Default blind SR geometric schedule: 0.12 down to 0.02
+            sigmas = np.geomspace(0.12, 0.02, self.iterations).tolist()
 
         for i in range(self.iterations):
             residual = D_H_forward(x, blur_kernel, self.scale) - y
@@ -164,7 +179,15 @@ class DeepUnfoldingSR(nn.Module):
             alpha_i = self.alphas[i].clamp(0.0, 0.5)
             x_half = x - alpha_i * grad
             x_half = x_half.clamp(0.0, 1.0)
-            x = self._denoise(x_half, sigma_t)
+
+            sigma_val = sigmas[i]
+            if torch.is_tensor(sigma_val):
+                sigma_map = sigma_val.view(-1, 1, 1, 1).expand(-1, -1, *out_size).contiguous()
+            else:
+                sigma_map = torch.full((B, 1, *out_size), float(sigma_val), device=y.device, dtype=y.dtype)
+            sigma_map = sigma_map.clamp(0.0, 1.0)
+
+            x = self._denoise(x_half, sigma_map)
 
         return x
 

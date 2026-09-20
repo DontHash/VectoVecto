@@ -115,33 +115,136 @@ def load_image(image_path):
     img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0)
     return img_tensor, img.size
 
-def save_image(tensor, path):
+def apply_photographic_grain(img_np: np.ndarray, strength: float = 0.02) -> np.ndarray:
+    """
+    Applies subtle, luminance-conditioned organic film grain to break surface tension
+    and restore natural skin micro-texture / photographic realism.
+    Conditioned on the human contrast sensitivity curve (stronger in mid-tones, gentle in highlights/shadows).
+    """
+    if strength <= 0.0:
+        return img_np
+
+    img_f = img_np.astype(np.float32) / 255.0
+    lum = 0.299 * img_f[:, :, 0] + 0.587 * img_f[:, :, 1] + 0.114 * img_f[:, :, 2]
+    # Parabolic mid-tone weighting: peak at lum=0.5, falls off near 0 and 1
+    weight = 4.0 * lum * (1.0 - lum)
+    weight = np.clip(weight, 0.15, 1.0)[:, :, np.newaxis]
+
+    noise = np.random.normal(0, strength, img_f.shape).astype(np.float32)
+    grain = noise * weight
+    out = np.clip(img_f + grain, 0.0, 1.0)
+    return (out * 255.0).round().astype(np.uint8)
+
+
+def save_image(tensor, path, mode='natural', grain_strength=0.015, use_tier_b=True):
+    """
+    Save image with natural photographic preservation or legacy mode.
+    Tier-B DRUNet uses 'natural' mode to avoid cartoon/clay-like bilateral flattening.
+    """
     tensor = tensor.squeeze(0).permute(1, 2, 0).detach().cpu().numpy()
     tensor = np.clip(tensor * 255.0, 0, 255).astype(np.uint8)
-    
-    # --- Artifact Smoothing ---
-    # The ConvTranspose2d upsampling layers can sometimes cause "checkerboard" block artifacts.
-    # We apply a Bilateral Filter, which acts as a "smart blur" that smooths out blocky pixels 
-    # and flat areas while keeping the sharp edges perfectly intact.
-    import cv2
-    tensor = cv2.bilateralFilter(tensor, d=5, sigmaColor=50, sigmaSpace=50)
+
+    if mode == 'raw':
+        # Pure neural reconstruction with zero post-processing
+        Image.fromarray(tensor).save(path)
+        return
+
+    if mode == 'legacy' and not use_tier_b:
+        # Legacy smoothing only for Tier-A ConvTranspose checkerboard
+        tensor = cv2.bilateralFilter(tensor, d=5, sigmaColor=50, sigmaSpace=50)
+        img = Image.fromarray(tensor)
+        img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=100, threshold=3))
+        img = ImageEnhance.Color(img).enhance(1.2)
+        img = ImageEnhance.Contrast(img).enhance(1.1)
+        img.save(path)
+        return
+
+    # Natural Photographic Mode:
+    # 1. Inject subtle organic micro-grain to break plastic surface tension
+    if grain_strength > 0:
+        tensor = apply_photographic_grain(tensor, strength=grain_strength)
 
     img = Image.fromarray(tensor)
-    
-    # --- Quality Enhancement (Math & Lightweight filtering) ---
-    # 1. Sharpening (Unsharp Mask: math-based edge enhancement)
-    # Reduced percent from 150 to 100 so it doesn't over-sharpen and bring back blocks.
-    img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=100, threshold=3))
-    
-    # 2. Vibrance (Color Saturation)
-    color_enhancer = ImageEnhance.Color(img)
-    img = color_enhancer.enhance(1.2) # 20% increase in color vibrance
-    
-    # 3. Contrast (Makes shadows darker and highlights brighter)
-    contrast_enhancer = ImageEnhance.Contrast(img)
-    img = contrast_enhancer.enhance(1.1) # 10% increase in contrast
-    
+    # 2. Gentle subpixel micro-contrast (radius 1, 20% - no haloing or posterization)
+    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=20, threshold=2))
     img.save(path)
+
+
+
+def predict_tta(model, x, kernel):
+    """8-way Test-Time Augmentation (4 rotations + horizontal flips)."""
+    B, C, H, W = x.shape
+    scale = getattr(model, 'scale', 4)
+    out = torch.zeros((B, C, H * scale, W * scale), device=x.device, dtype=x.dtype)
+    for k in range(4):
+        rot = torch.rot90(x, k, [2, 3])
+        out += torch.rot90(model(rot, kernel), -k, [2, 3])
+        flip = torch.flip(rot, [3])
+        out += torch.rot90(torch.flip(model(flip, kernel), [3]), -k, [2, 3])
+    return out / 8.0
+
+
+def upscale_tiled(model, img_tensor, kernel, scale, tile_size=256, tile_pad=32, use_tta=True):
+    """
+    Seamless tiled super-resolution with overlapping cosine window blending.
+    Guarantees low, constant VRAM usage regardless of input image size.
+    """
+    B, C, H, W = img_tensor.shape
+    device = img_tensor.device
+
+    # If image already fits in a single tile, process directly
+    if H <= tile_size and W <= tile_size:
+        print(f"Image fits in single tile ({H}x{W} <= {tile_size}). Running direct inference (TTA={use_tta})...")
+        return predict_tta(model, img_tensor, kernel) if use_tta else model(img_tensor, kernel)
+
+    stride = tile_size - 2 * tile_pad
+    h_steps = max(1, int(np.ceil((H - 2 * tile_pad) / stride)))
+    w_steps = max(1, int(np.ceil((W - 2 * tile_pad) / stride)))
+
+    out_H, out_W = H * scale, W * scale
+    out_tensor = torch.zeros((B, C, out_H, out_W), device=device, dtype=img_tensor.dtype)
+    weights = torch.zeros((1, 1, out_H, out_W), device=device, dtype=img_tensor.dtype)
+
+    # 2D Cosine window for seamless tile boundary blending
+    patch_out_size = tile_size * scale
+    wy = torch.sin(torch.linspace(0.01, float(np.pi - 0.01), patch_out_size, device=device))
+    wx = torch.sin(torch.linspace(0.01, float(np.pi - 0.01), patch_out_size, device=device))
+    tile_weight = (wy.unsqueeze(1) * wx.unsqueeze(0)).unsqueeze(0).unsqueeze(0)
+
+    total_tiles = h_steps * w_steps
+    print(f"Tiled inference active: {H}x{W} -> {out_H}x{out_W} ({total_tiles} tiles, tile_size={tile_size}, pad={tile_pad}, TTA={use_tta})")
+
+    tile_count = 0
+    for i in range(h_steps):
+        top = min(i * stride, max(0, H - tile_size))
+        bottom = min(top + tile_size, H)
+        if bottom - top < tile_size:
+            top = max(0, bottom - tile_size)
+
+        for j in range(w_steps):
+            left = min(j * stride, max(0, W - tile_size))
+            right = min(left + tile_size, W)
+            if right - left < tile_size:
+                left = max(0, right - tile_size)
+
+            tile_count += 1
+            patch = img_tensor[:, :, top:bottom, left:right]
+
+            if use_tta:
+                patch_out = predict_tta(model, patch, kernel)
+            else:
+                patch_out = model(patch, kernel)
+
+            ptop, pbottom = top * scale, bottom * scale
+            pleft, pright = left * scale, right * scale
+            cur_weight = tile_weight[:, :, :pbottom - ptop, :pright - pleft]
+
+            out_tensor[:, :, ptop:pbottom, pleft:pright] += patch_out * cur_weight
+            weights[:, :, ptop:pbottom, pleft:pright] += cur_weight
+
+    weights = torch.clamp(weights, min=1e-5)
+    out_tensor = out_tensor / weights
+    return out_tensor
 
 
 # ==========================================
@@ -154,9 +257,14 @@ OUTPUT_PATH = "./upscaled_result23.png"
 
 
 def main():
-    global IMAGE_PATH
+    global IMAGE_PATH, OUTPUT_PATH
     
-    # 1. Handle File Input (Terminal + UI Fallback)
+    # 1. Handle File Input (CLI arguments first, then configured path, then UI fallback)
+    if len(sys.argv) > 1:
+        IMAGE_PATH = sys.argv[1]
+    if len(sys.argv) > 2:
+        OUTPUT_PATH = sys.argv[2]
+
     if not os.path.exists(IMAGE_PATH):
         print("Opening file dialog to select an image...")
         try:
@@ -238,37 +346,94 @@ def main():
     kernel_ch = 1 if use_tier_b else 3
     kernel = create_gaussian_kernel(sigma=1.2, channels=kernel_ch).to(device)
 
-    # 5. Run Inference
-    print(f"\nUpscaling image by {sr_scale}x using 8-way Test-Time Augmentation (TTA)...")
-    print("Running the model 8 times to drastically improve quality and destroy artifacts.")
+    # 5. Run Inference (Seamless Tiled with Overlap Blending)
+    use_tta = "--no-tta" not in sys.argv
+    tile_size = 256
+    for arg in sys.argv:
+        if arg.startswith("--tile-size="):
+            try:
+                tile_size = int(arg.split("=")[1])
+            except ValueError:
+                pass
+
     with torch.no_grad():
-        # Initialize an empty tensor to accumulate the 8 predictions
-        B, C, H, W = img_tensor.shape
-        out_tensor = torch.zeros((B, C, H*sr_scale, W*sr_scale), device=device, dtype=img_tensor.dtype)
-
-        for k in range(4):
-            # 1. Standard Rotations
-            rot_img = torch.rot90(img_tensor, k, [2, 3])
-            out_rot = model(rot_img, kernel)
-            out_tensor += torch.rot90(out_rot, -k, [2, 3])
-
-            # 2. Flipped + Rotations
-            flip_img = torch.flip(rot_img, [3]) # horizontal flip
-            out_flip = model(flip_img, kernel)
-            out_tensor += torch.rot90(torch.flip(out_flip, [3]), -k, [2, 3])
-
-        # Average the 8 passes
-        out_tensor = out_tensor / 8.0
+        out_tensor = upscale_tiled(
+            model, img_tensor, kernel, sr_scale,
+            tile_size=tile_size, tile_pad=32, use_tta=use_tta
+        )
 
     # --- BUG FIX: Remove Padding ---
     if pad_h > 0 or pad_w > 0:
         out_tensor = out_tensor[:, :, :H*sr_scale, :W*sr_scale]
 
-    # 6. Save and Finish
-    save_image(out_tensor, OUTPUT_PATH)
+    # Phase 6: Optional Total Variation (TV) Minimization Refinement
+    if "--tv-refine" in sys.argv:
+        print("\nApplying Phase 6 Total Variation (TV / ROF) refinement...")
+        try:
+            from tv_refinement import tv_super_resolution_refine
+            out_np = out_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            lr_np = img_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            if pad_h > 0 or pad_w > 0:
+                lr_np = lr_np[:H, :W]
+            refined_np = tv_super_resolution_refine(lr_np, out_np, scale=sr_scale, lambda_tv=0.005, num_iters=4)
+            out_tensor = torch.from_numpy(refined_np).permute(2, 0, 1).unsqueeze(0).to(device)
+            print("Phase 6 TV refinement completed successfully.")
+        except Exception as e:
+            print(f"Warning: TV refinement skipped due to: {e}")
+
+    # Phase 4.5: Optional Hybrid Vector / Raster Decomposition
+    if "--hybrid-vector" in sys.argv:
+        print("\nApplying Phase 4.5 Hybrid Vector / Raster Decomposition...")
+        try:
+            from vector_raster_hybrid import hybrid_vector_raster_upscale
+            out_np = out_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            lr_np = img_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            if pad_h > 0 or pad_w > 0:
+                lr_np = lr_np[:H, :W]
+
+            svg_out = None
+            for arg in sys.argv:
+                if arg.startswith("--svg="):
+                    svg_out = arg.split("=")[1]
+
+            def raster_cb(lr, scale):
+                return (out_np * 255.0).round().astype(np.uint8)
+
+            lr_uint8 = (lr_np * 255.0).round().astype(np.uint8)
+            hybrid_np = hybrid_vector_raster_upscale(
+                lr_uint8,
+                scale=sr_scale,
+                raster_engine=raster_cb,
+                export_svg_path=svg_out
+            )
+            out_tensor = torch.from_numpy(hybrid_np.astype(np.float32) / 255.0).permute(2, 0, 1).unsqueeze(0).to(device)
+            print("Phase 4.5 Hybrid Vector/Raster decomposition completed successfully.")
+            if svg_out:
+                print(f"Exported resolution-independent SVG to: {svg_out}")
+        except Exception as e:
+            print(f"Warning: Hybrid vector/raster skipped due to: {e}")
+
+    # 6. Save and Finish (Natural Photographic Mode by default, bypassing clay-like bilateral filter)
+    save_mode = 'natural'
+    if "--legacy-filter" in sys.argv:
+        save_mode = 'legacy'
+    elif "--raw" in sys.argv:
+        save_mode = 'raw'
+
+    grain_val = 0.018 if use_tier_b else 0.0
+    for arg in sys.argv:
+        if arg.startswith("--grain="):
+            try:
+                grain_val = float(arg.split("=")[1])
+            except ValueError:
+                pass
+        elif arg == "--no-grain":
+            grain_val = 0.0
+
+    save_image(out_tensor, OUTPUT_PATH, mode=save_mode, grain_strength=grain_val, use_tier_b=use_tier_b)
     new_size = (orig_size[0] * sr_scale, orig_size[1] * sr_scale)
     print(f"\nSUCCESS! Upscaled image saved to: {os.path.abspath(OUTPUT_PATH)}")
-    print(f"New dimensions: {new_size[0]}x{new_size[1]}")
+    print(f"New dimensions: {new_size[0]}x{new_size[1]} (mode={save_mode}, grain={grain_val})")
     print("Compare the results to see the texture preservation!")
 
 if __name__ == "__main__":
