@@ -298,7 +298,9 @@ def main():
     ap = argparse.ArgumentParser(description="Document restore evaluation harness")
     ap.add_argument("--data-dir", default=None, help="dir containing manifest.json")
     ap.add_argument("--build-synthetic", type=int, default=0,
-                    help="build N synthetic invoices under data/doc_eval/synthetic and evaluate")
+                    help="build N synthetic pages under data/doc_eval/<layout> and evaluate")
+    ap.add_argument("--layout", default="single", choices=["single", "two_column"],
+                    help="synthetic page layout for --build-synthetic")
     ap.add_argument("--levels", default="mild,medium")
     ap.add_argument("--seed", type=int, default=100)
     ap.add_argument("--ocr", default=None, help="comma list; default all available")
@@ -314,10 +316,12 @@ def main():
     args = ap.parse_args()
 
     if args.build_synthetic:
-        out = os.path.join(BASE_DIR, "data", "doc_eval", "synthetic")
+        sub = "synthetic" if args.layout == "single" else f"synthetic_{args.layout}"
+        out = os.path.join(BASE_DIR, "data", "doc_eval", sub)
         levels = tuple(x.strip() for x in args.levels.split(",") if x.strip())
         doc_data.build_synthetic_dataset(out, n=args.build_synthetic,
-                                         levels=levels, seed=args.seed)
+                                         levels=levels, seed=args.seed,
+                                         layout=args.layout)
         args.data_dir = out
 
     if not args.data_dir:

@@ -240,18 +240,97 @@ def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = Non
 # synthetic dataset
 # ---------------------------------------------------------------------------
 
+_COL_LEFT_ITEMS = ["Statement No: {n}", "Date: {d}", "Bill To:",
+                   "ACME Supplies Ltd", "12 Market Street", "Lakeside 45000",
+                   "GSTIN: 27AABCU9603R1ZM"]
+_COL_RIGHT_ITEMS = ["Ship To:", "Northwind Traders", "88 Harbor Road",
+                    "Riverside 56001", "Payment Terms: Net 30",
+                    "Due Date: {due}", "Reference: PO-{po}"]
+
+
+def render_two_column_document(seed: int = 0, dpi: int = 300) -> Tuple[np.ndarray, str]:
+    """Two-column statement: full-width title, column block, then a table block.
+
+    Ground truth is the *reading order* (title, full left column, full right
+    column, table, totals) — the layout where OCR detection order interleaves
+    columns and XY-cut ordering must recover column-major order.
+    """
+    rng = np.random.default_rng(seed)
+    s = dpi / 150.0
+    w, h = int(1240 * s), int(1754 * s)
+
+    def sc(*vals):
+        return tuple(int(round(v * s)) for v in vals)
+
+    page = Image.new("RGB", (w, h), (250, 249, 246))
+    d = ImageDraw.Draw(page)
+    f_title = _font(int(44 * s))
+    f_head = _font(int(24 * s))
+    f_body = _font(int(22 * s))
+
+    lines: List[str] = []
+    title = "STATEMENT OF ACCOUNT"
+    d.text(sc(80, 70), title, font=f_title, fill=(15, 15, 15))
+    lines.append(title)
+
+    inv_no = int(rng.integers(10000, 99999))
+    po = int(rng.integers(1000, 9999))
+    date = f"2026-{int(rng.integers(1, 13)):02d}-{int(rng.integers(1, 29)):02d}"
+    due = f"2026-{int(rng.integers(1, 13)):02d}-{int(rng.integers(1, 29)):02d}"
+
+    y0 = 200
+    step = int(40 * s)
+    left = [t.format(n=inv_no, d=date) if "{" in t else t for t in _COL_LEFT_ITEMS]
+    right = [t.format(due=due, po=po) if "{" in t else t for t in _COL_RIGHT_ITEMS]
+    for i, text in enumerate(left):
+        d.text(sc(80, y0 + i * step), text, font=f_body, fill=(25, 25, 25))
+        lines.append(text)
+    for i, text in enumerate(right):
+        d.text(sc(700, y0 + i * step), text, font=f_body, fill=(25, 25, 25))
+        lines.append(text)
+
+    y_table = y0 + len(left) * step + int(80 * s)
+    d.text(sc(80, y_table), "Description", font=f_head, fill=(0, 0, 0))
+    d.text(sc(700, y_table), "Amount", font=f_head, fill=(0, 0, 0))
+    d.line(sc(80, y_table + 34, 1160, y_table + 34), fill=(120, 120, 120),
+           width=max(1, int(2 * s)))
+    lines.append("Description Amount")
+
+    total = 0.0
+    row_y = y_table + int(56 * s)
+    n_items = int(rng.integers(2, 4))
+    for idx in [int(i) for i in rng.choice(len(_ITEMS), size=n_items, replace=False)]:
+        name, qty, unit = _ITEMS[idx]
+        amount = qty * float(unit)
+        total += amount
+        d.text(sc(80, row_y), f"{name} x{qty}", font=f_body, fill=(25, 25, 25))
+        d.text(sc(980, row_y), f"{amount:.2f}", font=f_body, fill=(25, 25, 25))
+        lines.append(f"{name} x{qty} {amount:.2f}")
+        row_y += int(40 * s)
+
+    grand = round(total * 1.13, 2)
+    d.text(sc(700, row_y + 30), "TOTAL", font=f_title, fill=(10, 10, 10))
+    d.text(sc(980, row_y + 34), f"{grand:.2f}", font=f_title, fill=(10, 10, 10))
+    lines.append(f"TOTAL {grand:.2f}")
+
+    arr = cv2.cvtColor(np.array(page), cv2.COLOR_RGB2BGR)
+    return arr, normalize_text("\n".join(lines))
+
+
 def build_synthetic_dataset(out_dir: str, n: int = 20,
-                            levels=("mild", "medium"), seed: int = 100) -> Dict:
+                            levels=("mild", "medium"), seed: int = 100,
+                            layout: str = "single") -> Dict:
     pages_dir = os.path.join(out_dir, "pages")
     gt_dir = os.path.join(out_dir, "gt")
     os.makedirs(pages_dir, exist_ok=True)
     os.makedirs(gt_dir, exist_ok=True)
     entries: List[Dict] = []
+    renderer = render_two_column_document if layout == "two_column" else render_synthetic_invoice
     for i in range(n):
-        img, gt = render_synthetic_invoice(seed)
+        img, gt = renderer(seed)
         level = levels[i % len(levels)]
         page_seed = seed * 1000 + i
-        pid = f"inv_{i:04d}"
+        pid = f"{'two' if layout == 'two_column' else 'inv'}_{i:04d}"
         clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
         deg_path = os.path.join(pages_dir, f"{pid}_degraded.png")
         gt_path = os.path.join(gt_dir, f"{pid}.txt")
@@ -268,6 +347,7 @@ def build_synthetic_dataset(out_dir: str, n: int = 20,
         })
         seed += 1
     manifest = {"kind": "synthetic", "name": "synthetic_invoices",
+                "layout": layout,
                 "created": time.strftime("%Y-%m-%d %H:%M:%S"), "entries": entries}
     with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
@@ -444,6 +524,8 @@ def main():
     ap.add_argument("--dpi", type=int, default=200)
     ap.add_argument("--max-pages", type=int, default=0)
     ap.add_argument("--seed", type=int, default=100)
+    ap.add_argument("--layout", default="single", choices=["single", "two_column"],
+                    help="synthetic page layout")
     ap.add_argument("--demo-pdf", default=None)
     ap.add_argument("--hf", nargs="*", default=[],
                     help="HF sources for real photos: sroie, cord, or a repo id")
@@ -459,9 +541,12 @@ def main():
 
     levels = tuple(x.strip() for x in args.levels.split(",") if x.strip())
     if args.synthetic:
-        m = build_synthetic_dataset(os.path.join(args.out, "synthetic"),
-                                    n=args.synthetic, levels=levels, seed=args.seed)
-        print(f"synthetic: {len(m['entries'])} pages -> {os.path.join(args.out, 'synthetic')}")
+        sub = "synthetic" if args.layout == "single" else f"synthetic_{args.layout}"
+        m = build_synthetic_dataset(os.path.join(args.out, sub),
+                                    n=args.synthetic, levels=levels,
+                                    seed=args.seed, layout=args.layout)
+        print(f"synthetic[{args.layout}]: {len(m['entries'])} pages -> "
+              f"{os.path.join(args.out, sub)}")
     if args.pdf:
         m = build_pdf_dataset(args.pdf, os.path.join(args.out, "pdf"), dpi=args.dpi,
                               levels=levels, max_pages=args.max_pages, seed=args.seed)
