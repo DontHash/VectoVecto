@@ -439,3 +439,38 @@ Decision: `recheck_digits` stays available but **off by default**; the
 mechanism that yields independent digit evidence. Candidates for a future
 re-pass that would add signal: a *different* rec model, or a different image
 (2× Lanczos of the raw page, not a crop of it).
+
+---
+
+## Appendix B — Phase C status (2026-09-20)
+
+**Shipped**
+
+- `document_export.py` — searchable PDF (reportlab, invisible text at token
+  boxes), flag-colored overlay PNG (green/amber/red + alt reading), transcript,
+  OCR JSON. PyMuPDF avoided (AGPL).
+- `cli.py --mode document` — image and PDF input (page range via `--max-pages`),
+  `--ocr rapidocr|tesseract`, `--lang`, `--deskew`, `--repass-digits`,
+  `--skip-existing`, JSON report. Status line matches the UX copy:
+  `n tokens · k low-conf · c digit conflicts · t seconds`.
+- Dual-stream gate wired into the CLI: primary stream per `RECOMMENDED_STREAM`,
+  auditor stream compared with `compare_digit_streams` (flags only, no picking).
+- `restore_document(..., deskew=False)` geometry-stable mode so raw-OCR boxes
+  align with the display embedded in the PDF.
+- Perf: illumination background now estimated at 1/4 resolution —
+  A4@300dpi restore 19 s → **1.6 s**; harness CER unchanged (0.0937).
+
+**Measured (frozen set, RapidOCR raw):** CER 0.0937, coverage 0.667, false
+alarms 0.000 → **4.14 s/page** on CPU (inside the <8 s SLO, above the 4 s
+stretch goal).
+
+**Phase C criterion re-interpretation (honest):** "document pipeline wins on
+synthetic CER" is not achievable through preprocessing when the OCR engine is
+already stronger than the degradation model. The product's measurable wins are:
+searchable PDF + honest flags (2/3 of errors flagged, zero false alarms), and
+the Tesseract path (+55% relative CER). This is recorded here rather than
+hidden by reporting a prettier image.
+
+**Next:** Phase D (Gradio default = document, `SmartUpscaler(mode="document")`,
+cheap page classifier) and the public-receipt sanity set (SROIE/CORD) for
+real-photo validation.
