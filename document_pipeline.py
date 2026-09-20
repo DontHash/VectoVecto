@@ -28,6 +28,8 @@ import numpy as np
 
 from document_ocr import (RECOMMENDED_STREAM, OCRResult, available_backends,
                           compare_digit_streams, ocr_page, review_queue)
+from document_orientation import (RotationInfo, detect_rotation,
+                                  orientation_suspect, rotate_bgr)
 from document_restore import restore_document
 
 
@@ -48,8 +50,9 @@ class DocumentResult:
         low = sum(1 for t in self.ocr.tokens if "low_conf" in t.flags)
         conflicts = self.meta.get("digit_conflicts", 0)
         review = len(self.review_list)
+        orient = " · orientation?" if self.meta.get("orientation_suspect") else ""
         return (f"{len(self.ocr.tokens)} tokens · {low} low-confidence · "
-                f"{conflicts} digit conflicts · {review} to review · "
+                f"{conflicts} digit conflicts · {review} to review{orient} · "
                 f"{self.meta.get('seconds', 0):.1f}s")
 
 
@@ -68,6 +71,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           lang: Optional[str] = None, deskew: bool = False,
                           scale: int = 1, repass_digits: bool = False,
                           reading_order: bool = True,
+                          auto_rotate: bool = True,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -75,6 +79,12 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           conf_threshold: float = 60.0) -> DocumentResult:
     t0 = time.time()
     backend = pick_backend(backend)
+
+    rot = RotationInfo()
+    if auto_rotate:
+        rot = detect_rotation(img_bgr)
+        if rot.angle:
+            img_bgr = rotate_bgr(img_bgr, rot.angle)
 
     restored = restore_document(img_bgr, scale=scale, deskew=deskew)
     display = restored["display_bgr"]
@@ -114,6 +124,9 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         result.tokens = sort_reading_order(result.tokens)
         result.text = text_in_order(result.tokens)
     result.meta["reading_order"] = reading_order
+    suspect = orientation_suspect(result.tokens) or rot.source == "osd-180"
+    result.meta["orientation_suspect"] = suspect
+    result.meta["auto_rotate"] = rot.as_dict()
 
     outputs: Dict[str, str] = {}
     if out_dir:
@@ -130,6 +143,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "primary_stream": result.meta["primary_stream"],
         "digit_conflicts": conflicts,
         "reading_order": reading_order,
+        "orientation_suspect": suspect,
+        "auto_rotate": rot.as_dict(),
         "repass_digits": repass_digits,
     }
     return DocumentResult(display_bgr=display, ocr=result, meta=meta, outputs=outputs)

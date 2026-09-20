@@ -139,6 +139,7 @@ def run_document_mode(args) -> int:
                 img, backend=backend, lang=args.lang, deskew=args.deskew,
                 repass_digits=args.repass_digits, dpi=dpi,
                 reading_order=not getattr(args, "no_reading_order", False),
+                auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
                 make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
                 make_txt=not args.no_txt, make_json=True)
@@ -173,7 +174,8 @@ def run_document_mode(args) -> int:
                 for idx, page_img, _gt in pages:
                     process(page_img, f"{stem}_p{idx:03d}", f"{src}#p{idx}")
             else:
-                img = cv2.imread(src, cv2.IMREAD_COLOR)
+                from document_orientation import load_image_bgr
+                img = load_image_bgr(src)
                 if img is None:
                     raise ValueError("unreadable image")
                 stem = os.path.splitext(os.path.basename(src))[0]
@@ -235,6 +237,8 @@ def main():
                      help="max pages per PDF input (default 1)")
     doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",
                      help="skip XY-cut reading-order repair for column layouts")
+    doc.add_argument("--rotate", choices=["auto", "off"], default="auto",
+                     help="auto: EXIF + Tesseract OSD page rotation (large pages only)")
     doc.add_argument("--dpi", type=int, default=0, help="source DPI for PDF page size (0 = auto)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
