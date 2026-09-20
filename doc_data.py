@@ -90,36 +90,46 @@ _ITEMS = [("Widget A-100", 3, "120.00"), ("Gadget B-220", 1, "899.50"),
           ("License D-9", 2, "399.99"), ("Support Plan", 1, "149.00")]
 
 
-def render_synthetic_invoice(seed: int = 0) -> Tuple[np.ndarray, str]:
-    """Returns (BGR uint8 page, ground-truth text in reading order)."""
+def render_synthetic_invoice(seed: int = 0, dpi: int = 300) -> Tuple[np.ndarray, str]:
+    """Returns (BGR uint8 page, ground-truth text in reading order).
+
+    Rendered at 300 DPI by default so degradations act like a real phone photo
+    (text stays ~40-90 px tall before downscale), not like shrinking an
+    already-low-res thumbnail.
+    """
     rng = np.random.default_rng(seed)
-    w, h = 1240, 1754  # A4 @150dpi
+    s = dpi / 150.0
+    w, h = int(1240 * s), int(1754 * s)
+
+    def sc(*vals):
+        return tuple(int(round(v * s)) for v in vals)
+
     page = Image.new("RGB", (w, h), (250, 249, 246))
     d = ImageDraw.Draw(page)
-    f_title = _font(46)
-    f_head = _font(26)
-    f_body = _font(24)
-    f_mono = _font(24)
+    f_title = _font(int(46 * s))
+    f_head = _font(int(26 * s))
+    f_body = _font(int(24 * s))
+    f_mono = _font(int(24 * s))
 
     lines: List[str] = []
     inv_no = int(rng.integers(10000, 99999))
     vendor = _VENDORS[int(rng.integers(0, len(_VENDORS)))]
     date = f"2026-{int(rng.integers(1, 13)):02d}-{int(rng.integers(1, 29)):02d}"
     title = "INVOICE"
-    d.text((80, 70), title, font=f_title, fill=(15, 15, 15))
+    d.text(sc(80, 70), title, font=f_title, fill=(15, 15, 15))
     lines.append(title)
 
-    d.text((80, 150), f"Vendor: {vendor}", font=f_head, fill=(30, 30, 30))
-    d.text((80, 185), f"Invoice No: {inv_no}", font=f_body, fill=(30, 30, 30))
-    d.text((80, 218), f"Date: {date}", font=f_body, fill=(30, 30, 30))
+    d.text(sc(80, 150), f"Vendor: {vendor}", font=f_head, fill=(30, 30, 30))
+    d.text(sc(80, 185), f"Invoice No: {inv_no}", font=f_body, fill=(30, 30, 30))
+    d.text(sc(80, 218), f"Date: {date}", font=f_body, fill=(30, 30, 30))
     lines += [f"Vendor: {vendor}", f"Invoice No: {inv_no}", f"Date: {date}"]
 
-    d.text((80, 300), "Description", font=f_head, fill=(0, 0, 0))
-    d.text((620, 300), "Qty", font=f_head, fill=(0, 0, 0))
-    d.text((760, 300), "Unit", font=f_head, fill=(0, 0, 0))
-    d.text((980, 300), "Amount", font=f_head, fill=(0, 0, 0))
+    d.text(sc(80, 300), "Description", font=f_head, fill=(0, 0, 0))
+    d.text(sc(620, 300), "Qty", font=f_head, fill=(0, 0, 0))
+    d.text(sc(760, 300), "Unit", font=f_head, fill=(0, 0, 0))
+    d.text(sc(980, 300), "Amount", font=f_head, fill=(0, 0, 0))
     lines.append("Description Qty Unit Amount")
-    d.line((80, 340, 1160, 340), fill=(120, 120, 120), width=2)
+    d.line(sc(80, 340, 1160, 340), fill=(120, 120, 120), width=max(1, int(2 * s)))
 
     total = 0.0
     y = 360
@@ -132,25 +142,25 @@ def render_synthetic_invoice(seed: int = 0) -> Tuple[np.ndarray, str]:
         amount = qty * unit_f
         total += amount
         row = f"{name} {qty} {unit_f:.2f} {amount:.2f}"
-        d.text((80, y), name, font=f_body, fill=(25, 25, 25))
-        d.text((620, y), str(qty), font=f_body, fill=(25, 25, 25))
-        d.text((760, y), f"{unit_f:.2f}", font=f_mono, fill=(25, 25, 25))
-        d.text((980, y), f"{amount:.2f}", font=f_mono, fill=(25, 25, 25))
+        d.text(sc(80, y), name, font=f_body, fill=(25, 25, 25))
+        d.text(sc(620, y), str(qty), font=f_body, fill=(25, 25, 25))
+        d.text(sc(760, y), f"{unit_f:.2f}", font=f_mono, fill=(25, 25, 25))
+        d.text(sc(980, y), f"{amount:.2f}", font=f_mono, fill=(25, 25, 25))
         lines.append(row)
         y += 44
 
     tax = round(total * 0.13, 2)
     grand = round(total + tax, 2)
-    d.line((700, y + 6, 1160, y + 6), fill=(120, 120, 120), width=2)
-    d.text((760, y + 20), "Subtotal", font=f_head, fill=(0, 0, 0))
-    d.text((980, y + 20), f"{total:.2f}", font=f_mono, fill=(0, 0, 0))
-    d.text((760, y + 56), "VAT 13%", font=f_head, fill=(0, 0, 0))
-    d.text((980, y + 56), f"{tax:.2f}", font=f_mono, fill=(0, 0, 0))
-    d.text((760, y + 100), "TOTAL", font=f_title, fill=(10, 10, 10))
-    d.text((980, y + 104), f"{grand:.2f}", font=f_title, fill=(10, 10, 10))
+    d.line(sc(700, y + 6, 1160, y + 6), fill=(120, 120, 120), width=max(1, int(2 * s)))
+    d.text(sc(760, y + 20), "Subtotal", font=f_head, fill=(0, 0, 0))
+    d.text(sc(980, y + 20), f"{total:.2f}", font=f_mono, fill=(0, 0, 0))
+    d.text(sc(760, y + 56), "VAT 13%", font=f_head, fill=(0, 0, 0))
+    d.text(sc(980, y + 56), f"{tax:.2f}", font=f_mono, fill=(0, 0, 0))
+    d.text(sc(760, y + 100), "TOTAL", font=f_title, fill=(10, 10, 10))
+    d.text(sc(980, y + 104), f"{grand:.2f}", font=f_title, fill=(10, 10, 10))
     lines += [f"Subtotal {total:.2f}", f"VAT 13% {tax:.2f}", f"TOTAL {grand:.2f}"]
 
-    d.text((80, h - 90), "Thank you for your business.", font=f_body, fill=(60, 60, 60))
+    d.text(sc(80, 1754 - 90), "Thank you for your business.", font=f_body, fill=(60, 60, 60))
     lines.append("Thank you for your business.")
 
     arr = cv2.cvtColor(np.array(page), cv2.COLOR_RGB2BGR)
