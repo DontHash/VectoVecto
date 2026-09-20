@@ -54,6 +54,8 @@ class Token:
     backend: str = "?"
     flags: List[str] = field(default_factory=list)
     alt_text: Optional[str] = None  # second-stream reading, when it disagreed
+    repass_text: Optional[str] = None  # recognition-only re-read on a 2x crop
+    repass_conf: Optional[float] = None
 
     @property
     def has_digits(self) -> bool:
@@ -75,6 +77,11 @@ class OCRBackend:
         return True, ""
 
     def run(self, img_bgr: np.ndarray, lang: Optional[str] = None) -> OCRResult:
+        raise NotImplementedError
+
+    def recognize_crop(self, crop_bgr: np.ndarray, lang: Optional[str] = None) -> Tuple[str, float]:
+        """Recognition-only re-read of a single crop (no detection). Used by the
+        digit re-pass. Returns (text, conf 0-100)."""
         raise NotImplementedError
 
 
@@ -126,6 +133,15 @@ class RapidOCRBackend(OCRBackend):
         return OCRResult(text=text, tokens=tokens, backend=self.name,
                          meta={"seconds": round(time.time() - t0, 3),
                                "n_tokens": len(tokens), "lang": lang or "default"})
+
+    def recognize_crop(self, crop_bgr: np.ndarray, lang: Optional[str] = None) -> Tuple[str, float]:
+        self._ensure()
+        out = self._engine(crop_bgr, use_det=False, use_cls=False, use_rec=True)
+        txts = getattr(out, "txts", None) or ()
+        scores = getattr(out, "scores", None) or ()
+        if not txts:
+            return "", 0.0
+        return str(txts[0]), float(scores[0]) * 100.0 if len(scores) else 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +215,23 @@ class TesseractBackend(OCRBackend):
                          meta={"seconds": round(time.time() - t0, 3),
                                "n_tokens": len(tokens), "lang": lang or "eng"})
 
+    def recognize_crop(self, crop_bgr: np.ndarray, lang: Optional[str] = None) -> Tuple[str, float]:
+        exe = self._find()
+        if not exe:
+            raise RuntimeError("tesseract binary not found")
+        with tempfile.TemporaryDirectory() as td:
+            inp = os.path.join(td, "crop.png")
+            cv2.imwrite(inp, crop_bgr)
+            cmd = [exe, inp, "stdout", "-l", lang or "eng", "--psm", "7", "tsv"]
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  encoding="utf-8", errors="replace", timeout=120)
+            tokens = self._parse_tsv(proc.stdout or "")
+        if not tokens:
+            return "", 0.0
+        text = " ".join(t.text for t in tokens)
+        conf = float(np.mean([t.conf for t in tokens]))
+        return text, conf
+
 
 # ---------------------------------------------------------------------------
 # registry + flagging helpers
@@ -228,18 +261,81 @@ def get_backend(name: str) -> OCRBackend:
 
 def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
              lang: Optional[str] = None, conf_threshold: float = 60.0,
-             recheck_digits: bool = False) -> OCRResult:
-    """Run OCR and attach flags. `recheck_digits` needs a second backend-free pass
-    (implemented in Phase C as recognition-only re-run; here it is a hook)."""
-    result = get_backend(backend).run(img_bgr, lang=lang)
+             recheck_digits: bool = False,
+             repass_conf_below: float = 95.0) -> OCRResult:
+    """Run OCR, attach flags, optionally re-read digit tokens on 2x crops.
+
+    The re-pass never replaces text; it records `repass_text`/`repass_conf` and
+    raises `digit_conflict` when the digit sequences disagree.
+
+    `repass_conf_below=100` re-reads every digit token (PP-OCR confidences are
+    overconfident: ECE ~0.33 on the frozen set), at a small latency cost.
+    """
+    be = get_backend(backend)
+    result = be.run(img_bgr, lang=lang)
     for tok in result.tokens:
         if tok.conf < conf_threshold:
             tok.flags.append("low_conf")
         if tok.has_digits and tok.conf < 80.0:
             tok.flags.append("digit_uncertain")
     result.meta["conf_threshold"] = conf_threshold
+    if recheck_digits:
+        conflicts = apply_digit_repass(result.tokens, img_bgr, be.recognize_crop,
+                                       lang=lang, conf_below=repass_conf_below)
+        result.meta["digit_repass_conflicts"] = conflicts
+        result.meta["repass_conf_below"] = repass_conf_below
     result.meta["flagged"] = sum(1 for t in result.tokens if t.flags)
     return result
+
+
+# ---------------------------------------------------------------------------
+# digit re-pass (recognition-only second look, never a silent replacement)
+# ---------------------------------------------------------------------------
+
+def _crop_with_pad(img: np.ndarray, bbox: Tuple[int, int, int, int],
+                   pad_ratio: float = 0.15) -> np.ndarray:
+    x0, y0, x1, y1 = bbox
+    h, w = y1 - y0, x1 - x0
+    px, py = int(w * pad_ratio) + 2, int(h * pad_ratio) + 2
+    xa, ya = max(0, x0 - px), max(0, y0 - py)
+    xb, yb = min(img.shape[1], x1 + px), min(img.shape[0], y1 + py)
+    return img[ya:yb, xa:xb].copy()
+
+
+def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
+                       repass_fn, lang: Optional[str] = None,
+                       scale: float = 2.0, conf_below: float = 95.0,
+                       max_tokens: int = 40) -> int:
+    """Re-read digit tokens on upscaled crops. Returns conflict count.
+
+    Agreement is recorded in `repass_text` only (no flag) so that flag-based
+    coverage metrics are not polluted by successful checks.
+    """
+    checked = conflicts = 0
+    for tok in tokens:
+        if not tok.has_digits or tok.conf >= conf_below:
+            continue
+        if checked >= max_tokens:
+            break
+        crop = _crop_with_pad(img_bgr, tok.bbox)
+        if crop.size == 0:
+            continue
+        big = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_LANCZOS4)
+        try:
+            text, conf = repass_fn(big, lang) if lang else repass_fn(big)
+        except TypeError:
+            text, conf = repass_fn(big)
+        except Exception:
+            continue
+        tok.repass_text, tok.repass_conf = text, conf
+        checked += 1
+        if _digits_of(tok.text) != _digits_of(text):
+            if "digit_conflict" not in tok.flags:
+                tok.flags.append("digit_conflict")
+            if tok.alt_text is None:
+                tok.alt_text = text
+            conflicts += 1
+    return conflicts
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +382,8 @@ def compare_digit_streams(primary: OCRResult, alt: OCRResult,
 
 def ocr_page_dual(img_raw: np.ndarray, img_alt: Optional[np.ndarray] = None,
                   backend: str = "rapidocr", lang: Optional[str] = None,
-                  conf_threshold: float = 60.0) -> OCRResult:
+                  conf_threshold: float = 60.0,
+                  recheck_digits: bool = False) -> OCRResult:
     """OCR the recommended stream as primary; the other stream audits digits.
 
     stream choice follows RECOMMENDED_STREAM (measured, see module docstring):
@@ -300,7 +397,7 @@ def ocr_page_dual(img_raw: np.ndarray, img_alt: Optional[np.ndarray] = None,
         primary_img, audit_img = img_raw, alt_img
 
     primary = ocr_page(primary_img, backend=backend, lang=lang,
-                       conf_threshold=conf_threshold)
+                       conf_threshold=conf_threshold, recheck_digits=recheck_digits)
     conflicts = 0
     if audit_img is not None and audit_img is not img_raw or backend == "tesseract":
         try:

@@ -124,3 +124,32 @@ def test_recommended_stream_table_covers_backends():
     from document_ocr import RECOMMENDED_STREAM
     assert RECOMMENDED_STREAM.get("rapidocr") == "raw"
     assert RECOMMENDED_STREAM.get("tesseract", "").startswith("restore")
+
+
+def test_digit_repass_records_evidence_without_polluting_flags():
+    from document_ocr import apply_digit_repass
+
+    img = np.full((60, 300, 3), 255, dtype=np.uint8)
+
+    agree = [Token(text="TOTAL 1200.00", conf=90, bbox=(10, 10, 200, 50),
+                   granularity="word", backend="x")]
+    conflicts = apply_digit_repass(agree, img, lambda crop: ("TOTAL 1200.00", 99.0))
+    assert conflicts == 0
+    assert agree[0].repass_text == "TOTAL 1200.00"
+    assert agree[0].flags == [], "agreement must not add flags (coverage stays honest)"
+
+    disagree = [Token(text="TOTAL 1200.00", conf=90, bbox=(10, 10, 200, 50),
+                      granularity="word", backend="x")]
+    assert apply_digit_repass(disagree, img, lambda crop: ("TOTAL 1260.00", 95.0)) == 1
+    assert "digit_conflict" in disagree[0].flags
+    assert disagree[0].alt_text == "TOTAL 1260.00"
+
+    high_conf = [Token(text="TOTAL 999", conf=99, bbox=(10, 10, 200, 50),
+                       granularity="word", backend="x")]
+    assert apply_digit_repass(high_conf, img, lambda crop: ("WRONG", 10.0)) == 0
+    assert high_conf[0].repass_text is None, "high-confidence tokens are not re-read"
+
+    nondigit = [Token(text="TOTAL", conf=50, bbox=(10, 10, 200, 50),
+                      granularity="word", backend="x")]
+    assert apply_digit_repass(nondigit, img, lambda crop: ("X", 1.0)) == 0
+    assert nondigit[0].repass_text is None

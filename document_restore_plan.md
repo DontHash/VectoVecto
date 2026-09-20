@@ -426,3 +426,16 @@ Tesseract 5.5.3 (`--psm 6`, CPU). CER strict (case/punctuation counted);
   dual-stream gate already flags disagreements without picking a winner.
 - Coverage/false-alarm trade-off is tunable via `conf_threshold`; freeze after
   the first real-photo run.
+
+### Appendix A.1 — digit re-pass measurement (same frozen set)
+
+Re-reading digit tokens with the recognition-only head on 2× crops of the **same
+image** returned identical text for **13/13** tokens on a heavy page and produced
+**0 conflicts** across the set, at **+0.4 s/token** CPU. Identical input to the
+same recognition model is redundant by construction.
+
+Decision: `recheck_digits` stays available but **off by default**; the
+**dual-stream** comparison (raw pixels vs restored-grayscale pixels) is the
+mechanism that yields independent digit evidence. Candidates for a future
+re-pass that would add signal: a *different* rec model, or a different image
+(2× Lanczos of the raw page, not a crop of it).

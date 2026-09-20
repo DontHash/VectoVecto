@@ -121,7 +121,8 @@ def _maybe_downscale(img: np.ndarray, max_side: int) -> np.ndarray:
 
 def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                    max_side: int = 0, with_photo: bool = False,
-                   conf_threshold: float = 60.0) -> Dict:
+                   conf_threshold: float = 60.0, recheck_digits: bool = False,
+                   repass_conf_below: float = 95.0) -> Dict:
     results: Dict[str, Dict] = {}
     per_page: List[Dict] = []
     for i, entry in enumerate(entries, 1):
@@ -149,7 +150,9 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             for backend in backends:
                 t0 = time.time()
                 try:
-                    res = ocr_page(img, backend=backend, conf_threshold=conf_threshold)
+                    res = ocr_page(img, backend=backend, conf_threshold=conf_threshold,
+                                   recheck_digits=recheck_digits,
+                                   repass_conf_below=repass_conf_below)
                 except Exception as e:  # noqa: BLE001
                     print(f"  [skip] {method}@{backend}: {e}")
                     continue
@@ -172,6 +175,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                     "flagged": stats.flagged,
                     "invented": hall.get("invented", 0),
                     "invented_digits": hall.get("invented_digits", 0),
+                    "repass_conflicts": res.meta.get("digit_repass_conflicts", 0),
                     "seconds": round(elapsed, 3),
                     "gt_chars": len(gt),
                 }
@@ -179,7 +183,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 agg = results.setdefault(key, {"cer": [], "wer": [], "token_err": [],
                                                "coverage": [], "false_alarm": [],
                                                "ece": [], "seconds": [], "invented": 0,
-                                               "invented_digits": 0, "pages": 0})
+                                               "invented_digits": 0, "repass_conflicts": 0,
+                                               "pages": 0})
                 agg["cer"].append(row["cer"])
                 agg["wer"].append(row["wer"])
                 agg["token_err"].append(row["token_err"])
@@ -189,6 +194,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 agg["seconds"].append(row["seconds"])
                 agg["invented"] += row["invented"]
                 agg["invented_digits"] += row["invented_digits"]
+                agg["repass_conflicts"] += row["repass_conflicts"]
                 agg["pages"] += 1
         print(f"  [{i}/{len(entries)}] {entry['id']} done", flush=True)
 
@@ -205,6 +211,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "seconds": float(np.mean(agg["seconds"])) if agg["seconds"] else None,
             "invented": agg["invented"],
             "invented_digits": agg["invented_digits"],
+            "repass_conflicts": agg["repass_conflicts"],
         }
     return {"summary": summary, "per_page": per_page}
 
@@ -212,14 +219,14 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
 def print_summary(summary: Dict) -> None:
     order = sorted(summary.items(), key=lambda kv: (kv[1]["cer"] if kv[1]["cer"] is not None else 9))
     header = (f"{'method@backend':<22}{'CER':>8}{'WER':>8}{'tok_err':>9}"
-              f"{'cover':>7}{'false_al':>9}{'ECE':>7}{'invent':>7}{'s/page':>8}")
+              f"{'cover':>7}{'false_al':>9}{'ECE':>7}{'invent':>7}{'repas':>6}{'s/page':>8}")
     print("\n=== DOCUMENT EVAL (sorted by CER) ===")
     print(header)
     print("-" * len(header))
     for key, m in order:
         print(f"{key:<22}{m['cer']:>8.4f}{m['wer']:>8.4f}{m['token_err']:>9.4f}"
               f"{m['coverage']:>7.3f}{m['false_alarm']:>9.3f}{m['ece']:>7.3f}"
-              f"{m['invented']:>7d}{m['seconds']:>8.2f}")
+              f"{m['invented']:>7d}{m.get('repass_conflicts', 0):>6d}{m['seconds']:>8.2f}")
 
 
 def main():
@@ -232,6 +239,10 @@ def main():
     ap.add_argument("--ocr", default=None, help="comma list; default all available")
     ap.add_argument("--methods", default="clean,raw,sauvola,lanczos2")
     ap.add_argument("--with-photo", action="store_true")
+    ap.add_argument("--recheck-digits", action="store_true",
+                    help="recognition-only re-pass on digit tokens (adds flags, never text)")
+    ap.add_argument("--repass-conf-below", type=float, default=95.0,
+                    help="re-pass digit tokens with conf below this (100 = all)")
     ap.add_argument("--pages", type=int, default=0)
     ap.add_argument("--max-side", type=int, default=0)
     ap.add_argument("--json", default=None)
@@ -261,7 +272,9 @@ def main():
     print(f"[doc-eval] methods={methods} backends={backends}")
 
     report = run_evaluation(entries, methods, backends, max_side=args.max_side,
-                            with_photo=args.with_photo)
+                            with_photo=args.with_photo,
+                            recheck_digits=args.recheck_digits,
+                            repass_conf_below=args.repass_conf_below)
     report["args"] = vars(args)
     report["dataset"] = {"dir": args.data_dir, "kind": manifest.get("kind"),
                          "pages": len(entries)}
