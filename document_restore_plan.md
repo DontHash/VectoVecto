@@ -374,3 +374,55 @@ And on the frozen harness, document mode has **lower CER than raw OCR and lower 
 6. Only then touch `app.py`
 
 No new neural training in that PR series.
+
+---
+
+## Appendix A — Phase A/B measurements (2026-09-20, frozen set)
+
+**Setup:** 6 synthetic invoices @300 DPI (2480×3508), levels mild/medium/heavy,
+150-DPI preview set for cross-checks; RapidOCR 3.9.2 (PP-OCRv6 small, CPU) vs
+Tesseract 5.5.3 (`--psm 6`, CPU). CER strict (case/punctuation counted);
+`token_err` is case/punctuation-insensitive exact token match.
+
+**RapidOCR (300 DPI set):**
+
+| method | CER | token_err | coverage | false alarm | invented |
+|---|---|---|---|---|---|
+| clean | 0.0000 | 0.0000 | — | — | 0 |
+| **raw** | **0.0937** | 0.0251 | 0.667 | 0.000 | 0 |
+| restore (clahe stream) | 0.1424 | 0.0554 | 0.500 | 0.000 | 7 |
+| restore (gray stream) | 0.1431 | 0.0841 | 0.500 | 0.000 | 7 |
+
+**Tesseract (300 DPI set):**
+
+| method | CER | token_err | coverage | false alarm | invented |
+|---|---|---|---|---|---|
+| clean | 0.0894 | 0.0000 | — | — | 0 |
+| **restore (gray stream)** | **0.1749** | 0.1746 | 0.911 | 0.193 | 26 |
+| restore (sauvola) | 0.1874 | 0.2566 | 0.874 | 0.169 | 41 |
+| raw | 0.3844 | 0.3093 | 0.920 | 0.179 | 0 |
+| sauvola (direct) | 0.3541 | 0.3270 | 0.965 | 0.113 | 68 |
+
+**Decisions taken from the data:**
+
+1. **RapidOCR is the default engine and eats raw input** — classical hardening
+   (CLAHE/Sauvola/denoise) *hurts* it on every set tested.
+2. **Tesseract, when used, eats the restored grayscale stream** — 55% relative
+   CER improvement over its own raw baseline (0.384 → 0.175).
+3. Classical restore stays in the pipeline for: display image, Tesseract stream,
+   and evidence for flags (restored tokens flag *more* errors with fewer false
+   alarms than raw in the earlier preview set).
+4. An engine that is 2× better than the other on clean pages (RapidOCR 0.0 vs
+   Tesseract 0.089) means "both adapters" is about **language coverage**, not
+   English CER.
+5. Latency: RapidOCR ≈ 4.3–4.7 s/page CPU at 300 DPI (inside the <8 s SLO,
+   outside the 4 s stretch goal; DirectML EP or a det max-side cap is the fix).
+
+**Open items this data creates:**
+
+- Real-photo sanity set (SROIE/CORD public receipts) — synthetic pages do not
+  contain perspective + real shadows the way phones do.
+- Digit re-pass (recognition-only on 2× crops) still to be measured; the
+  dual-stream gate already flags disagreements without picking a winner.
+- Coverage/false-alarm trade-off is tunable via `conf_threshold`; freeze after
+  the first real-photo run.

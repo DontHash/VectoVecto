@@ -96,3 +96,31 @@ def test_tesseract_adapter_optional():
     assert ok == status
     if not ok:
         assert "winget" in why or "not found" in why
+
+
+def test_dual_stream_gate_flags_digit_conflicts():
+    from document_ocr import OCRResult, compare_digit_streams
+
+    primary = OCRResult("", [Token(text="TOTAL 1200.00", conf=95,
+                                   bbox=(100, 100, 300, 130), granularity="word",
+                                   backend="x")], "x")
+    alt = OCRResult("", [Token(text="TOTAL 1280.00", conf=90,
+                               bbox=(100, 100, 300, 130), granularity="word",
+                               backend="y")], "y")
+    assert compare_digit_streams(primary, alt) == 1
+    assert primary.tokens[0].alt_text == "TOTAL 1280.00"
+    assert "digit_conflict" in primary.tokens[0].flags
+
+    agree = OCRResult("", [Token(text="TOTAL 1200.00", conf=80,
+                                 bbox=(100, 100, 300, 130), granularity="word",
+                                 backend="y")], "y")
+    primary2 = OCRResult("", [Token(text="TOTAL 1200.00", conf=95,
+                                    bbox=(100, 100, 300, 130), granularity="word",
+                                    backend="x")], "x")
+    assert compare_digit_streams(primary2, agree) == 0
+
+
+def test_recommended_stream_table_covers_backends():
+    from document_ocr import RECOMMENDED_STREAM
+    assert RECOMMENDED_STREAM.get("rapidocr") == "raw"
+    assert RECOMMENDED_STREAM.get("tesseract", "").startswith("restore")

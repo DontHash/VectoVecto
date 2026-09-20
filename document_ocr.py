@@ -33,6 +33,17 @@ import numpy as np
 
 DIGIT_RUN_RE = re.compile(r"[0-9][0-9.,:\-/]*[0-9]|[0-9]")
 
+# Measured on the frozen synthetic set (6 pages @300dpi, mild/medium/heavy):
+#   rapidocr  raw            CER 0.0937
+#   rapidocr  restored clahe CER 0.1424  (hurts -> feed raw)
+#   tesseract raw            CER 0.3844
+#   tesseract restored gray  CER 0.1749  (helps -> feed restored grayscale)
+# Re-measure with `eval_document.py` whenever this table changes.
+RECOMMENDED_STREAM: Dict[str, str] = {
+    "rapidocr": "raw",
+    "tesseract": "restore_gray",
+}
+
 
 @dataclass
 class Token:
@@ -42,6 +53,7 @@ class Token:
     granularity: str = "line"  # "line" | "word"
     backend: str = "?"
     flags: List[str] = field(default_factory=list)
+    alt_text: Optional[str] = None  # second-stream reading, when it disagreed
 
     @property
     def has_digits(self) -> bool:
@@ -228,6 +240,78 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     result.meta["conf_threshold"] = conf_threshold
     result.meta["flagged"] = sum(1 for t in result.tokens if t.flags)
     return result
+
+
+# ---------------------------------------------------------------------------
+# do-not-hallucinate gate: two streams must agree on digits
+# ---------------------------------------------------------------------------
+
+def _digits_of(text: str) -> str:
+    return "".join(re.findall(r"\d+", text))
+
+
+def _center(bbox: Tuple[int, int, int, int]) -> Tuple[float, float]:
+    x0, y0, x1, y1 = bbox
+    return (x0 + x1) / 2.0, (y0 + y1) / 2.0
+
+
+def compare_digit_streams(primary: OCRResult, alt: OCRResult,
+                          center_tolerance: float = 1.0) -> int:
+    """Flag primary digit tokens where the nearest alt token reads different digits.
+
+    Tolerance is in units of the primary token's height. Never picks a winner —
+    it only records `digit_conflict` and stores `alt_text` for the UI.
+    """
+    conflicts = 0
+    for tok in primary.tokens:
+        if not tok.has_digits:
+            continue
+        cx, cy = _center(tok.bbox)
+        tol = max(8.0, (tok.bbox[3] - tok.bbox[1]) * center_tolerance)
+        best, best_d = None, float("inf")
+        for other in alt.tokens:
+            if not other.has_digits:
+                continue
+            ox, oy = _center(other.bbox)
+            d = ((cx - ox) ** 2 + (cy - oy) ** 2) ** 0.5
+            if d < best_d:
+                best_d, best = d, other
+        if best is not None and best_d <= tol and _digits_of(tok.text) != _digits_of(best.text):
+            if "digit_conflict" not in tok.flags:
+                tok.flags.append("digit_conflict")
+            tok.alt_text = best.text
+            conflicts += 1
+    return conflicts
+
+
+def ocr_page_dual(img_raw: np.ndarray, img_alt: Optional[np.ndarray] = None,
+                  backend: str = "rapidocr", lang: Optional[str] = None,
+                  conf_threshold: float = 60.0) -> OCRResult:
+    """OCR the recommended stream as primary; the other stream audits digits.
+
+    stream choice follows RECOMMENDED_STREAM (measured, see module docstring):
+      rapidocr  -> primary = raw,      auditor = restored
+      tesseract -> primary = restored, auditor = raw
+    """
+    alt_img = img_alt if img_alt is not None else img_raw
+    if backend == "tesseract":
+        primary_img, audit_img = alt_img, img_raw
+    else:
+        primary_img, audit_img = img_raw, alt_img
+
+    primary = ocr_page(primary_img, backend=backend, lang=lang,
+                       conf_threshold=conf_threshold)
+    conflicts = 0
+    if audit_img is not None and audit_img is not img_raw or backend == "tesseract":
+        try:
+            audit = ocr_page(audit_img, backend=backend, lang=lang,
+                             conf_threshold=conf_threshold)
+            conflicts = compare_digit_streams(primary, audit)
+        except Exception as e:  # noqa: BLE001
+            primary.meta["audit_error"] = str(e)
+    primary.meta["digit_conflicts"] = conflicts
+    primary.meta["primary_stream"] = "restored" if backend == "tesseract" else "raw"
+    return primary
 
 
 if __name__ == "__main__":
