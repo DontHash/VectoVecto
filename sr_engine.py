@@ -29,6 +29,7 @@ sys.path.insert(0, BASE_DIR)
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")
 
 DEFAULT_TIER_C = os.path.join(BASE_DIR, "artifacts", "tier_c", "g_ema.pth")
+TIER_C_ACCEPTED_MARKER = os.path.join(BASE_DIR, "artifacts", "tier_c", "ACCEPTED")
 DEFAULT_ONNX_DIR = os.path.join(BASE_DIR, "weights", "onnx")
 DEFAULT_X4PLUS = os.path.join(BASE_DIR, "weights", "RealESRGAN_x4plus.pth")
 DEFAULT_X4V3 = os.path.join(BASE_DIR, "weights", "realesr-general-x4v3.pth")
@@ -274,9 +275,21 @@ class NcnnEngine(Engine):
 # Factory
 # ---------------------------------------------------------------------------
 
+def tier_c_accepted() -> bool:
+    """Gate for the fine-tuned tier_c photo checkpoint.
+
+    The 2026-09 fine-tune was rejected on perceptual metrics vs x4plus (see
+    gcp/RESULTS.md). 'auto' must never silently swap the shipped model for it;
+    acceptance requires an explicit artifacts/tier_c/ACCEPTED marker.
+    """
+    return os.path.exists(TIER_C_ACCEPTED_MARKER)
+
+
 def _tier_c_candidates():
+    if not tier_c_accepted():
+        return []
     return [
-        os.path.join(BASE_DIR, "artifacts", "tier_c", "g_ema.pth"),
+        DEFAULT_TIER_C,
         os.path.join(BASE_DIR, "artifacts", "tier_c", "latest.pth"),
         os.path.join(DEFAULT_ONNX_DIR, "tier_c_x4_fp16.onnx"),
         os.path.join(DEFAULT_ONNX_DIR, "tier_c_x4.onnx"),
@@ -297,7 +310,11 @@ def load_engine(spec: str = "auto", scale: int = 4, device: str = "auto",
                 tile: Optional[int] = None, fp16: bool = True, tta: bool = False) -> Engine:
     """Resolve a model spec into a ready Engine.
 
-    'auto' prefers: fine-tuned tier_c -> x4plus -> ncnn UltraSharp -> bicubic.
+    'auto' prefers: accepted tier_c -> x4plus -> ncnn UltraSharp -> bicubic.
+    tier_c only participates once artifacts/tier_c/ACCEPTED exists (it is
+    rejected by default — see gcp/RESULTS.md).
+
+    An explicit path/spec always loads, accepted or not (bring-your-own-model).
     """
     dev = pick_device(device)
     if tile is None:
