@@ -35,9 +35,13 @@ DIGIT_RUN_RE = re.compile(r"[0-9][0-9.,:\-/]*[0-9]|[0-9]")
 
 # Measured on the frozen synthetic set (6 pages @300dpi, mild/medium/heavy):
 #   rapidocr  raw            CER 0.0937
-#   rapidocr  restored clahe CER 0.1424  (hurts -> feed raw)
+#   rapidocr  restored clahe CER 0.1424  (hurts)
 #   tesseract raw            CER 0.3844
 #   tesseract restored gray  CER 0.1749  (helps -> feed restored grayscale)
+# Open item (P4b): newer reports show rapidocr restored_gray at CER 0.0150 on
+# the synthetic set and marginally better on SROIE (0.3618 vs 0.3635) and CORD
+# (0.5748 vs 0.5872), but bagCER disagrees on synthetics (0.1049 vs 0.0269) -
+# flagged for a proper re-measure before any change to this table.
 # Re-measure with `eval_document.py` whenever this table changes.
 RECOMMENDED_STREAM: Dict[str, str] = {
     "rapidocr": "raw",

@@ -232,13 +232,15 @@ def main():
     doc.add_argument("--deskew", action="store_true",
                      help="rotate to deskew; OCR then runs on the display for alignment")
     doc.add_argument("--repass-digits", action="store_true", dest="repass_digits",
-                     help="re-read digit tokens (recognition-only); off by default (measured redundant)")
+                     help="re-read digit tokens for the review queue; off until "
+                          "re-measured with the engine fix (Appendix A.1)")
     doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
                      help="max pages per PDF input (default 1)")
     doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",
                      help="skip XY-cut reading-order repair for column layouts")
     doc.add_argument("--rotate", choices=["auto", "off"], default="auto",
-                     help="auto: EXIF + Tesseract OSD page rotation (large pages only)")
+                     help="auto: EXIF + line-classifier votes/geometry (all four "
+                          "angles, all page sizes); off = flag only")
     doc.add_argument("--dpi", type=int, default=0, help="source DPI for PDF page size (0 = auto)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
