@@ -170,8 +170,13 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
 
     if reading_order:
         from document_layout import sort_reading_order, text_in_order
-        result.tokens = sort_reading_order(result.tokens)
+        before = [t.text for t in result.tokens]
+        stats: Dict = {}
+        result.tokens = sort_reading_order(result.tokens, stats=stats)
         result.text = text_in_order(result.tokens)
+        result.meta["reading_order_splits"] = stats.get("splits", 0)
+        result.meta["reading_order_changed"] = \
+            [t.text for t in result.tokens] != before
     result.meta["reading_order"] = reading_order
 
     vfinal = vertical_fraction(result.tokens)
@@ -205,6 +210,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "primary_stream": result.meta["primary_stream"],
         "digit_conflicts": p.conflicts,
         "reading_order": reading_order,
+        "reading_order_splits": result.meta.get("reading_order_splits", 0),
+        "reading_order_changed": result.meta.get("reading_order_changed", False),
         "orientation_suspect": suspect,
         "auto_rotate": rot.as_dict(),
         "orientation_evidence": result.meta["orientation_evidence"],
