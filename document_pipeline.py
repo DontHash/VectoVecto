@@ -85,11 +85,14 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           scale: int = 1, repass_digits: bool = False,
                           reading_order: bool = True,
                           auto_rotate: bool = True,
+                          primary_stream: Optional[str] = None,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
                           make_txt: bool = True, make_json: bool = True,
                           conf_threshold: float = 60.0) -> DocumentResult:
+    """`primary_stream` ("raw"|"restored", None = RECOMMENDED_STREAM) exists
+    for evaluation A/Bs; production callers leave it unset."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -100,7 +103,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
 
         # Primary stream follows the measured table (RECOMMENDED_STREAM); the
         # other stream audits digit tokens. deskew=True forces the display.
-        stream = RECOMMENDED_STREAM.get(backend, "raw")
+        stream = primary_stream or RECOMMENDED_STREAM.get(backend, "raw")
         if deskew:
             primary_img, audit_img, primary_name = display, image, "display"
         elif stream.startswith("restore"):
