@@ -98,6 +98,7 @@ class TokenStats:
     flagged_correct: int = 0
     digit_errors: int = 0
     digit_flagged_errors: int = 0
+    digit_flagged: int = 0  # flagged digit-bearing tokens (errors + correct)
 
     @property
     def coverage(self) -> float:
@@ -106,6 +107,17 @@ class TokenStats:
     @property
     def false_alarm_rate(self) -> float:
         return self.flagged_correct / self.flagged if self.flagged else 0.0
+
+    @property
+    def digit_coverage(self) -> float:
+        """Of the wrong digit tokens, how many raised a flag. The money bar."""
+        return (self.digit_flagged_errors / self.digit_errors
+                if self.digit_errors else 1.0)
+
+    @property
+    def digit_false_alarm_rate(self) -> float:
+        correct = self.digit_flagged - self.digit_flagged_errors
+        return correct / self.digit_flagged if self.digit_flagged else 0.0
 
     @property
     def token_error_rate(self) -> float:
@@ -131,6 +143,7 @@ def token_stats(tokens: Sequence[Token], gt_text: str) -> TokenStats:
         stats.digit_total += n if has_digit else 0
         flagged = bool(tok.flags)
         stats.flagged += n if flagged else 0
+        stats.digit_flagged += n if (flagged and has_digit) else 0
         if not ok:
             stats.errors += n
             stats.flagged_errors += n if flagged else 0

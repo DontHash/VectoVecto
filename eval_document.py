@@ -11,6 +11,10 @@ Methods (all numpy in/out, independently swappable):
     photo    : SmartUpscaler photo mode (proves photo SR helps or not; slow, opt-in)
     restore  : document_restore.restore_document (Phase B; skipped if absent)
 
+Plus the pseudo-method `pipeline`: the actual shipped path
+(document_pipeline.run_document_pipeline -> dual-stream OCR + digit-conflict
+flags). It does its own OCR, so the backend loop only selects its backend.
+
 Backends: rapidocr (default), tesseract (optional). Multiple can be compared.
 
 Usage:
@@ -140,6 +144,21 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
         for method in methods:
             if method == "photo" and not with_photo:
                 continue
+            if method == "pipeline":
+                from document_pipeline import run_document_pipeline
+                for backend in backends:
+                    t0 = time.time()
+                    try:
+                        pres = run_document_pipeline(
+                            degraded, backend=backend, conf_threshold=conf_threshold,
+                            repass_digits=recheck_digits)
+                    except Exception as e:  # noqa: BLE001
+                        print(f"  [skip] pipeline@{backend}: {e}")
+                        continue
+                    key = f"pipeline@{backend}"
+                    ocr_results[key] = pres.ocr
+                    elapsed_by_key[key] = time.time() - t0
+                continue
             try:
                 if method in images:
                     img = images[method]
@@ -185,6 +204,9 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 "token_err": stats.token_error_rate,
                 "coverage": stats.coverage,
                 "false_alarm": stats.false_alarm_rate,
+                "digit_errors": stats.digit_errors,
+                "digit_flagged_errors": stats.digit_flagged_errors,
+                "digit_flagged": stats.digit_flagged,
                 "ece": doc_metrics.ece(res.tokens, gt),
                 "tokens": stats.total,
                 "flagged": stats.flagged,
@@ -202,6 +224,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                                            "coverage": [], "false_alarm": [],
                                            "ece": [], "seconds": [], "invented": 0,
                                            "invented_digits": 0, "repass_conflicts": 0,
+                                           "digit_errors": 0, "digit_flagged_errors": 0,
+                                           "digit_flagged": 0,
                                            "pages": 0})
             agg["cer"].append(row["cer"])
             agg["cer_bag"].append(row["cer_bag"])
@@ -216,6 +240,9 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             agg["invented"] += row["invented"]
             agg["invented_digits"] += row["invented_digits"]
             agg["repass_conflicts"] += row["repass_conflicts"]
+            agg["digit_errors"] += row["digit_errors"]
+            agg["digit_flagged_errors"] += row["digit_flagged_errors"]
+            agg["digit_flagged"] += row["digit_flagged"]
             agg["pages"] += 1
         print(f"  [{i}/{len(entries)}] {entry['id']} done", flush=True)
 
@@ -234,6 +261,12 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "false_alarm": float(np.mean(agg["false_alarm"])) if agg["false_alarm"] else None,
             "ece": float(np.mean(agg["ece"])) if agg["ece"] else None,
             "seconds": float(np.mean(agg["seconds"])) if agg["seconds"] else None,
+            "digit_coverage": (agg["digit_flagged_errors"] / agg["digit_errors"]
+                               if agg["digit_errors"] else None),
+            "digit_false_alarm": ((agg["digit_flagged"] - agg["digit_flagged_errors"])
+                                  / agg["digit_flagged"] if agg["digit_flagged"] else None),
+            "digit_errors": agg["digit_errors"],
+            "digit_flagged": agg["digit_flagged"],
             "invented": agg["invented"],
             "invented_digits": agg["invented_digits"],
             "repass_conflicts": agg["repass_conflicts"],
@@ -248,15 +281,17 @@ def _fmt(v) -> str:
 def print_summary(summary: Dict) -> None:
     order = sorted(summary.items(), key=lambda kv: (kv[1]["cer"] if kv[1]["cer"] is not None else 9))
     header = (f"{'method@backend':<22}{'CER':>8}{'bagCER':>8}{'digCER':>8}{'digBAG':>8}"
-              f"{'WER':>8}{'cover':>7}{'falseAl':>9}{'ECE':>7}{'invent':>7}{'repas':>6}{'s/page':>8}")
+              f"{'digCov':>8}{'digFA':>7}{'cover':>7}{'falseAl':>9}"
+              f"{'ECE':>7}{'invent':>7}{'s/page':>8}")
     print("\n=== DOCUMENT EVAL (sorted by CER) ===")
     print(header)
     print("-" * len(header))
     for key, m in order:
         print(f"{key:<22}{m['cer']:>8.4f}{_fmt(m.get('cer_bag')):>8}{_fmt(m.get('digit_cer')):>8}"
-              f"{_fmt(m.get('digit_cer_bag')):>8}{m['wer']:>8.4f}"
+              f"{_fmt(m.get('digit_cer_bag')):>8}{_fmt(m.get('digit_coverage')):>8}"
+              f"{_fmt(m.get('digit_false_alarm')):>7}"
               f"{m['coverage']:>7.3f}{m['false_alarm']:>9.3f}{m['ece']:>7.3f}"
-              f"{m['invented']:>7d}{m.get('repass_conflicts', 0):>6d}{m['seconds']:>8.2f}")
+              f"{m['invented']:>7d}{m['seconds']:>8.2f}")
 
 
 def main():

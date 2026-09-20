@@ -61,3 +61,29 @@ def test_document_mode_returns_cleaned_display():
 def test_is_document_threshold_default():
     page, _gt = doc_data.render_synthetic_invoice(seed=84, dpi=150)
     assert is_document(page) is True
+
+
+def test_pipeline_primary_stream_follows_recommended_table(monkeypatch):
+    import document_pipeline as dp
+    from document_ocr import OCRResult
+
+    calls = []
+
+    def fake_ocr_page(img, backend="rapidocr", **kw):
+        calls.append((backend, id(img)))
+        return OCRResult(text="", tokens=[], backend=backend, meta={})
+
+    monkeypatch.setattr(dp, "ocr_page", fake_ocr_page)
+    monkeypatch.setattr(dp, "pick_backend", lambda b=None: b or "rapidocr")
+    monkeypatch.setattr(dp, "compare_digit_streams", lambda a, b: 0)
+
+    page = np.full((80, 200, 3), 255, dtype=np.uint8)
+
+    res = dp.run_document_pipeline(page, backend="tesseract")
+    assert res.meta["primary_stream"] == "restored"
+    assert calls[0][1] != id(page), "tesseract must OCR the restored display first"
+
+    calls.clear()
+    res = dp.run_document_pipeline(page, backend="rapidocr")
+    assert res.meta["primary_stream"] == "raw"
+    assert calls[0][1] == id(page), "rapidocr must OCR the raw pixels first"

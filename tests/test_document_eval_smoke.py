@@ -86,6 +86,23 @@ def test_digit_cer_isolates_money_errors():
     assert doc_metrics.digit_cer("TOTAL DUE", "TOTAL 42") == 1.0
 
 
+def test_digit_coverage_money_metric():
+    gt = "TOTAL 1200.00 TAX 156.00"
+    toks = [Token(text="TOTAL", conf=99, bbox=(0, 0, 1, 1), granularity="word"),
+            Token(text="1200.08", conf=50, bbox=(0, 0, 1, 1), granularity="word",
+                  flags=["digit_conflict"]),
+            Token(text="TAX", conf=99, bbox=(0, 0, 1, 1), granularity="word"),
+            Token(text="156.00", conf=99, bbox=(0, 0, 1, 1), granularity="word")]
+    stats = doc_metrics.token_stats(toks, gt)
+    assert stats.digit_errors == 1
+    assert stats.digit_coverage == 1.0, "the wrong amount was flagged"
+    assert stats.digit_false_alarm_rate == 0.0
+
+    toks[3].flags.append("digit_conflict")
+    stats2 = doc_metrics.token_stats(toks, gt)
+    assert stats2.digit_false_alarm_rate == 0.5, "one flagged amount was actually right"
+
+
 def test_hf_gt_adapters():
     sroie = {"words": ["TAN WOON YANN", "DOCUMENT NO : TD01167104", "TOTAL 9.00"]}
     gt = doc_data.gt_from_sroie(sroie)
