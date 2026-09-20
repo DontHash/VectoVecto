@@ -194,7 +194,7 @@ def pdf_to_pages(pdf_path: str, dpi: int = 200):
 
 def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = None,
                       dpi: int = 200, levels=("medium",), max_pages: int = 0,
-                      seed: int = 1234) -> Dict:
+                      max_pages_per_pdf: int = 0, seed: int = 1234) -> Dict:
     """Render PDFs, degrade pages, write dataset + manifest. Returns manifest."""
     pages_dir = os.path.join(out_dir, "pages")
     gt_dir = os.path.join(out_dir, "gt")
@@ -204,11 +204,15 @@ def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = Non
     count = 0
     for pdf_path in pdf_paths:
         stem = os.path.splitext(os.path.basename(pdf_path))[0]
+        per_pdf = 0
         for idx, img, gt in pdf_to_pages(pdf_path, dpi=dpi):
             if not gt:
                 continue
             if max_pages and count >= max_pages:
                 break
+            if max_pages_per_pdf and per_pdf >= max_pages_per_pdf:
+                break
+            per_pdf += 1
             level = levels[count % len(levels)]
             page_seed = seed + count
             pid = f"{stem}_p{idx:03d}"
