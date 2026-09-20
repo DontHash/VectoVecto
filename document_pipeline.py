@@ -67,6 +67,7 @@ def pick_backend(backend: Optional[str] = None) -> str:
 def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           lang: Optional[str] = None, deskew: bool = False,
                           scale: int = 1, repass_digits: bool = False,
+                          reading_order: bool = True,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -108,6 +109,12 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         result.meta["audit_error"] = audit_error
     result.meta["skew_angle"] = restored["debug"]["skew_angle"]
 
+    if reading_order:
+        from document_layout import sort_reading_order, text_in_order
+        result.tokens = sort_reading_order(result.tokens)
+        result.text = text_in_order(result.tokens)
+    result.meta["reading_order"] = reading_order
+
     outputs: Dict[str, str] = {}
     if out_dir:
         from document_export import export_document_outputs
@@ -122,6 +129,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "skew_angle": restored["debug"]["skew_angle"],
         "primary_stream": result.meta["primary_stream"],
         "digit_conflicts": conflicts,
+        "reading_order": reading_order,
         "repass_digits": repass_digits,
     }
     return DocumentResult(display_bgr=display, ocr=result, meta=meta, outputs=outputs)

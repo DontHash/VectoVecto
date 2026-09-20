@@ -1,0 +1,272 @@
+"""
+document_layout.py — reading-order sorting for OCR tokens (XY-cut).
+
+Why: OCR detection order is not reading order. PP-OCR tends to return boxes in
+rows, so a two-column page comes out interleaved (left1, right1, left2, ...);
+Tesseract gives per-line word order but no column model. Fixing order before
+the transcript/searchable-PDF/JSON is a measurable CER/WER win on multi-column
+pages and a no-op on single-column ones.
+
+Algorithm (conservative XY-cut, measured against SROIE/CORD):
+  * find a vertical whitespace band no token crosses, with substance on both
+    sides, right side ragged (text column, not right-aligned numbers) and
+    non-numeric -> that is a real gutter -> column-major within the region
+  * full-width elements (titles, tables) split the page into vertical bands so
+    each region gets its own column decision (a page-wide gutter does not
+    exist on title + two-column layouts)
+  * no confident gutter -> preserve engine order, which is already row-major
+    for both supported backends (RapidOCR detection order, Tesseract lines);
+    aggressive row re-grouping measurably HURTS single-column receipts
+
+API:
+    sort_reading_order(tokens) -> new list in reading order
+"""
+from __future__ import annotations
+
+import statistics
+from typing import List, Optional, Sequence, Tuple
+
+from document_ocr import Token
+
+# A vertical band must look like a real gutter (not word/column spacing in a
+# table row): at least 2x the median line height. RapidOCR's line-level boxes
+# make this safe; on word-granularity backends highly tabular pages can read
+# column-major, which is acceptable for extraction.
+MIN_X_GAP_FACTOR = 2.0
+MIN_X_GAP_PX = 24.0
+# A column split needs substance on both sides: label/value tables (receipt
+# totals, invoices) have clean gutters but only a few rows, and reading them
+# column-major is wrong. Real columns have many lines per side.
+MIN_X_SIDE_TOKENS = 6
+# A token at least this fraction of the region's content width is a full-width
+# element (title, section header): it always separates vertical bands. Without
+# this, a title sitting ~1 line-height above the columns merges into the column
+# band and its width shrinks the gutter below threshold (measured on the
+# two-column fixture: pages 2-3 failed to columnize).
+WIDE_TOKEN_FRACTION = 0.5
+# Vertical bands: merge token y-intervals whose gap is below ~2.5 line heights.
+BAND_GAP_FACTOR = 2.5
+BAND_GAP_MIN_PX = 32.0
+MAX_DEPTH = 16
+
+
+def _interval(tok: Token, axis: str) -> Tuple[float, float]:
+    x0, y0, x1, y1 = tok.bbox
+    return (x0, x1) if axis == "x" else (y0, y1)
+
+
+def _largest_union_gap(tokens: Sequence[Token], axis: str) -> Tuple[float, Optional[float]]:
+    """Largest whitespace band on `axis` that no token crosses, as (gap, pos)."""
+    intervals = sorted(_interval(t, axis) for t in tokens)
+    best_gap, best_pos = 0.0, None
+    cur_end = intervals[0][1]
+    for start, end in intervals[1:]:
+        if start > cur_end:
+            gap = start - cur_end
+            if gap > best_gap:
+                best_gap, best_pos = gap, (cur_end + start) / 2.0
+        cur_end = max(cur_end, end)
+    return best_gap, best_pos
+
+
+def _median_height(tokens: Sequence[Token]) -> float:
+    heights = [max(1.0, t.bbox[3] - t.bbox[1]) for t in tokens]
+    return max(1.0, statistics.median(heights))
+
+
+def _ragged_right(tokens: Sequence[Token]) -> bool:
+    """Does the right side read like a text column (ragged right) rather than a
+    value column (right-aligned amounts)?
+
+    Text columns are left-aligned with varying line lengths (sd(x1) >= sd(x0));
+    receipt/invoice value columns are right-aligned (sd(x1) < sd(x0)), and
+    reading them column-major is wrong. This is the geometric signal that keeps
+    label/value tables row-major on SROIE while still columnizing real pages.
+    """
+    x0s = [float(t.bbox[0]) for t in tokens]
+    x1s = [float(t.bbox[2]) for t in tokens]
+    if len(tokens) < 2:
+        return True
+    sd0 = statistics.pstdev(x0s)
+    sd1 = statistics.pstdev(x1s)
+    return sd1 >= 0.5 * sd0
+
+
+def _digit_ratio(text: str) -> float:
+    chars = [c for c in text if not c.isspace()]
+    if not chars:
+        return 0.0
+    return sum(1 for c in chars if c.isdigit()) / len(chars)
+
+
+def _mostly_numeric(tokens: Sequence[Token], threshold: float = 0.4) -> bool:
+    """A number-dominated right side is a value column, not a text column.
+
+    SROIE totals blocks have 'RM XX.XX' rows where x0 and x1 are both nearly
+    constant (fixed currency prefix), so edge alignment cannot see the table.
+    Content can: numbers read row-wise (label: value), never column-wise.
+    """
+    if not tokens:
+        return False
+    numeric = sum(1 for t in tokens if _digit_ratio(t.text) >= threshold)
+    return numeric / len(tokens) >= 0.5
+
+
+def row_major(tokens: Sequence[Token]) -> List[Token]:
+    """Rows top-down (y-overlap grouping), left-right inside a row."""
+    items = sorted(tokens, key=lambda t: (t.bbox[1] + t.bbox[3]) / 2.0)
+    rows: List[dict] = []
+    for tok in items:
+        cy = (tok.bbox[1] + tok.bbox[3]) / 2.0
+        th = max(1.0, tok.bbox[3] - tok.bbox[1])
+        for row in rows:
+            rcy = (row["y0"] + row["y1"]) / 2.0
+            rh = max(1.0, row["y1"] - row["y0"])
+            if abs(cy - rcy) <= 0.5 * max(th, rh):
+                row["tokens"].append(tok)
+                row["y0"] = min(row["y0"], tok.bbox[1])
+                row["y1"] = max(row["y1"], tok.bbox[3])
+                break
+        else:
+            rows.append({"y0": tok.bbox[1], "y1": tok.bbox[3], "tokens": [tok]})
+    out: List[Token] = []
+    for row in rows:
+        out.extend(sorted(row["tokens"], key=lambda t: (t.bbox[0], t.bbox[1])))
+    return out
+
+
+def _content_width(tokens: Sequence[Token]) -> float:
+    return max(t.bbox[2] for t in tokens) - min(t.bbox[0] for t in tokens)
+
+
+def _y_overlap(a: Token, b: Token) -> float:
+    return min(a.bbox[3], b.bbox[3]) - max(a.bbox[1], b.bbox[1])
+
+
+def _standalone_wide_ids(tokens: Sequence[Token], cw: float) -> set:
+    """Full-width tokens that sit alone on their row are structural separators.
+
+    A wide token sharing its row with other tokens is not (measured: receipt
+    footer lines overlap the amounts column; treating them as separators
+    reordered rows and cost 8% CER on SROIE).
+    """
+    if cw <= 0:
+        return set()
+    wide = [t for t in tokens if (t.bbox[2] - t.bbox[0]) >= WIDE_TOKEN_FRACTION * cw]
+    ids = set()
+    for t in wide:
+        if not any(other is not t and _y_overlap(t, other) > 1.0 for other in tokens):
+            ids.add(id(t))
+    return ids
+
+
+def _bands(tokens: Sequence[Token], med_h: float,
+           wide_ids: Optional[set] = None) -> List[List[Token]]:
+    """Vertical connected components: token y-intervals merged when the gap is
+    below ~2.5 line heights; full-width tokens are forced separators so titles
+    and tables get their own bands (each band judged for columns on its own)."""
+    items = sorted(tokens, key=lambda t: (t.bbox[1], t.bbox[3]))
+    gap_thresh = max(BAND_GAP_FACTOR * med_h, BAND_GAP_MIN_PX)
+    bands: List[List[Token]] = []
+    cur: List[Token] = []
+    cur_y1 = 0.0
+    for tok in items:
+        if wide_ids and id(tok) in wide_ids:
+            if cur:
+                bands.append(cur)
+                cur = []
+            bands.append([tok])
+            continue
+        if not cur:
+            cur = [tok]
+            cur_y1 = tok.bbox[3]
+        elif tok.bbox[1] - cur_y1 <= gap_thresh:
+            cur.append(tok)
+            cur_y1 = max(cur_y1, tok.bbox[3])
+        else:
+            bands.append(cur)
+            cur = [tok]
+            cur_y1 = tok.bbox[3]
+    if cur:
+        bands.append(cur)
+    return bands
+
+
+def _column_split(tokens: Sequence[Token], med_h: float, min_side: int,
+                  stats: dict) -> Optional[List[Token]]:
+    """A confident gutter -> left side sorted, then right side sorted."""
+    gap, pos = _largest_union_gap(tokens, "x")
+    if pos is None or gap < max(MIN_X_GAP_PX, MIN_X_GAP_FACTOR * med_h):
+        return None
+    left = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 < pos]
+    right = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 >= pos]
+    if len(left) < min_side or len(right) < min_side:
+        return None
+    if not _ragged_right(right) or _mostly_numeric(right):
+        return None
+    stats["splits"] += 1
+    return (_sort_region(left, min_side, 1, stats)
+            + _sort_region(right, min_side, 1, stats))
+
+
+def _sort_region(tokens: Sequence[Token], min_side: int, depth: int = 0,
+                 stats: Optional[dict] = None) -> List[Token]:
+    """Conservative reading order: repair confirmed column layouts, otherwise
+    preserve engine order (RapidOCR and Tesseract already emit rows top-down)."""
+    if stats is None:
+        stats = {"splits": 0}
+    if len(tokens) <= 1 or depth >= MAX_DEPTH:
+        return list(tokens)
+    med_h = _median_height(tokens)
+
+    split = _column_split(tokens, med_h, min_side, stats)
+    if split is not None:
+        return split
+
+    cw = _content_width(tokens)
+    wide_ids = _standalone_wide_ids(tokens, cw)
+    if len(wide_ids) >= 0.5 * len(tokens):
+        wide_ids = set()  # every token fills the measure: single-column region
+    bands = _bands(tokens, med_h, wide_ids)
+    if len(bands) <= 1:
+        return list(tokens)
+    out: List[Token] = []
+    for band in bands:
+        out.extend(_sort_region(band, min_side, depth + 1, stats))
+    return out
+
+
+def sort_reading_order(tokens: Sequence[Token],
+                       min_column_tokens: int = MIN_X_SIDE_TOKENS) -> List[Token]:
+    """Return tokens in human reading order (new list; input untouched).
+
+    If no confident column split exists anywhere, the input order is returned
+    unchanged: band bookkeeping must never perturb single-column pages.
+    """
+    toks = list(tokens)
+    if not toks:
+        return []
+    stats = {"splits": 0}
+    out = _sort_region(toks, max(1, min_column_tokens), 0, stats)
+    return out if stats["splits"] else list(tokens)
+
+
+def text_in_order(tokens: Sequence[Token]) -> str:
+    return "\n".join(t.text for t in tokens if t.text)
+
+
+if __name__ == "__main__":
+    from document_ocr import Token as T
+
+    words = []
+    for i in range(6):
+        y = 40 + i * 80
+        words.append(T(f"right column line {i + 1}", 99, (400, y, 700, y + 30), "line"))
+        words.append(T(f"left column line {i + 1}", 99, (40, y, 300, y + 30), "line"))
+    out = sort_reading_order(words)
+    for t in out:
+        print(t.text)
+    expected = [f"left column line {i}" for i in range(1, 7)] + \
+               [f"right column line {i}" for i in range(1, 7)]
+    assert [t.text for t in out] == expected
+    print("document_layout OK")

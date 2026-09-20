@@ -138,6 +138,7 @@ def run_document_mode(args) -> int:
             res = run_document_pipeline(
                 img, backend=backend, lang=args.lang, deskew=args.deskew,
                 repass_digits=args.repass_digits, dpi=dpi,
+                reading_order=not getattr(args, "no_reading_order", False),
                 out_dir=args.output, stem=name,
                 make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
                 make_txt=not args.no_txt, make_json=True)
@@ -232,6 +233,8 @@ def main():
                      help="re-read digit tokens (recognition-only); off by default (measured redundant)")
     doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
                      help="max pages per PDF input (default 1)")
+    doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",
+                     help="skip XY-cut reading-order repair for column layouts")
     doc.add_argument("--dpi", type=int, default=0, help="source DPI for PDF page size (0 = auto)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
