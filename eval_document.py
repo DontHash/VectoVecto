@@ -84,6 +84,13 @@ def method_restore(img: np.ndarray) -> np.ndarray:
     return out["ocr_bgr"]
 
 
+def _restore_stream(stream: str) -> Method:
+    def fn(img: np.ndarray) -> np.ndarray:
+        from document_restore import restore_document
+        return restore_document(img, scale=1, ocr_stream=stream)["ocr_bgr"]
+    return fn
+
+
 METHODS: Dict[str, Method] = {
     "clean": method_clean,
     "raw": method_raw,
@@ -91,6 +98,9 @@ METHODS: Dict[str, Method] = {
     "lanczos2": method_lanczos2,
     "photo": method_photo,
     "restore": method_restore,
+    "restore_clahe": _restore_stream("clahe"),
+    "restore_sauvola": _restore_stream("sauvola"),
+    "restore_gray": _restore_stream("gray"),
 }
 
 
