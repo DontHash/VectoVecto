@@ -143,13 +143,18 @@ def run_document_mode(args) -> int:
                 make_txt=not args.no_txt, make_json=True)
             ok += 1
             low = sum(1 for t in res.ocr.tokens if "low_conf" in t.flags)
+            review = res.review_list
             records.append({"src": src, "name": name, "status": "ok",
                             "tokens": len(res.ocr.tokens), "low_conf": low,
                             "digit_conflicts": res.meta["digit_conflicts"],
+                            "review": [{"text": t.text, "flags": t.flags}
+                                       for t in review[:5]],
                             "seconds": res.meta["seconds"],
                             "skew_angle": res.meta["skew_angle"],
                             "outputs": res.outputs})
             print(f"  {name}: {res.status_line}")
+            for tok in review[:3]:
+                print(f"    review: {tok.text!r} ({', '.join(tok.flags)})")
             return "ok"
         except Exception as e:  # noqa: BLE001
             failed += 1

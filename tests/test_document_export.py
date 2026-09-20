@@ -51,6 +51,27 @@ def test_overlay_marks_conflicts_red(tmp_path):
     assert green > 20, "agreeing token must be green (BGR)"
 
 
+def test_ocr_json_review_queue_is_ranked(tmp_path):
+    from document_export import write_ocr_json
+    from document_ocr import OCRResult, review_queue, token_risk
+
+    toks = [
+        Token(text="note", conf=50, bbox=(0, 100, 40, 120), granularity="word",
+              flags=["low_conf"]),
+        Token(text="TOTAL 1200.00", conf=90, bbox=(0, 0, 200, 30), granularity="line",
+              flags=["digit_conflict"], alt_text="TOTAL 1260.00"),
+        Token(text="INVOICE", conf=99, bbox=(0, 200, 100, 220), granularity="word"),
+    ]
+    result = OCRResult(text="x", tokens=toks, backend="rapidocr")
+    path = write_ocr_json(str(tmp_path / "r.json"), result)
+    payload = json.load(open(path, encoding="utf-8"))
+    assert len(payload["review"]) == 2, "only flagged tokens are in the queue"
+    assert payload["review"][0]["text"] == "TOTAL 1200.00"
+    assert payload["review"][0]["risk"] > payload["review"][1]["risk"]
+    assert review_queue(toks, top_k=1)[0].text == "TOTAL 1200.00"
+    assert token_risk(toks[2]) == 0.0
+
+
 @pytest.mark.skipif("rapidocr" not in available_backends(), reason="rapidocr unavailable")
 def test_export_document_outputs_end_to_end(tmp_path):
     page, _gt = doc_data.render_synthetic_invoice(seed=31, dpi=200)
@@ -75,6 +96,7 @@ def test_export_document_outputs_end_to_end(tmp_path):
 
     payload = json.load(open(out["json"], encoding="utf-8"))
     assert payload["backend"] == "rapidocr"
+    assert "review" in payload, "JSON must carry the human review queue"
     assert len(payload["tokens"]) == len(result.tokens)
     first = payload["tokens"][0]
     assert {"text", "conf", "bbox", "flags"} <= set(first.keys())

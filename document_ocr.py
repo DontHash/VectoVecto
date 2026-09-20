@@ -402,6 +402,39 @@ def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
 # do-not-hallucinate gate: two streams must agree on digits
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# do-not-hallucinate gate: two streams must agree on digits
+# ---------------------------------------------------------------------------
+
+RISK_WEIGHTS: Dict[str, float] = {
+    "digit_conflict": 3.0,   # two independent streams read different digits
+    "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
+    "low_conf": 1.0,
+}
+
+
+def token_risk(tok: "Token") -> float:
+    """Uncertainty score used to rank the human review queue.
+
+    Evidence-based on the SROIE/CORD sweeps: single signals do not meet
+    precision bars on real photos, but ranking multiplies their value -
+    'check these 5 numbers first' is what a human can act on.
+    """
+    risk = sum(RISK_WEIGHTS.get(f, 1.0) for f in tok.flags)
+    if tok.repass_text is not None and _digits_of(tok.repass_text) != _digits_of(tok.text):
+        risk += 2.0  # a recorded 2x re-read disagrees
+    if tok.alt_text is not None:
+        risk += 0.5  # an alternative reading was recorded at all
+    return risk
+
+
+def review_queue(tokens: List["Token"], top_k: Optional[int] = None) -> List["Token"]:
+    """Tokens flagged for human review, riskiest first (stable reading order)."""
+    risky = [t for t in tokens if t.flags]
+    ranked = sorted(risky, key=lambda t: (-token_risk(t), t.bbox[1], t.bbox[0]))
+    return ranked[:top_k] if top_k else ranked
+
+
 def _digits_of(text: str) -> str:
     return "".join(re.findall(r"\d+", text))
 

@@ -13,7 +13,8 @@ API:
 
 `DocumentResult.display_bgr` is the cleaned page embedded in the PDF/overlay;
 `DocumentResult.ocr.tokens` bboxes live in display coordinates by construction:
-  * deskew=False -> display keeps raw geometry (primary OCR runs on raw pixels)
+  * deskew=False -> display keeps raw geometry; primary stream per
+    RECOMMENDED_STREAM (rapidocr: raw, tesseract: restored)
   * deskew=True  -> display is rotated, so primary OCR runs on the display
 """
 from __future__ import annotations
@@ -25,7 +26,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from document_ocr import OCRResult, available_backends, compare_digit_streams, ocr_page
+from document_ocr import (RECOMMENDED_STREAM, OCRResult, available_backends,
+                          compare_digit_streams, ocr_page, review_queue)
 from document_restore import restore_document
 
 
@@ -37,11 +39,18 @@ class DocumentResult:
     outputs: Dict[str, str] = field(default_factory=dict)
 
     @property
+    def review_list(self):
+        """Flagged tokens, riskiest first - the human review queue."""
+        return review_queue(self.ocr.tokens)
+
+    @property
     def status_line(self) -> str:
         low = sum(1 for t in self.ocr.tokens if "low_conf" in t.flags)
         conflicts = self.meta.get("digit_conflicts", 0)
+        review = len(self.review_list)
         return (f"{len(self.ocr.tokens)} tokens · {low} low-confidence · "
-                f"{conflicts} digit conflicts · {self.meta.get('seconds', 0):.1f}s")
+                f"{conflicts} digit conflicts · {review} to review · "
+                f"{self.meta.get('seconds', 0):.1f}s")
 
 
 def pick_backend(backend: Optional[str] = None) -> str:
@@ -69,10 +78,18 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     restored = restore_document(img_bgr, scale=scale, deskew=deskew)
     display = restored["display_bgr"]
 
+    # Primary stream follows the measured table (RECOMMENDED_STREAM); the other
+    # stream audits digit tokens. deskew=True forces the display (raw is rotated).
+    stream = RECOMMENDED_STREAM.get(backend, "raw")
     if deskew:
         primary_img, audit_img = display, img_bgr
+        primary_name = "display"
+    elif stream.startswith("restore"):
+        primary_img, audit_img = display, img_bgr
+        primary_name = "restored"
     else:
         primary_img, audit_img = img_bgr, display
+        primary_name = "raw"
 
     result = ocr_page(primary_img, backend=backend, lang=lang,
                       conf_threshold=conf_threshold, recheck_digits=repass_digits)
@@ -86,7 +103,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         audit_error = str(e)
 
     result.meta["digit_conflicts"] = conflicts
-    result.meta["primary_stream"] = "display" if deskew else "raw"
+    result.meta["primary_stream"] = primary_name
     if audit_error:
         result.meta["audit_error"] = audit_error
     result.meta["skew_angle"] = restored["debug"]["skew_angle"]

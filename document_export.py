@@ -114,9 +114,23 @@ def write_transcript(path: str, result: OCRResult) -> str:
 
 
 def write_ocr_json(path: str, result: OCRResult) -> str:
+    from document_ocr import review_queue, token_risk
+
+    review = review_queue(result.tokens)
     payload = {
         "backend": result.backend,
         "meta": {k: v for k, v in result.meta.items()},
+        "review": [
+            {
+                "text": t.text,
+                "bbox": list(t.bbox),
+                "conf": round(t.conf, 2),
+                "risk": round(token_risk(t), 2),
+                "flags": t.flags,
+                "alt_text": t.alt_text,
+            }
+            for t in review
+        ],
         "tokens": [
             {
                 "text": t.text,
