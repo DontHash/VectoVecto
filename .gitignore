@@ -4,6 +4,7 @@ weights/*.bin
 weights/*.pt
 weights/*.ckpt
 weights/*.safetensors
+weights/onnx/
 *.pth
 *.bin
 *.pt
@@ -13,6 +14,8 @@ weights/*.safetensors
 # ===== Training artifacts (checkpoints, logs, curves) =====
 artifacts/
 data/
+out/
+web_outputs/
 
 # ===== Graphify output (knowledge graph builds) =====
 graphify-out/
@@ -39,6 +42,19 @@ upscaled_result*.png
 De1_upscaled.png
 PrakashJI_upscaled.png
 idbhuntu_upscaled.png
+
+# ===== Generated comparison sheets / demos at repo root =====
+/De1_*.png
+/PrakashJI_*.png
+/*_comparison_sheet.png
+/*_detailed_comparison.png
+/*_hybrid_4x.png
+/*_natural*.png
+/*_smart_test.png
+/*_smart_mask.png
+/*_vector.svg
+/test_*.png
+/Synthetic_benchmark_comparison.png
 
 # ===== Python =====
 __pycache__/
