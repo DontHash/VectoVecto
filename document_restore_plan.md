@@ -427,18 +427,23 @@ Tesseract 5.5.3 (`--psm 6`, CPU). CER strict (case/punctuation counted);
 - Coverage/false-alarm trade-off is tunable via `conf_threshold`; freeze after
   the first real-photo run.
 
-### Appendix A.1 — digit re-pass measurement (same frozen set)
+### Appendix A.1 — digit re-pass measurement (same frozen set) — *verdict invalidated*
 
 Re-reading digit tokens with the recognition-only head on 2× crops of the **same
 image** returned identical text for **13/13** tokens on a heavy page and produced
-**0 conflicts** across the set, at **+0.4 s/token** CPU. Identical input to the
-same recognition model is redundant by construction.
+**0 conflicts** across the set, at **+0.4 s/token** CPU.
 
-Decision: `recheck_digits` stays available but **off by default**; the
-**dual-stream** comparison (raw pixels vs restored-grayscale pixels) is the
-mechanism that yields independent digit evidence. Candidates for a future
-re-pass that would add signal: a *different* rec model, or a different image
-(2× Lanczos of the raw page, not a crop of it).
+**INVALIDATED (2026-09-20):** this was measured through a RapidOCR 3.x state-leak
+bug — a rec-only call permanently set `use_det=False` on the engine, so later
+full-page OCR returned zero tokens (see commit `fix(ocr): rec-only crop re-read
+silently disabled detection...` and `tests/test_document_ocr_state.py`). The
+"13/13 identical" result cannot be trusted; it may have compared empty outputs.
+The re-pass must be re-measured after the fix (queued; see Appendix D for the
+corrected sweep that now actually exercises it).
+
+Decision so far: `recheck_digits` stays available but **off by default**; the
+**dual-stream** comparison (raw pixels vs restored pixels) is the primary digit
+evidence. Re-measure the re-pass before promoting it.
 
 ---
 
@@ -499,6 +504,86 @@ real-photo validation.
 
 **Remaining for v1**
 
-1. Real-photo sanity set (SROIE/CORD) — synthetic pages still flatter us.
-2. Phase E mixed-page router (text + logo + signature + photo on one page).
-3. Photo fine-tune checkpoint → Advanced tab (L4 run at ~8.1k/30k iterations).
+1. Phase E mixed-page router (text + logo + signature + photo on one page).
+2. P2 reading order (XY-cut) and P3 orientation — see Appendix D priorities.
+3. P4 Deva nagari (ne/hi) with vendored models; P6 multi-page PDF; P7 license gate.
+
+---
+
+## Appendix D — P1 real-pixel gate (2026-09-20): SROIE + CORD, 30 pages each
+
+**Setup.** Real photos streamed from the Hugging Face hub (internal eval only,
+never redistributed): `jsdnrs/ICDAR2019-SROIE` (line-level `words`) and
+`naver-clova-ix/cord-v2` (structured JSON → text leaves). Real pages are not
+degraded (`clean == degraded`). `digCER` = CER over digit-bearing tokens
+("money metric"); `BAG` = order-insensitive variant (annotation order is not
+guaranteed to be reading order); hallucination counts only tokens no method and
+no annotation produced (peer-reference rule, because real GT is incomplete).
+
+### RapidOCR — the only viable real-photo backend
+
+| set / method | CER | bagCER | digCER | digBAG |
+|---|---|---|---|---|
+| SROIE raw | 0.3635 | 0.4012 | 0.2143 | 0.2672 |
+| SROIE restore_clahe | **0.3603** | 0.3941 | **0.2088** | 0.2436 |
+| SROIE restore_gray | 0.3618 | **0.3921** | 0.2123 | **0.2408** |
+| CORD raw | 0.5872 | 0.5357 | 0.2301 | 0.1689 |
+| CORD restore_gray | **0.5748** | **0.5292** | 0.2588 | 0.1884 |
+| CORD restore_clahe | 0.5927 | 0.5326 | **0.2250** | **0.1559** |
+
+Tesseract on the same pages: SROIE raw **0.4446** vs restore_gray 0.4541; CORD
+raw **0.8997** vs restore_gray **1.5740** (and 919–1851 invented tokens). Its
+synthetic win (restore_gray CER 0.1318 vs raw 0.3844) does not transfer to real
+photos: **demoted to clean-scan / synthetic fallback**, never the real-photo
+default.
+
+### Pre-registered gate vs measured
+
+| gate | verdict |
+|---|---|
+| real CER ≤ raw + 5% | RapidOCR pass (both sets); Tesseract fails CORD (1.57 vs 0.90) |
+| digit CER ≤ raw | RapidOCR clahe **pass** (0.2088/0.1559 bag), gray fails CORD digits |
+| hallucination ≤ raw | raw = 0; restore adds 21–49 peer-unconfirmed tokens / 30 pages — **fail (strict)** |
+| coverage ≥ 0.55 | **FAIL** — RapidOCR token coverage 0.014–0.032 raw, 0.024–0.082 pipeline; digit coverage 0.04–0.13 |
+| FA ≤ 0.25 | RapidOCR mixed (0.11–0.47 digit FA); Tesseract **fail** (0.44–0.48) |
+
+**Stop-the-line triggered** (this plan's own rule). Flag-policy sweep on the same
+60 pages (decision units = RapidOCR digit tokens; 964 units / 73 wrong on SROIE,
+319 / 39 on CORD), after the engine-state fix made the re-pass real:
+
+| policy | SROIE cov / FA | CORD cov / FA |
+|---|---|---|
+| conf < 90 | 0.25 / 0.44 | 0.18 / 0.42 |
+| conf < 95 | 0.32 / 0.74 | 0.23 / 0.61 |
+| 2× re-read differs (1.5× or 2×) | 0.36 / 0.40 | 0.13 / 0.29 |
+| cross-backend, bbox-contained | 0.73 / 0.79 | 0.23 / 0.87 |
+| cross OR re-read OR conf<80 | 0.77 / 0.78 | 0.36 / 0.81 |
+
+**No available signal combination reaches ≥0.55 coverage at ≤0.25 FA on real
+photos.** The old bar is recorded here as failed — it is not silently moved.
+
+### Decisions (shipped in the same PR series)
+
+1. **RapidOCR is the real-photo path**; Tesseract is a clean-scan/synthetic
+   fallback. `RECOMMENDED_STREAM` unchanged (rapidocr=raw, tesseract=gray).
+2. **Honesty = ranked review queue**, not binary flags: `token_risk()` /
+   `review_queue()` rank flagged tokens (digit_conflict 3.0, digit_uncertain
+   1.5, low_conf 1.0, disagreeing re-read +2.0); exposed in `status_line`
+   ("N to review"), the JSON `review` array, and the CLI top-3 printout.
+3. **Revised P1 metrics (evidence-based, replaces the failed bar):**
+   - queue usefulness: share of true digit errors present in the top-5 per page
+     (to be measured on future changes);
+   - digit signal quality reported per signal (coverage/FA pairs stay in the
+     tables above);
+   - no regression on CER/bagCER/digCER vs raw for the chosen streams.
+4. **Re-pass default stays off** until re-measured (Appendix A.1 invalidation).
+5. **Photo tier_c rejected** and gated behind `artifacts/tier_c/ACCEPTED`
+   (see `gcp/RESULTS.md`); x4plus remains the shipped photo default.
+
+### Corrected priorities after P1
+
+Tesseract's collapse and the flag reality change the plan order only slightly:
+P2 reading order and P3 orientation are still the next language-agnostic wins
+(they directly cut CER/bagCER by fixing order, independent of flags); P4
+Devanagari next; **P4b** re-measure the 2× re-pass with the engine fix and fold
+it into the review queue; P5 mixed-page router after.
