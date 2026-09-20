@@ -587,3 +587,43 @@ P2 reading order and P3 orientation are still the next language-agnostic wins
 (they directly cut CER/bagCER by fixing order, independent of flags); P4
 Devanagari next; **P4b** re-measure the 2× re-pass with the engine fix and fold
 it into the review queue; P5 mixed-page router after.
+
+---
+
+## Appendix E — P2 reading order shipped (2026-09-20)
+
+**Design (conservative, evidence-driven).** `document_layout.sort_reading_order`
+repairs *confident* two-column layouts and otherwise returns the engine order
+byte-for-byte. The conservatism is a measured requirement, not taste: aggressive
+row re-grouping cost **+8–19% CER** on SROIE receipts, because receipts are
+single-column and their detection order is already row-major.
+
+Confidence rules (each one added after a measured failure):
+1. gutter = vertical union gap no token crosses, ≥ 2× median line height;
+2. both sides need ≥ 6 tokens (receipt totals tables have clean gutters but
+   3–5 rows — columnizing them is wrong);
+3. the right side must be ragged (sd(x1) ≥ 0.5·sd(x0)) — right-aligned value
+   columns of fixed width (`RM 33.92`) are detected by content instead;
+4. the right side must not be number-dominated (≥ 50% of tokens ≥ 40% digits);
+5. full-width rows are structural band separators only when *standalone*
+   (sharing a row with other tokens made receipts churn: +8% CER);
+6. if no confident split fires anywhere, the input order is returned unchanged;
+7. column-major output preserves engine order *within* each column.
+
+**Measured** (`out/doc_two_column.json`; 4 pages, RapidOCR, mild/medium):
+
+| method | CER | WER | digCER |
+|---|---|---|---|
+| raw (detection order) | 0.5048 | 0.5817 | 0.4371 |
+| pipeline (+ reading order) | **0.0421** | **0.1070** | **0.1028** |
+
+WER gate (pre-registered −15%) exceeded at **−82%**. SROIE and CORD 15-page
+probes: pipeline output is byte-identical to raw (identity rule holds on real
+single-column pages). 11 layout tests; full suite 57 green.
+
+**Escape hatch:** `run_document_pipeline(reading_order=False)`,
+`cli.py --mode document --no-reading-order`; `meta["reading_order"]` records it.
+
+**Known limitation (documented):** a full-width title that shares its row with
+another token (e.g. a page number) is not used as a band separator; such pages
+fall back to identity. Acceptable until a real case appears.
