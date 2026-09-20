@@ -7,10 +7,14 @@ Tesseract gives per-line word order but no column model. Fixing order before
 the transcript/searchable-PDF/JSON is a measurable CER/WER win on multi-column
 pages and a no-op on single-column ones.
 
-Algorithm (conservative XY-cut, measured against SROIE/CORD):
-  * find a vertical whitespace band no token crosses, with substance on both
-    sides, right side ragged (text column, not right-aligned numbers) and
-    non-numeric -> that is a real gutter -> column-major within the region
+Algorithm (conservative XY-cut, measured against SROIE/CORD/arXiv renders):
+  * a vertical whitespace band that at most 5% of token boxes cross, with
+    substance on both sides, right side ragged (text column, not right-aligned
+    numbers) and non-numeric -> that is a real gutter -> column-major within
+    the region. Coverage-based, because real OCR line boxes extend into the
+    gutter (clean union gaps of 8-52 px at 200 dpi vs a 2x-line-height rule
+    that never fires); occasional straddlers (equations, figures) are assigned
+    by center and guarded by the 5% limit.
   * full-width elements (titles, tables) split the page into vertical bands so
     each region gets its own column decision (a page-wide gutter does not
     exist on title + two-column layouts)
@@ -26,14 +30,25 @@ from __future__ import annotations
 import statistics
 from typing import List, Optional, Sequence, Tuple
 
+import numpy as np
+
 from document_ocr import Token
 
-# A vertical band must look like a real gutter (not word/column spacing in a
-# table row): at least 2x the median line height. RapidOCR's line-level boxes
-# make this safe; on word-granularity backends highly tabular pages can read
-# column-major, which is acceptable for extraction.
-MIN_X_GAP_FACTOR = 2.0
-MIN_X_GAP_PX = 24.0
+# A gutter x-run may be crossed by at most this share of token boxes (measured:
+# arXiv renders 0-5%, SROIE receipts never produce a candidate at all).
+COVERAGE_LIMIT = 0.05
+# ... and must be at least this wide (px / x median line height).
+GUTTER_MIN_WIDTH_PX = 8.0
+GUTTER_MIN_WIDTH_FACTOR = 0.3
+# The gutter must sit in the middle of the content (20%-80%) to count.
+GUTTER_CENTER_MIN = 0.2
+GUTTER_CENTER_MAX = 0.8
+# Each side must be a wide text block, not a thin label strip: on receipts the
+# item/label strip next to a value column produced a passable gutter (measured:
+# sroie_00003 label strip was 24% of content width) and columnizing it
+# reordered rows. Real text columns are ~40-50% of the content width; 0.3
+# keeps 0/60 real single-column pages changed and all 19 arXiv splits.
+SIDE_MIN_WIDTH_FRACTION = 0.3
 # A column split needs substance on both sides: label/value tables (receipt
 # totals, invoices) have clean gutters but only a few rows, and reading them
 # column-major is wrong. Real columns have many lines per side.
@@ -50,23 +65,46 @@ BAND_GAP_MIN_PX = 32.0
 MAX_DEPTH = 16
 
 
-def _interval(tok: Token, axis: str) -> Tuple[float, float]:
-    x0, y0, x1, y1 = tok.bbox
-    return (x0, x1) if axis == "x" else (y0, y1)
+def _find_gutter(tokens: Sequence[Token], med_h: float) -> Optional[Tuple[float, float]]:
+    """Widest x-run covered by <= COVERAGE_LIMIT of token boxes, or None.
 
-
-def _largest_union_gap(tokens: Sequence[Token], axis: str) -> Tuple[float, Optional[float]]:
-    """Largest whitespace band on `axis` that no token crosses, as (gap, pos)."""
-    intervals = sorted(_interval(t, axis) for t in tokens)
-    best_gap, best_pos = 0.0, None
-    cur_end = intervals[0][1]
-    for start, end in intervals[1:]:
-        if start > cur_end:
-            gap = start - cur_end
-            if gap > best_gap:
-                best_gap, best_pos = gap, (cur_end + start) / 2.0
-        cur_end = max(cur_end, end)
-    return best_gap, best_pos
+    Coverage (not emptiness) is what works on real pages: OCR line boxes are
+    wider than the printed text, so a few px of box padding close an otherwise
+    clean gutter; requiring zero crossings has no operating point.
+    """
+    lo = min(t.bbox[0] for t in tokens)
+    hi = max(t.bbox[2] for t in tokens)
+    cw = hi - lo
+    if cw <= 0:
+        return None
+    hist = np.zeros(int(cw) + 2, dtype=np.int32)
+    for t in tokens:
+        a, b = t.bbox[0] - lo, t.bbox[2] - lo
+        hist[max(0, a):max(0, a) + max(1, b - a)] += 1
+    limit = max(1, int(COVERAGE_LIMIT * len(tokens)))
+    min_w = max(GUTTER_MIN_WIDTH_PX, GUTTER_MIN_WIDTH_FACTOR * med_h)
+    best: Optional[Tuple[float, float]] = None
+    best_w = 0.0
+    run: Optional[int] = None
+    for i in range(len(hist) + 1):
+        empty = i < len(hist) and hist[i] <= limit
+        if empty:
+            if run is None:
+                run = i
+            continue
+        if run is None:
+            continue
+        w = i - run
+        x0, x1 = run + lo, i + lo
+        run = None
+        if w < min_w:
+            continue
+        center = (x0 + x1) / 2.0
+        if not (lo + GUTTER_CENTER_MIN * cw < center < lo + GUTTER_CENTER_MAX * cw):
+            continue
+        if w > best_w:
+            best, best_w = (x0, x1), w
+    return best
 
 
 def _median_height(tokens: Sequence[Token]) -> float:
@@ -192,17 +230,27 @@ def _bands(tokens: Sequence[Token], med_h: float,
     return bands
 
 
+def _side_width(tokens: Sequence[Token]) -> float:
+    return max(t.bbox[2] for t in tokens) - min(t.bbox[0] for t in tokens)
+
+
 def _column_split(tokens: Sequence[Token], med_h: float, min_side: int,
                   stats: dict) -> Optional[List[Token]]:
     """A confident gutter -> left side sorted, then right side sorted."""
-    gap, pos = _largest_union_gap(tokens, "x")
-    if pos is None or gap < max(MIN_X_GAP_PX, MIN_X_GAP_FACTOR * med_h):
+    gutter = _find_gutter(tokens, med_h)
+    if gutter is None:
         return None
-    left = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 < pos]
-    right = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 >= pos]
+    x0, x1 = gutter
+    mid = (x0 + x1) / 2.0
+    left = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 < mid]
+    right = [t for t in tokens if (t.bbox[0] + t.bbox[2]) / 2.0 >= mid]
     if len(left) < min_side or len(right) < min_side:
         return None
     if not _ragged_right(right) or _mostly_numeric(right):
+        return None
+    cw = _content_width(tokens)
+    if (_side_width(left) < SIDE_MIN_WIDTH_FRACTION * cw
+            or _side_width(right) < SIDE_MIN_WIDTH_FRACTION * cw):
         return None
     stats["splits"] += 1
     return (_sort_region(left, min_side, 1, stats)
@@ -237,18 +285,23 @@ def _sort_region(tokens: Sequence[Token], min_side: int, depth: int = 0,
 
 
 def sort_reading_order(tokens: Sequence[Token],
-                       min_column_tokens: int = MIN_X_SIDE_TOKENS) -> List[Token]:
+                       min_column_tokens: int = MIN_X_SIDE_TOKENS,
+                       stats: Optional[dict] = None) -> List[Token]:
     """Return tokens in human reading order (new list; input untouched).
 
     If no confident column split exists anywhere, the input order is returned
     unchanged: band bookkeeping must never perturb single-column pages.
+    `stats["splits"]` (when a dict is passed) records how many column splits
+    fired, for telemetry.
     """
     toks = list(tokens)
     if not toks:
         return []
-    stats = {"splits": 0}
-    out = _sort_region(toks, max(1, min_column_tokens), 0, stats)
-    return out if stats["splits"] else list(tokens)
+    book = {"splits": 0}
+    out = _sort_region(toks, max(1, min_column_tokens), 0, book)
+    if stats is not None:
+        stats["splits"] = book["splits"]
+    return out if book["splits"] else list(tokens)
 
 
 def text_in_order(tokens: Sequence[Token]) -> str:

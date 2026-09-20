@@ -128,6 +128,32 @@ def test_empty_input():
     assert sort_reading_order([]) == []
 
 
+def test_thin_label_strip_stays_engine_order():
+    # sroie_00003 regression: a 6-token label strip (24% of content width)
+    # beside a value column passes coverage/raggedness but is not a column.
+    toks = []
+    for i in range(6):
+        y = 40 + i * 40
+        toks.append(T(f"label{i}", 20, y, 120 - (i * 13) % 30, y + 22))
+    for i in range(15):
+        y = 30 + i * 18
+        toks.append(T(f"value item {i}", 145, y, 440 - (i * 29) % 120, y + 16))
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks], \
+        "thin label strips must never be columnized"
+
+
+def test_gutter_tolerates_box_padding():
+    # Real-page condition: OCR boxes bleed a few px into the gutter. The
+    # coverage rule (<=5% crossings) must still columnize.
+    toks = column_pairs(7)
+    toks[0] = T("L1 line", 40, 40, 330, 70, gran="line")  # pads into the gutter
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == (
+        [f"L{i} line" for i in range(1, 8)] +
+        [f"R{i} line" for i in range(1, 8)])
+
+
 def test_pipeline_applies_reading_order(monkeypatch):
     import numpy as np
     import document_pipeline as dp
