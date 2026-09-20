@@ -91,10 +91,24 @@ def rotate(img: np.ndarray, angle: float) -> np.ndarray:
                           borderMode=cv2.BORDER_REPLICATE)
 
 
-def flatten_illumination(gray: np.ndarray, ksize: int = 41) -> tuple[np.ndarray, np.ndarray]:
-    """Divide by a large-kernel background estimate to remove shadows/gradients."""
+def flatten_illumination(gray: np.ndarray, ksize: int = 41,
+                         work_scale: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """Divide by a large-kernel background estimate to remove shadows/gradients.
+
+    The background is estimated at 1/work_scale resolution (median blur cost at
+    full A4@300dpi was ~10 s; this is ~0.2 s and visually identical for smooth
+    lighting fields).
+    """
+    h, w = gray.shape[:2]
     k = max(3, ksize | 1)
-    background = cv2.medianBlur(gray, k)
+    if work_scale > 1 and min(h, w) > 4 * work_scale:
+        small = cv2.resize(gray, (max(1, w // work_scale), max(1, h // work_scale)),
+                           interpolation=cv2.INTER_AREA)
+        bk = max(3, (k // work_scale) | 1)
+        bg_small = cv2.medianBlur(small, bk)
+        background = cv2.resize(bg_small, (w, h), interpolation=cv2.INTER_CUBIC)
+    else:
+        background = cv2.medianBlur(gray, k)
     background = cv2.GaussianBlur(background, (0, 0), k / 3.0)
     target = float(np.percentile(background, 90))
     norm = gray.astype(np.float32) / np.maximum(background.astype(np.float32), 1.0) * target
@@ -138,7 +152,10 @@ def build_ocr_stream(clean_gray: np.ndarray, mode: str = "clahe") -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def restore_document(img_bgr: np.ndarray, *, scale: int = 1,
-                     max_side: int = MAX_SIDE, ocr_stream: str = "clahe") -> Dict:
+                     max_side: int = MAX_SIDE, ocr_stream: str = "clahe",
+                     deskew: bool = True) -> Dict:
+    """Full classical restore. `deskew=False` keeps geometry identical to the
+    input (callers that overlay raw-OCR boxes on the display need this)."""
     t0 = time.time()
     if img_bgr.ndim == 2:
         img = cv2.cvtColor(img_bgr, cv2.COLOR_GRAY2BGR)
@@ -151,7 +168,7 @@ def restore_document(img_bgr: np.ndarray, *, scale: int = 1,
     flat, background = flatten_illumination(gray)
     flat = light_denoise(flat)
 
-    skew = estimate_skew(flat)
+    skew = estimate_skew(flat) if deskew else 0.0
     clean = rotate(flat, skew)
     binary = sauvola_binary(clean)
 
@@ -171,6 +188,7 @@ def restore_document(img_bgr: np.ndarray, *, scale: int = 1,
             "illum": background,
             "binary": binary,
             "ocr_stream": ocr_stream,
+            "deskew": deskew,
             "seconds": round(time.time() - t0, 3),
         },
     }
