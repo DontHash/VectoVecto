@@ -687,6 +687,69 @@ def build_hf_dataset(source: str, out_dir: str, max_pages: int = 30,
     return manifest
 
 
+def build_line_crop_dataset(source: str, out_dir: str, max_lines: int = 0,
+                            split: str = "test") -> Dict:
+    """Real text-line crops + transcriptions (recognition-level eval).
+
+    Used for the Nepali line slice (himalaya-ai/nepali-deva-ocr-eval, itself a
+    held-out extraction of gauravgiri/nepali-ocr-dataset). Provenance and
+    license are UNKNOWN: every artifact derived from this set must carry the
+    'unverified provenance' label until a human eyeball pass clears it. The
+    crops are recognition-only: detection is bypassed, so this measures the
+    recognizer, not the page pipeline.
+    """
+    from datasets import load_dataset
+
+    ds = load_dataset(source, split=split)
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_dir = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_dir, exist_ok=True)
+    entries: List[Dict] = []
+    for idx, example in enumerate(ds):
+        if max_lines and len(entries) >= max_lines:
+            break
+        gt = str(example.get("ocr") or "").strip()
+        img = example.get("image")
+        if not gt or img is None:
+            continue
+        if isinstance(img, dict) and img.get("bytes"):
+            import io
+            from PIL import Image
+            img = Image.open(io.BytesIO(img["bytes"]))
+        arr = np.array(img.convert("RGB"))
+        arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+        pid = f"line_{idx:05d}"
+        img_path = os.path.join(pages_dir, f"{pid}.png")
+        gt_path = os.path.join(gt_dir, f"{pid}.txt")
+        cv2.imwrite(img_path, arr)
+        with open(gt_path, "w", encoding="utf-8") as f:
+            f.write(gt)
+        entries.append({
+            "id": pid, "source": source, "row": idx, "real": True,
+            "gt_chars": len(gt),
+            "image": os.path.relpath(img_path, out_dir),
+            "gt": os.path.relpath(gt_path, out_dir),
+        })
+    manifest = {
+        "kind": "lines", "name": f"lines_{source.split('/')[-1]}",
+        "source": source, "split": split,
+        "created": time.strftime("%Y-%m-%d %H:%M:%S"), "entries": entries,
+    }
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def load_line_dataset(data_dir: str) -> Dict:
+    with open(os.path.join(data_dir, "manifest.json"), encoding="utf-8") as f:
+        manifest = json.load(f)
+    for e in manifest["entries"]:
+        e["_image_path"] = os.path.join(data_dir, e["image"])
+        e["_gt_path"] = os.path.join(data_dir, e["gt"])
+    return manifest
+
+
 # ---------------------------------------------------------------------------
 # demo PDF (offline PDF-path exercise)
 # ---------------------------------------------------------------------------
