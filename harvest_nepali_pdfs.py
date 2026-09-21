@@ -8,6 +8,12 @@ set, but in Devanagari. The catch is text layers: many Nepali PDFs are scans
 (no text) or use legacy non-Unicode fonts (Preeti etc.), which extract as
 mojibake. Both are rejected here by a Devanagari-ratio gate.
 
+Gate v2 adds ground-truth integrity: `doc_metrics.devanagari_validity()`
+measures the invalid-combining-sequence rate of the extracted text (reordered
+matras, dangling viramas, orphan marks) and documents above
+`MAX_INVALID_RATE` (2% of Devanagari tokens) are rejected. Every verdict
+records its reason.
+
 Accepted PDFs go to data/doc_eval/nepali_pdf_sources/ (gitignored). The
 resulting dataset is internal-eval-only; provenance recorded per file.
 
@@ -27,6 +33,10 @@ import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
+
+import doc_metrics  # noqa: E402
+
+MAX_INVALID_RATE = 0.02
 
 # Candidate URLs found via agent-reach search (Exa). A mix of statute PDFs and
 # court judgments; all public government publications (Nepal). Verified below.
@@ -64,21 +74,44 @@ def _devanagari_ratio(text: str) -> float:
 
 
 def probe_pdf(path: str, max_pages: int = 8) -> dict:
-    """Text-layer quality of a PDF: chars/pages + Devanagari ratio (pre-mojibake)."""
+    """Text-layer quality: chars/pages, Devanagari ratio, invalid-sequence rate."""
     import pypdfium2 as pdfium
     doc = pdfium.PdfDocument(path)
-    n_pages = len(doc)
-    texts = []
-    for i in range(min(n_pages, max_pages)):
-        texts.append(doc[i].get_textpage().get_text_range())
+    try:
+        n_pages = len(doc)
+        texts = []
+        for i in range(min(n_pages, max_pages)):
+            texts.append(doc[i].get_textpage().get_text_range())
+    finally:
+        doc.close()  # rejected files are deleted; Windows locks otherwise
     text = "\n".join(texts)
+    validity = doc_metrics.devanagari_validity(text)
     return {
         "pages": n_pages,
         "sampled_pages": len(texts),
         "chars": len(text),
         "chars_per_page": len(text) / len(texts) if texts else 0,
         "devanagari_ratio": round(_devanagari_ratio(text), 3),
+        "invalid_token_rate": validity["invalid_token_rate"],
+        "invalid_examples": validity["examples"][:3],
     }
+
+
+def gate_reason(info: dict, min_chars_per_page: int = 300,
+                min_deva_ratio: float = 0.4,
+                max_invalid_rate: float = 0.02) -> str | None:
+    """None when the PDF passes the harvest gate, else the rejection reason."""
+    if info["chars_per_page"] < min_chars_per_page:
+        return (f"no text layer ({info['chars_per_page']:.0f} chars/p < "
+                f"{min_chars_per_page})")
+    if info["devanagari_ratio"] < min_deva_ratio:
+        return (f"mojibake/non-Unicode text (deva {info['devanagari_ratio']:.2f} "
+                f"< {min_deva_ratio})")
+    rate = info.get("invalid_token_rate", 0.0)
+    if rate > max_invalid_rate:
+        return (f"invalid Devanagari sequences ({rate:.1%} > "
+                f"{max_invalid_rate:.0%} of tokens)")
+    return None
 
 
 def _download(url: str, dst: str, retries: int = 3) -> None:
@@ -126,7 +159,8 @@ def discover_pdf_links(page_urls, limit_per_page: int = 4):
 
 
 def harvest(out_dir: str, urls=None, min_chars_per_page: int = 300,
-            min_deva_ratio: float = 0.4) -> dict:
+            min_deva_ratio: float = 0.4,
+            max_invalid_rate: float = MAX_INVALID_RATE) -> dict:
     os.makedirs(out_dir, exist_ok=True)
     report = {"accepted": [], "rejected": [], "created":
               time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -148,19 +182,21 @@ def harvest(out_dir: str, urls=None, min_chars_per_page: int = 300,
                 _download(url, dst)
                 info = probe_pdf(dst)
             rec.update(info)
-            if (info["chars_per_page"] >= min_chars_per_page and
-                    info["devanagari_ratio"] >= min_deva_ratio):
+            reason = gate_reason(info, min_chars_per_page, min_deva_ratio,
+                                 max_invalid_rate)
+            rec["reason"] = reason
+            if reason is None:
                 rec["verdict"] = "accepted"
                 report["accepted"].append(rec)
                 print(f"  OK   {name}: {info['pages']}p "
                       f"{info['chars_per_page']:.0f} chars/p "
-                      f"deva {info['devanagari_ratio']:.2f}")
+                      f"deva {info['devanagari_ratio']:.2f} "
+                      f"invalid {info['invalid_token_rate']:.2%}")
             else:
                 rec["verdict"] = "rejected"
                 report["rejected"].append(rec)
                 os.remove(dst)
-                print(f"  DROP {name}: {info['chars_per_page']:.0f} chars/p "
-                      f"deva {info['devanagari_ratio']:.2f} (scan or mojibake)")
+                print(f"  DROP {name}: {reason}")
         except Exception as e:  # noqa: BLE001
             rec["verdict"] = "error"
             rec["error"] = str(e)
@@ -176,6 +212,9 @@ def main():
     ap.add_argument("--json", default=None)
     ap.add_argument("--min-chars-per-page", type=int, default=300)
     ap.add_argument("--min-deva-ratio", type=float, default=0.4)
+    ap.add_argument("--max-invalid-rate", type=float, default=MAX_INVALID_RATE,
+                    help="reject when the text layer has more invalid "
+                         "Devanagari sequences than this share of tokens")
     ap.add_argument("--discover", nargs="*", default=[],
                     help="listing/content pages to scrape for .pdf links")
     args = ap.parse_args()
@@ -184,7 +223,8 @@ def main():
         urls += discover_pdf_links(args.discover)
     report = harvest(args.out, urls=urls,
                      min_chars_per_page=args.min_chars_per_page,
-                     min_deva_ratio=args.min_deva_ratio)
+                     min_deva_ratio=args.min_deva_ratio,
+                     max_invalid_rate=args.max_invalid_rate)
     print(f"[harvest] accepted {len(report['accepted'])} / "
           f"rejected {len(report['rejected'])}")
     if args.json:
