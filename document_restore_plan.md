@@ -1319,6 +1319,49 @@ collapses. Wave 2 (real A5 photographs + photo preprocessing/dewarp) is
 high priority; the proxy tells us the size of the problem before field data
 arrives.
 
+### W2.1 letterpress preprocessing A/B (FAILED the gate -> raw stays)
+
+Frozen heiDATA, three streams (gate was CER ->=5% relative):
+
+| method | CER | bagCER | digCER | recall | invented | area cov |
+|---|---|---|---|---|---|---|
+| sauvola | 0.4269 (-1.5%) | 0.5747 | **5.862 (-34%)** | 0.612 | **1754** | 0.935 |
+| raw (shipped) | 0.4335 | **0.5529** | 8.946 | **0.647** | **0** | **0.975** |
+| restore | 0.4371 | 0.5657 | 9.179 | 0.647 | 1709 | 0.717 |
+
+Sauvola nearly halves digit CER but invents 1754 tokens and loses bagCER,
+recall and detection coverage; restore collapses detection (area 0.72) and
+hallucinates too. Gate not met, **no change adopted** - raw stays, with new
+evidence for the do-not-hallucinate contract.
+
+---
+
+## Appendix R - W1 fine-tune: Vertex AI training (2026-09-21)
+
+**Goal.** A small Devanagari line recognizer (CRNN+CTC, `deva_crnn/`) trained
+on synthetic digit-rich lines, adopted only if the pre-registered gate passes:
+digit-exact >= 0.75 on frozen heiDATA digit-bearing lines, bagCER not worse
+than the RapidOCR line baseline, <= +1 s/page.
+
+**Data.** heiDATA is fully allocated (7 books = frozen eval, 4 books = dev
+tuning), so training data is synthetic: `doc_data.synthesize_deva_lines`
+(Qt-shaped, digit-rich patterns) + `deva_crnn.augment.line` (blur/noise/JPEG/
+brightness). 30k lines, 65-char charset, 49 MB npz shipped inside the wheel.
+
+**Pipeline (Google SDK, Vertex AI).** `scripts/export_training_data.py` ->
+wheel with data (`pip wheel`) -> `gcloud storage cp` -> custom job:
+`gcloud ai custom-jobs create` with executor image
+`tf-cpu.2-15.py310`, `python-package-uris` = the wheel, `python-module` =
+`deva_crnn.train`, machine `n1-standard-8`; checkpoints/metrics upload to
+`gs://neptrans-.../w1/out/` per epoch (`_upload_if_gcs`).
+Job 8696792149963833344 submitted 2026-09-21; gate evaluation via
+`scripts/eval_deva_crnn_gate.py`.
+
+**Trainer hardening found on the way** (all tested): GroupNorm instead of
+BatchNorm (small-batch CTC diverged to NaN), non-finite-step guard,
+`drop_last` only when a full batch exists (a 7-sample set trained on *zero*
+batches before the fix), Windows DataLoader workers off for small sets.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display
