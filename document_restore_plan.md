@@ -1017,3 +1017,55 @@ read (F-phase), keep the "never invent digits" promise, and record that
 Devanagari digit reading remains the headline gap. The bake-off harness stays
 in the repo (`eval_models.py --list`) so any future model can be scored on the
 same frozen sets in minutes.
+
+---
+
+## Appendix M — Devanagari flags + calibration (2026-09-22)
+
+With the bake-off showing no reusable model wins (Appendix L), the honest
+product path is telling the user *where* the engine is wrong. Tuning happened
+exclusively on a held-out dev set (`heidata_dev_v1`, 4 books / 61 pages,
+never used for evaluation); all results below are frozen-set evaluations.
+
+### Signals added
+
+| signal | dev evidence | frozen evidence |
+|---|---|---|
+| `script_mismatch` (Latin token on a Devanagari page, weight 2.5) | 15.3% of tokens, ~100% junk | letterpress: 73 tokens, **precision 1.00**; gov PDFs: 46 tokens, precision **0.37** (Latin is legitimate there) |
+| digit confidence bar 80 -> 90 (devanagari) | digit-error recall 0.235 -> 0.686 (precision 0.60 -> 0.31) | part of the queue numbers below |
+| isotonic `cal_conf` (0-100) | dev ECE 0.640 -> **0.105** | letterpress ECE 0.818 -> 0.297; PDFs 0.821 -> 0.411 |
+
+Calibration note: temperature scaling was measured to be *structurally
+unsuitable* on this domain — probabilities saturate near 1 while token
+accuracy is 0.28, so the BCE optimum inverts the ranking (T=-7.75) instead of
+fixing the scale. The shipped map is isotonic (monotone, so ranking/AUC 0.733
+is untouched); `fit_calibration.py` records the dev manifest sha256 and the
+temperature evidence in the JSON.
+
+### Frozen review-queue quality (`eval_flags.py`)
+
+| set | digit-token err rate | R@5 | R@10 | P@5 | P@10 |
+|---|---|---|---|---|---|
+| heiDATA letterpress (69 p) | 0.333 | **0.533** | **0.730** | 0.212 | 0.160 |
+| gov PDFs (41 p) | 0.316 | 0.154 | 0.154 | 0.261 | 0.240 |
+
+Pre-registered bar was R@10 >= 0.4 at P >= 0.35: **recall passes on the hard
+scan set (0.73) and precision misses**; **on clean PDFs both miss** — their
+errors are confidently wrong (ECE 0.82), so confidence-based signals barely
+fire. The queue is a large honest improvement for degraded scans (P4b's
+receipt baseline was R@5 0.049) and weak for born-digital pages; the
+difference is now a measured product fact instead of an assumption.
+
+Ranker comparison on dev (current risk+reading-order vs confidence tiebreak vs
+continuous digit-risk): current wins (R@5 0.537 vs 0.423 / 0.504), so the
+existing ranking stays.
+
+### What this changes for the product
+
+- Review queue on Devanagari scans now surfaces ~3 of 4 digit errors in the
+  top 10 (was ~1 in 20 on the receipt baseline); the JSON `review` list, CLI
+  top-3 and GUI overlay all inherit it.
+- Calibrated confidence is reported (`cal_conf`, meta `calibration`) and used
+  for honest ECE reporting; it does not silently move text or thresholds.
+- Devanagari digit *reading* remains unsolved (Appendix L); the product
+  position is "flagged, not invented".

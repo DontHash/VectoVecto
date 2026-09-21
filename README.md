@@ -69,6 +69,7 @@ Measured behaviour, not marketing (full tables in
 | Single-column layout | identity — 60/60 real pages untouched |
 | Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end; all 4 unlabeled real splits verified by geometry; >2 columns unsupported |
 | Digit-number honesty | review queue ranked by risk; best case recalls ~23% of digit errors in the top-5 — **weak, documented**; on real Devanagari pages flag coverage is 0.2–1.6% (calibration ECE ≈ 0.82) |
+| Devanagari flags + calibration (Appendix M) | `script_mismatch` + conf-90 digit bar + isotonic `cal_conf`: on letterpress scans the queue now surfaces **73% of digit errors in the top 10** (P@10 0.16); on clean gov PDFs it barely helps (R@10 0.15) — errors there are confidently wrong. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
 | Tesseract backend | fails on real photos (CORD CER 0.90 raw / 1.57 restored) — clean-scan fallback only |
 | Numeric flags bar (coverage ≥0.55) | **not met** on real photos; replaced by the ranked review queue |
 | Frozen eval + CIs | every real-set number above comes from a hash-frozen manifest (`evals/manifests/`) with bootstrap 95% CIs; see plan Appendix K |
