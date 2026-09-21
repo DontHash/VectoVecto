@@ -569,7 +569,8 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
 def apply_digit_verifier(tokens: List["Token"], img_bgr: np.ndarray,
                          verify_fn, pad_ratio: float = 0.08,
                          max_tokens: int = 12,
-                         only_flagged: bool = True) -> int:
+                         only_flagged: bool = True,
+                         max_aspect: float = 8.0) -> int:
     """Second-model digit re-read on suspect tokens. Returns conflict count.
 
     `verify_fn(crops) -> texts` may be batch or single-crop (both accepted).
@@ -577,9 +578,19 @@ def apply_digit_verifier(tokens: List["Token"], img_bgr: np.ndarray,
     is stored as `alt_text` (same contract as the dual-stream conflict).
     On the frozen letterpress set this flag had recall 0.71 / precision 0.81
     against baseline digit errors (Appendix L, bodhan verifier role).
+
+    Suspects are ordered by `token_risk` (the queue order) and implausibly
+    wide boxes (aspect > `max_aspect`: watermark/URL lines that happen to
+    contain digits) are skipped - they dominated verifier cost (~2.5 s each)
+    and contributed junk conflicts (W0.2).
     """
     suspects = [t for t in tokens
                 if t.has_digits and (not only_flagged or t.flags)]
+    suspects = [t for t in suspects
+                if (t.bbox[3] - t.bbox[1]) > 0
+                and (t.bbox[2] - t.bbox[0]) / (t.bbox[3] - t.bbox[1])
+                <= max_aspect]
+    suspects.sort(key=lambda t: (-token_risk(t), t.bbox[1], t.bbox[0]))
     if max_tokens:
         suspects = suspects[:max_tokens]
     if not suspects:

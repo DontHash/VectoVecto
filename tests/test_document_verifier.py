@@ -108,6 +108,40 @@ def test_pipeline_verifier_scope_all_covers_unflagged_digit_tokens():
     assert a > 0
 
 
+def test_apply_digit_verifier_skips_oversized_crops():
+    img = np.full((400, 1200, 3), 255, dtype=np.uint8)
+    normal = _tok("120.50", conf=85, bbox=(100, 100, 300, 140))
+    normal.flags.append("digit_uncertain")
+    watermark = _tok("http://digi.ub 1854", conf=85, bbox=(10, 20, 1190, 60))
+    watermark.flags.append("digit_uncertain")
+    seen = []
+
+    def fake(crops):
+        seen.extend(c.shape for c in crops)
+        return ["9"] * len(crops)
+
+    conflicts = apply_digit_verifier([watermark, normal], img, fake)
+    assert len(seen) == 1, "full-width watermark lines must not be verified"
+    assert seen[0][1] < 400, "only the normal digit crop is sent"
+    assert conflicts == 1
+
+
+def test_apply_digit_verifier_verifies_riskiest_first():
+    img = np.full((300, 400, 3), 255, dtype=np.uint8)
+    low = _tok("11", conf=85, bbox=(10, 10, 60, 40))
+    low.flags.append("digit_uncertain")
+    high = _tok("22", conf=85, bbox=(10, 60, 60, 90))
+    high.flags.extend(["digit_conflict", "digit_uncertain"])
+    seen = []
+
+    def fake(crops):
+        seen.extend(c.shape for c in crops)
+        return ["9"] * len(crops)
+
+    apply_digit_verifier([low, high], img, fake, max_tokens=1)
+    assert len(seen) == 1, "only the top-risk suspect is verified"
+
+
 def test_get_digit_verifier_factory():
     assert get_digit_verifier(None) is None
     assert get_digit_verifier("off") is None

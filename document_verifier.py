@@ -100,6 +100,11 @@ class BodhanDigitVerifier:
         self._rec = HfRecognizer(
             ckpt=os.path.join(self._repo, "weights", "ocr"),
             device=device, batch_size=self.batch_size)
+        # Cap generation: the vendored default (2048) lets one junk crop run
+        # away - measured 32 crops at 6.0 s/crop uncapped vs 0.82 s/crop with
+        # a 64-token cap (W0.2). Digit crops need <16 tokens.
+        from idp_types import RecognizerConfig  # vendored repo, on sys.path
+        self._rec.config = self._rec.config.merged(max_tokens=64)
 
     def __call__(self, crops: List[np.ndarray]) -> List[str]:
         self._ensure()

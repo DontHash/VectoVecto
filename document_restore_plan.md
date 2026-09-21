@@ -1259,6 +1259,24 @@ Single frozen confirmation run (weight 1.0, pre-registered gate: token R@10
 Verdict: **PASS** - the flag lifts general token recall on both domains and
 improves the digit queue instead of hurting it; 204 tests green.
 
+### W0.2 verifier cost engineering (R@10 kept, cost gate FAILED -> stays opt-in)
+
+Measured on the RTX 2050 with the bodhan verifier (`--digit-verifier-scope
+flagged`, frozen heiDATA):
+
+| finding | measurement |
+|---|---|
+| per-crop cost floor (fallback kernels: no `causal_conv1d` / `flash-linear-attention` wheels) | ~0.8-0.9 s/crop |
+| batch blowup with the vendored `max_tokens=2048` default | 12 crops 5.5 s; **32 crops 192 s (6.0 s/crop)** - runaway generation on junk crops |
+| with `max_tokens=64` cap (shipped) | 32 crops 26.2 s (0.82 s/crop); the cap bounds worst case |
+| junk-crop filter (aspect > 8 skipped: watermark/URL lines that contain digits) + risk ordering | shipped; removes ~2.5 s/crop junk and junk conflicts |
+| end-to-end frozen run (69 p) | 725 s = 10.5 s/page (baseline 2.24; old verifier 10.8) |
+| digit R@10 | 0.7445 vs 0.7518 before (within the pre-registered 1pp tolerance) |
+
+Gate: cost **+8.3 s/page > +1 s/page -> FAIL**; the verifier stays opt-in.
+The cost is the model itself on this hardware, not batching: batching beyond
+12 crops/page cannot help because the per-crop forward pass dominates.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display
