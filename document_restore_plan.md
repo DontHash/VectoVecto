@@ -926,6 +926,19 @@ better detector for degraded text or a server-size Devanagari rec model
 
 ## Appendix K — real Devanagari evidence: frozen sets + CIs (2026-09-21)
 
+> **Correction (N phase, same day).** The `nepali_pdf` row below is scored
+> against a *corrupt* text layer. The N2 gate (`doc_metrics.devanagari_validity`)
+> found 41/41 pages above the 2% invalid-sequence bar (page mean 22.4%,
+> per-doc 8.5-40.1%; wrong ToUnicode maps: dha→i-matra, matra reordering,
+> virama-for-space) and a ~60-document source hunt across ~25 government
+> sites found no clean batch. **CER 0.338 is therefore not a
+> recognition-error estimate** - it measures GT damage as much as OCR error.
+> `nepali_pdf_v2` (same 41 pages, re-frozen with the audit) scores on the
+> valid-GT-token subset: exact-token recall **0.522 [0.480-0.562]**, unmatched
+> hypothesis 0.576; the unbiased absolute anchor comes from human-verified
+> pages (`eval_anchor.py`). Digit claims are re-scoped in Appendix N. v1
+> numbers stay as the historical record.
+
 The reality check's top two gaps were: (1) no real Nepali data anywhere in the
 P4 claim, (2) all numbers were point estimates on small sets that the
 thresholds had been tuned on. Both are addressed here.
@@ -1083,3 +1096,77 @@ existing ranking stays.
   for honest ECE reporting; it does not silently move text or thresholds.
 - Devanagari digit *reading* remains unsolved (Appendix L); the product
   position is "flagged, not invented".
+
+---
+
+## Appendix N — recognition & digit reality; fine-tune recipe (2026-09-21, R phase)
+
+### N1. What fails: error taxonomy on human GT (R1)
+
+`eval_error_taxonomy.py` classifies token errors between RapidOCR and the
+human-corrected ALTO GT (heiDATA, 69 pages / 7 books, frozen) into digit /
+matra / consonant / order / segmentation / missing / invented / other.
+
+| book | lines | gt tok | err rate | seg | miss | cons | matra | digit | det_x |
+|---|---|---|---|---|---|---|---|---|---|
+| diksita1895 | 51 | 232 | 0.388 | 26 | 32 | 9 | 8 | 0 | 34 |
+| jacobi1897 | 212 | 1822 | 0.336 | 46 | 377 | 119 | 30 | 2 | 110 |
+| jagannatha1955 | 210 | 1360 | 0.265 | 141 | 49 | 80 | 37 | 9 | 101 |
+| jayadeva1926 | 255 | 1271 | 0.344 | 166 | 124 | 65 | 36 | 5 | 135 |
+| pyarelala1914 | 206 | 1243 | 0.439 | 152 | 181 | 42 | 24 | 3 | 114 |
+| sankaracarya1925 | 238 | 1885 | 0.222 | 128 | 20 | 136 | 74 | 2 | 71 |
+| sivaramasukla1900 | 279 | 1848 | 0.329 | 219 | 99 | 102 | 97 | 0 | 91 |
+
+Segmentation + missing dominate (line assembly and detection, not just
+recognition); consonant and matra errors are next; digit errors are rare in
+letterpress text. `det_x` = OCR tokens whose center falls in no ALTO line
+(headers/footers/noise). Order errors: 0.
+
+### N2. Digit reality, scoped by domain (R2)
+
+| domain | set | valid-token recall | digit CER | digit-exact pages | queue R@10 |
+|---|---|---|---|---|---|
+| modern gov PDFs | `nepali_pdf_v2` (41 p) | 0.522 [0.480-0.562] | 0.289 [0.227-0.352] | 0.049 | 0.154 |
+| letterpress scans | `heidata_printed` (69 p) | 0.647 [0.619-0.675] | 8.95 [5.86-12.50] | 0.000 | 0.730 |
+
+Digits are broken in *different* ways per domain: letterpress digits are
+essentially unread (the model emits Latin insertions - digit CER 8.95), while
+on clean PDFs most digits are individually readable but whole-page digit
+sequences are exactly right on only 2/41 pages. The review queue helps on
+scans (R@10 0.73) and not on clean PDFs (0.154) - their errors are confidently
+wrong.
+
+### N3. Verifier coverage, pre-registered (R3)
+
+`--digit-verifier` gained a scope: `flagged` (default) or `all` digit tokens.
+Adopt-if was pre-registered: queue R@10 **+>=3pp** on frozen heiDATA at
+**<=+3 s/page**.
+
+| scope | conflicts | R@5 | R@10 | s/page | verdict |
+|---|---|---|---|---|---|
+| off (baseline) | 0 | 0.533 | 0.730 | 2.24 | - |
+| flagged (default) | 32 | 0.613 | 0.752 | 10.80 | shipped opt-in |
+| all | 59 | 0.635 | 0.788 | 18.20 | recall +3.7pp PASS, cost +7.4 s/page FAIL -> stays opt-in |
+
+Note the cost table: per-page batch overhead dominates the 0.44 s/token
+estimate (model load + one batch call per page). The default stays `flagged`.
+
+### N4. Fine-tune recipe (documented, not started)
+
+Target the taxonomy, not the mean: segmentation/missing first, then
+consonants/matras, digits last (but gated hardest).
+
+- **Data**: (a) synthetic Devanagari lines from our Qt renderer
+  (`doc_data.render_devanagari_invoice` + a line-crop exporter) with exact GT
+  and controllable degradation; (b) heiDATA ALTO line crops (human GT, CC BY
+  4.0); (c) line crops from the v2 PDFs, **GT only where the text layer passes
+  `devanagari_validity`** (corrupt tokens are never training targets).
+- **Model**: fine-tune a small recognizer head (PP-OCRv5 mobile rec or TrOCR
+  small) on the frozen dev split `heidata_dev_v1`; tuning only on dev, never
+  on frozen eval sets.
+- **Gate (pre-registered)**: adopt only if, on frozen `heidata_printed_v1` +
+  `nepali_pdf_v2`: digit-exact **>= 0.75** (baseline 0.0 letterpress / 0.049
+  PDFs) and bagCER not worse than baseline (letterpress 0.553 / v2 valid-subset
+  recall not worse), at <= +1 s/page.
+- **Not started**: no training run is scheduled by this appendix; it exists so
+  the next attempt starts from a pre-registered bar instead of an aspiration.
