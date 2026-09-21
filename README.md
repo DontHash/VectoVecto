@@ -63,15 +63,17 @@ Measured behaviour, not marketing (full tables in
 |---|---|
 | Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations (and 0/19 on unlabeled Nepali scans); rotated 90/90 decided |
 | Devanagari (Nepali/Hindi) — rendered fixture | clean CER 0.030/0.028 (Latin engine 0.85 — the language model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
-| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481]; modern gov PDFs (n=41): CER 0.338 [0.305–0.378] (bagCER 0.48); per-document 0.22–0.66; Devanagari digits essentially unread by the mobile model |
+| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481], exact-token recall 0.647 [0.619–0.675]. Modern gov PDFs (n=41): **the text layer is corrupt** (41/41 pages above the 2% invalid-sequence bar, mean 22.4%; wrong ToUnicode maps), so CER 0.338 is *not* a recognition estimate — on valid GT tokens exact-token recall is 0.522 [0.480–0.562]; the unbiased anchor comes from human-verified pages (`eval_anchor.py`, Appendix N). Devanagari digits essentially unread by the mobile model |
 | Devanagari — alternative models (bake-off, Appendix L) | Tesseract/TrOCR/GLM-OCR all scored on frozen sets and **rejected**: invented tokens, domain mismatch, or 200 s/page. The harness stays for future models (`python eval_models.py --list`) |
-| Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740] on a slice whose GT is machine-generated and partly misaligned — numbers provisional until human-verified |
+| Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740]; GT audit: 0.07% invalid tokens — the defect is *alignment* (machine-generated GT, partly misaligned), so numbers stay "behavior only" until a human pass |
 | Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
 | Single-column layout | identity — 60/60 real pages untouched |
 | Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end; all 4 unlabeled real splits verified by geometry; >2 columns unsupported |
 | Digit-number honesty | review queue ranked by risk; best case recalls ~23% of digit errors in the top-5 — **weak, documented**; on real Devanagari pages flag coverage is 0.2–1.6% (calibration ECE ≈ 0.82) |
 | Devanagari flags + calibration (Appendix M) | `script_mismatch` + conf-90 digit bar + isotonic `cal_conf`: on letterpress scans the queue surfaces **75% of digit errors in the top 10** (with the optional verifier; P@10 0.16); on clean gov PDFs it barely helps (R@10 0.15) — errors there are confidently wrong. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
-| Optional digit verifier (`--digit-verifier bodhan`, Appendix L) | second model re-reads suspect digits; disagreement is flagged `cross_model_conflict` with the alt reading kept (text never changed). Frozen: flag recall 0.71 / precision 0.81; queue R@10 0.730→0.752. Needs a one-time `hf auth login` + license acceptance, ~1.9 GB, ~0.4 s/token. License: Indic Open Model License 1.0 (self-host OK, no third-party hosting, attribution) |
+| Optional digit verifier (`--digit-verifier bodhan`, Appendix L) | second model re-reads suspect digits; disagreement is flagged `cross_model_conflict` with the alt reading kept (text never changed). Frozen: flag recall 0.71 / precision 0.81; queue R@10 0.730→0.752 (`--digit-verifier-scope flagged`). Scope `all` gains +3.7pp R@10 but costs +7.4 s/page — pre-registered gate failed, stays opt-in (Appendix N). Needs a one-time `hf auth login` + license acceptance, ~1.9 GB. License: Indic Open Model License 1.0 (self-host OK, no third-party hosting, attribution) |
+| Multi-page PDF (P6) | `--max-pages 0` processes every page and writes `<stem>_combined.pdf` / `.txt` (per-page artifacts unchanged); GUI "All pages (PDF)" checkbox, default stays first page. Verified: 3-page demo → 3-page searchable PDF, text extractable on every page |
+| Mixed-page router (P5, opt-in `--mixed-router`) | restored text regions + untouched logos/photos/signatures (non-text PSNR 60–67 dB vs 18–23 dB after a naive full-page restore). Pre-registered gates: text CER +0%, cost 0.31 s/page, non-text PASS, but 1 invented token on a photo texture → **not auto-enabled** (Appendix O) |
 | Tesseract backend | fails on real photos (CORD CER 0.90 raw / 1.57 restored) — clean-scan fallback only |
 | Numeric flags bar (coverage ≥0.55) | **not met** on real photos; replaced by the ranked review queue |
 | Frozen eval + CIs | every real-set number above comes from a hash-frozen manifest (`evals/manifests/`) with bootstrap 95% CIs; see plan Appendix K |
@@ -85,10 +87,12 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-103 tests: OCR/export/routing/CLI/app, layout (14), orientation (13), language
-plumbing, engine-state regressions, frozen-manifest + bootstrap-CI guards,
-Unicode-path IO, line eval, box metrics, sanity audit. `legacy/` holds
-archived photo-training scripts and is not part of the product.
+189 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
+mixed-page router), layout (14), orientation (13), language plumbing,
+engine-state regressions, frozen-manifest + bootstrap-CI guards, GT-validity
+audits, error taxonomy, anchor harness, Unicode-path IO, line eval, box
+metrics, sanity audit. `legacy/` holds archived photo-training scripts and is
+not part of the product.
 
 ## Real-data evaluation (frozen)
 

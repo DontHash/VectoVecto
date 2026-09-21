@@ -1170,3 +1170,52 @@ consonants/matras, digits last (but gated hardest).
   recall not worse), at <= +1 s/page.
 - **Not started**: no training run is scheduled by this appendix; it exists so
   the next attempt starts from a pre-registered bar instead of an aspiration.
+
+---
+
+## Appendix O — multi-page combined PDF (P6, 2026-09-21)
+
+`write_searchable_pdf_pages` writes one PDF page per `(image, tokens, dpi)`
+entry, each keeping its own page size. CLI: `--max-pages 0` = all pages, and
+the run additionally writes `<stem>_combined.pdf` + `<stem>_combined.txt`
+(per-page artifacts unchanged; default stays `--max-pages 1`). GUI: an
+"All pages (PDF)" checkbox (default off; slider/overlay show page 1, the
+combined files cover all). Verified by tests: a 3-page demo PDF yields a
+3-page combined PDF with extractable text on every page and correct sizes;
+full suite 189 green - no single-page regression.
+
+---
+
+## Appendix P — mixed-page router gates (P5, 2026-09-21)
+
+### Setup
+
+`mixed_pages` (synthetic, `doc_data.render_mixed_document`): 6 pages @300dpi
+with text + logo + photo + signature, exact text GT and region sidecars; photo
+textures are DIV2K crops when present, procedural otherwise. Text regions for
+the router come from OCR boxes; everything else is composited from the
+original. Recognition is unchanged (OCR still runs on the raw page).
+
+### Pre-registered gates and measured result
+
+| gate | bar | measured | verdict |
+|---|---|---|---|
+| text CER | <= plain * 1.02 | 0.2664 -> 0.2651 (no regression) | PASS |
+| non-text PSNR/SSIM | >= naive full-page restore | 60-67 dB vs 18-23 dB (router keeps originals) | PASS |
+| invented tokens | 0 | 1 word (`barkrddeo.com`, detector false-positive over untouched photo texture) | **FAIL** |
+| cost | <= +1 s/page | 0.31 s/page | PASS |
+
+**Verdict: not all gates passed -> the router stays opt-in**
+(`--mixed-router`), it is not auto-enabled. The value it protects is large
+where it applies (non-text PSNR 60-67 dB vs 18-23 dB for a naive full-page
+restore), and the failure is a single detection instability, not corrupted
+pixels.
+
+### Geometry fix found by this phase
+
+The pipeline used to OCR >2500 px inputs at full resolution while the display
+was fitted to `MAX_SIDE` - boxes (and PDF text) fell outside the exported
+page. `run_document_pipeline` now fits the page once at entry, so display,
+boxes and exported page share one coordinate space; `meta["resized"]` is now
+real and the GUI's "downscaled" warning fires. Regression test:
+`test_pipeline_boxes_stay_inside_downscaled_display`.

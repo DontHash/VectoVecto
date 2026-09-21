@@ -12,3 +12,5 @@ gradio
 rapidocr
 reportlab
 pypdfium2
+transformers
+huggingface_hub
