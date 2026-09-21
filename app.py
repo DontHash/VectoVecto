@@ -64,6 +64,12 @@ OCR_CHOICES = [
     ("Tesseract 5 (optional install)", "tesseract"),
 ]
 
+LANG_CHOICES = [
+    ("English / Latin (default)", "en"),
+    ("Nepali (Devanagari)", "ne"),
+    ("Hindi (Devanagari)", "hi"),
+]
+
 
 # ---------------------------------------------------------------------------
 # Document mode
@@ -93,6 +99,7 @@ def process_document(
     want_overlay: bool = True,
     want_pdf: bool = True,
     want_txt: bool = True,
+    lang: Optional[str] = None,
 ):
     """Gradio handler for the document tab.
 
@@ -128,7 +135,7 @@ def process_document(
 
     try:
         result = run_document_pipeline(
-            img_bgr, backend=backend, deskew=deskew_flag,
+            img_bgr, backend=backend, deskew=deskew_flag, lang=lang,
             out_dir=OUTPUT_DIR, stem=stem,
             make_pdf=want_pdf, make_overlay=want_overlay,
             make_txt=want_txt, make_json=True)
@@ -308,6 +315,10 @@ def create_app():
                         gr.Markdown("#### Settings")
                         doc_ocr = gr.Dropdown(choices=OCR_CHOICES, value="auto",
                                               label="OCR engine")
+                        doc_lang = gr.Dropdown(choices=LANG_CHOICES, value="en",
+                                               label="Language",
+                                               info="Devanagari model downloads once "
+                                                    "on first use, then stays offline")
                         with gr.Row():
                             doc_deskew = gr.Checkbox(value=False, label="Deskew (rotate)",
                                                      info="OCR then runs on the rotated page")
@@ -343,7 +354,7 @@ def create_app():
                 doc_btn.click(
                     fn=process_document,
                     inputs=[doc_input, doc_pdf, doc_ocr, doc_deskew,
-                            doc_overlay, doc_pdf_out, doc_txt_out],
+                            doc_overlay, doc_pdf_out, doc_txt_out, doc_lang],
                     outputs=[doc_slider, doc_overlay_img, doc_transcript,
                              doc_pdf_file, doc_txt_file, doc_status],
                 )

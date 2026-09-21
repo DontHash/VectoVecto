@@ -50,6 +50,25 @@ def test_process_document_no_input():
     assert slider is None and "Upload" in status
 
 
+def test_process_document_threads_lang(monkeypatch):
+    import app
+    import numpy as np
+    import document_pipeline
+
+    captured = {}
+
+    def fake_pipeline(img, **kw):
+        captured.update(kw)
+        raise RuntimeError("stop-after-capture")
+
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline", fake_pipeline)
+    img = np.zeros((8, 8, 3), dtype=np.uint8)
+    _slider, _ov, _tr, _pdf, _txt, status = app.process_document(
+        img, None, "auto", False, True, True, True, "ne")
+    assert captured.get("lang") == "ne"
+    assert "failed" in status
+
+
 @pytest.mark.skipif(not __import__("document_ocr").available_backends(),
                     reason="no OCR backend available")
 def test_process_document_accepts_filepath_with_exif(tmp_path):

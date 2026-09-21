@@ -22,6 +22,8 @@ Usage:
         --ocr rapidocr,tesseract --methods clean,raw,sauvola,lanczos2 \
         --json out/doc_smoke.json
     python eval_document.py --data-dir data/doc_eval/pdf --methods clean,raw,sauvola,restore
+    python eval_document.py --build-devanagari 12 --script ne --lang ne \
+        --methods clean,raw,pipeline --json out/doc_p4_ne.json
 """
 from __future__ import annotations
 
@@ -126,7 +128,8 @@ def _maybe_downscale(img: np.ndarray, max_side: int) -> np.ndarray:
 def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                    max_side: int = 0, with_photo: bool = False,
                    conf_threshold: float = 60.0, recheck_digits: bool = False,
-                   repass_conf_below: float = 95.0) -> Dict:
+                   repass_conf_below: float = 95.0,
+                   lang: Optional[str] = None) -> Dict:
     results: Dict[str, Dict] = {}
     per_page: List[Dict] = []
     for i, entry in enumerate(entries, 1):
@@ -151,7 +154,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                     try:
                         pres = run_document_pipeline(
                             degraded, backend=backend, conf_threshold=conf_threshold,
-                            repass_digits=recheck_digits)
+                            repass_digits=recheck_digits, lang=lang)
                     except Exception as e:  # noqa: BLE001
                         print(f"  [skip] pipeline@{backend}: {e}")
                         continue
@@ -173,7 +176,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 try:
                     res = ocr_page(img, backend=backend, conf_threshold=conf_threshold,
                                    recheck_digits=recheck_digits,
-                                   repass_conf_below=repass_conf_below)
+                                   repass_conf_below=repass_conf_below,
+                                   lang=lang)
                 except Exception as e:  # noqa: BLE001
                     print(f"  [skip] {method}@{backend}: {e}")
                     continue
@@ -301,8 +305,16 @@ def main():
                     help="build N synthetic pages under data/doc_eval/<layout> and evaluate")
     ap.add_argument("--layout", default="single", choices=["single", "two_column"],
                     help="synthetic page layout for --build-synthetic")
+    ap.add_argument("--build-devanagari", type=int, default=0,
+                    help="build N Devanagari fixture pages (Nepali/Hindi) and evaluate")
+    ap.add_argument("--script", default="ne", choices=["ne", "hi"],
+                    help="script for --build-devanagari")
+    ap.add_argument("--dpi", type=int, default=300,
+                    help="fixture render dpi for --build-devanagari")
     ap.add_argument("--levels", default="mild,medium")
     ap.add_argument("--seed", type=int, default=100)
+    ap.add_argument("--lang", default=None,
+                    help="OCR language: en (default), ne/nepali, hi/hindi")
     ap.add_argument("--ocr", default=None, help="comma list; default all available")
     ap.add_argument("--methods", default="clean,raw,sauvola,lanczos2")
     ap.add_argument("--with-photo", action="store_true")
@@ -324,6 +336,15 @@ def main():
                                          layout=args.layout)
         args.data_dir = out
 
+    if args.build_devanagari:
+        levels = tuple(x.strip() for x in args.levels.split(",") if x.strip())
+        sub = f"devanagari_{args.script}_{args.dpi}"
+        out = os.path.join(BASE_DIR, "data", "doc_eval", sub)
+        doc_data.build_devanagari_dataset(out, n=args.build_devanagari,
+                                          script=args.script, levels=levels,
+                                          dpi=args.dpi, seed=args.seed)
+        args.data_dir = out
+
     if not args.data_dir:
         raise SystemExit("provide --data-dir or --build-synthetic N")
 
@@ -343,7 +364,8 @@ def main():
     report = run_evaluation(entries, methods, backends, max_side=args.max_side,
                             with_photo=args.with_photo,
                             recheck_digits=args.recheck_digits,
-                            repass_conf_below=args.repass_conf_below)
+                            repass_conf_below=args.repass_conf_below,
+                            lang=args.lang)
     report["args"] = vars(args)
     report["dataset"] = {"dir": args.data_dir, "kind": manifest.get("kind"),
                          "pages": len(entries)}

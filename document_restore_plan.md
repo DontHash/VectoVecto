@@ -511,8 +511,11 @@ real-photo validation.
 
 **Remaining for v1**
 
-1. P4 Devanagari (ne/hi) with vendored models; P4b re-measure the 2× re-pass
-   with the engine fix and fold it into the review queue.
+1. ~~P4 Devanagari (ne/hi) with vendored models~~ **DONE** (Appendix J): language
+   routing + cls fix + fixture + gates; GUI language selector and
+   `eval_document.py --build-devanagari/--lang` included, so the P4 numbers are
+   reproducible from the harness. P4b **DONE** (Appendix I). Vendoring the model
+   for air-gap stays on the P7 checklist.
 2. Phase E mixed-page router (text + logo + signature + photo on one page).
 3. P6 multi-page PDF; P7 license gate + packaging + tag v1.1.0.
 
