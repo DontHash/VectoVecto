@@ -862,3 +862,55 @@ runtime + `requirements-dev.txt` (a fresh install previously could not run
 document mode: rapidocr/reportlab/pypdfium2 were missing), README with the
 measured capability table, 26 regenerable root PNGs deleted.
 
+
+---
+
+## Appendix J - P4 Devanagari (Nepali/Hindi), shipped 2026-09-20
+
+**Goal.** `--lang ne|hi` with a vendored PP-OCRv5 Devanagari model, an exact-GT
+synthetic fixture, and the pre-registered gate: synthetic CER < 0.15.
+
+**Discovery chain (each step measured, not assumed).**
+1. PIL cannot shape Devanagari (no Raqm): unshaped rendering made both the
+   Latin and Devanagari models read gibberish. GDI+ rendering was worse.
+   Qt/PySide6 (HarfBuzz, offscreen) shapes correctly - verified via
+   QTextLayout glyph counts ('???' 3 codepoints -> 1 glyph).
+2. RapidOCR's PP-OCRv6 has no Devanagari rec model: the engine needs
+   `Rec.lang_type=devanagari`, `Rec.ocr_version=PP-OCRv5`,
+   `Rec.model_type=mobile` (passed as Enums, not strings).
+3. The 0/180 textline classifier mangles Devanagari crops - it flipped lines
+   and page CER went 0.537 -> **0.039** with `use_cls=False` (isolated crops
+   read perfectly either way, which is how the classifier was caught).
+4. Page-level "recognition failures" on isolated words were a *detection*
+   artifact; and the pipeline's reading-order sorter columnized a Hindi
+   invoice table (fix in commit 724020a: sides must be filled by long lines).
+
+**Shipped.** `normalize_lang` aliases (ne/nep/nepali, hi/hin/hindi), per-
+language engine cache, cls disabled for Devanagari, Devanagari digits counted
+by the honesty flags, `line_orientation_votes` unavailable for non-default
+languages (sideways direction falls back to OSD), CLI `--lang`, fixture
+renderer/builder, 6 new tests.
+
+**Measured** (12 pages/script @300dpi, `out/doc_p4_devanagari.json`)
+
+| set | ne | hi |
+|---|---|---|
+| clean, Devanagari engine | **0.030** | **0.028** |
+| clean, Latin engine (control) | 0.859 | 0.833 |
+| degraded mild | 0.028 | 0.059 |
+| degraded medium | 0.084 | 0.100 |
+| degraded heavy | 0.169 | 0.352 |
+| degraded mean | **0.094 (PASS)** | 0.170 (partial) |
+
+**Verdict: partial pass, recorded.** Nepali passes the <0.15 gate on all
+levels; Hindi passes mild/medium and fails heavy (0.45-0.65x downscale
+destroys small Devanagari matras). The restored stream does not help
+(0.217 vs 0.202 ne at 200dpi). The Latin-engine control confirms the language
+model is the reason it works at all.
+
+**Limitations / next.** 180-degree Devanagari pages are not auto-corrected
+(no cls votes; EXIF still covers phone photos). Hindi heavy needs either a
+better detector for degraded text or a server-size Devanagari rec model
+(none exists for PP-OCRv5 devanagari at server size). Vendoring the model into
+`models/` for air-gap packaging is a P7 item (`Rec.model_path` /
+`Rec.rec_keys_path` accept local files).
