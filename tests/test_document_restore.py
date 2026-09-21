@@ -85,6 +85,26 @@ def test_restore_contract():
         assert key in dbg
 
 
+@pytest.mark.skipif("rapidocr" not in __import__("document_ocr").available_backends(),
+                    reason="rapidocr unavailable")
+def test_pipeline_boxes_stay_inside_downscaled_display():
+    """Geometry contract: display, OCR boxes and exported page share one space.
+
+    Regression: >2500 px inputs used to be OCR'd at full resolution while the
+    display was fitted to MAX_SIDE, so boxes (and PDF text) fell outside the
+    exported page.
+    """
+    from document_pipeline import run_document_pipeline
+
+    page, _gt = doc_data.render_synthetic_invoice(seed=502, dpi=300)
+    assert max(page.shape[:2]) > 2500
+    res = run_document_pipeline(page, backend="rapidocr")
+    dh, dw = res.display_bgr.shape[:2]
+    assert max(t.bbox[2] for t in res.ocr.tokens) <= dw
+    assert max(t.bbox[3] for t in res.ocr.tokens) <= dh
+    assert res.meta["resized"] is True
+
+
 def test_restore_max_side_downscales():
     page, _ = doc_data.render_synthetic_invoice(seed=9, dpi=300)
     out = restore_document(page, max_side=600)

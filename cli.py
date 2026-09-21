@@ -145,6 +145,7 @@ def run_document_mode(args) -> int:
                 repass_digits=args.repass_digits, dpi=dpi,
                 digit_verifier=verifier,
                 verifier_scope=getattr(args, "digit_verifier_scope", "flagged"),
+                mixed_router=getattr(args, "mixed_router", False),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -289,6 +290,9 @@ def main():
                      help="auto: EXIF + line-classifier votes/geometry (all four "
                           "angles, all page sizes); off = flag only")
     doc.add_argument("--dpi", type=int, default=0, help="source DPI for PDF page size (0 = auto)")
+    doc.add_argument("--mixed-router", action="store_true", dest="mixed_router",
+                     help="composite the exported page: restored text regions, "
+                          "untouched non-text (logos/photos/signatures)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")

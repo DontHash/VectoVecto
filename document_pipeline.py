@@ -32,7 +32,7 @@ from document_ocr import (RECOMMENDED_STREAM, OCRResult, apply_digit_verifier,
 from document_orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
                                   RotationInfo, detect_rotation, infer_angle,
                                   rotate_bgr, vertical_fraction)
-from document_restore import restore_document
+from document_restore import fit_max_side, restore_document
 
 
 @dataclass
@@ -89,6 +89,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           primary_stream: Optional[str] = None,
                           digit_verifier=None,
                           verifier_scope: str = "flagged",
+                          mixed_router: bool = False,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -101,10 +102,21 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     suspect digit tokens; disagreements become `cross_model_conflict` flags
     with the alternative reading in `alt_text`. Flag-only; see
     document_verifier.py. `verifier_scope` is "flagged" (default: only tokens
-    the first pass already suspects) or "all" (every digit token, costlier)."""
+    the first pass already suspects) or "all" (every digit token, costlier).
+
+    `mixed_router` composites the exported page: restored pixels inside the
+    OCR text boxes, original pixels elsewhere (logos/photos/signatures are
+    never touched by the restore). Recognition is unchanged."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
+
+    # One coordinate space: fit the page once, up front, so the display, the
+    # OCR boxes and the exported page always agree. (Regression: >MAX_SIDE
+    # inputs used to be OCR'd at full resolution while the display was
+    # downscaled - boxes fell outside the exported page.)
+    img_bgr, fit = fit_max_side(img_bgr)
+    resized = fit < 1.0
 
     def _run_pass(image: np.ndarray) -> _Pass:
         restored = restore_document(image, scale=scale, deskew=deskew)
@@ -227,6 +239,11 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "passes": passes,
     }
 
+    if mixed_router:
+        from document_router import route_page
+        p.display = route_page(img_bgr, p.display, result.tokens)
+        result.meta["mixed_router"] = True
+
     outputs: Dict[str, str] = {}
     if out_dir:
         from document_export import export_document_outputs
@@ -248,6 +265,9 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "auto_rotate": rot.as_dict(),
         "orientation_evidence": result.meta["orientation_evidence"],
         "repass_digits": repass_digits,
+        "mixed_router": mixed_router,
+        "resized": resized,
+        "downscale": round(fit, 4),
     }
     return DocumentResult(display_bgr=p.display, ocr=result, meta=meta, outputs=outputs)
 

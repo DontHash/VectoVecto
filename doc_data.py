@@ -614,6 +614,156 @@ def build_devanagari_dataset(out_dir: str, n: int = 6, script: str = "ne",
 
 
 # ---------------------------------------------------------------------------
+# mixed pages: text + logo + photo + signature (P5 router fixtures)
+# ---------------------------------------------------------------------------
+
+def _photo_texture(seed: int, size) -> np.ndarray:
+    """Deterministic photo-like BGR texture for mixed-page fixtures.
+
+    Prefers a center crop of a DIV2K image when available (real photographic
+    content), else a smoothed noise field - tests must not depend on DIV2K.
+    """
+    w, h = size
+    import glob as _glob
+    hr = sorted(_glob.glob(os.path.join(BASE_DIR, "data", "DIV2K_valid_HR",
+                                        "*.png")))
+    if hr:
+        img = imread_safe(hr[seed % len(hr)])
+        if img is not None and img.shape[0] >= h and img.shape[1] >= w:
+            y0 = (img.shape[0] - h) // 2
+            x0 = (img.shape[1] - w) // 2
+            return img[y0:y0 + h, x0:x0 + w].copy()
+    rng = np.random.default_rng(seed)
+    base = rng.integers(60, 200, size=(h, w, 3), dtype=np.uint8)
+    return cv2.GaussianBlur(base, (0, 0), sigmaX=9)
+
+
+def render_mixed_document(seed: int = 0, dpi: int = 300):
+    """Mixed page: text + logo + photo + signature, exact text GT.
+
+    Returns (image_bgr, gt_text, regions) where regions is
+    [{"kind": "text"|"logo"|"photo"|"signature", "bbox": [x0,y0,x1,y1]}].
+    Photo/logo/signature carry no text GT (by design - the router must keep
+    them without inventing anything).
+    """
+    rng = np.random.default_rng(seed)
+    s = dpi / 150.0
+    w, h = int(1240 * s), int(1754 * s)
+
+    def sc(*vals):
+        return tuple(int(round(v * s)) for v in vals)
+
+    page = Image.new("RGB", (w, h), (250, 249, 246))
+    d = ImageDraw.Draw(page)
+    f_title = _font(int(46 * s))
+    f_head = _font(int(26 * s))
+    f_body = _font(int(24 * s))
+
+    lines: List[str] = []
+    regions: List[Dict] = []
+
+    d.text(sc(80, 70), "INVOICE", font=f_title, fill=(15, 15, 15))
+    lines.append("INVOICE")
+
+    logo_bbox = sc(940, 60, 1160, 200)
+    d.ellipse(logo_bbox, fill=(30, 90, 200), outline=(10, 40, 110),
+              width=max(1, int(3 * s)))
+    d.rectangle(sc(1000, 110, 1120, 150), fill=(240, 200, 40))
+    regions.append({"kind": "logo", "bbox": list(logo_bbox)})
+
+    vendor = _VENDORS[int(rng.integers(0, len(_VENDORS)))]
+    inv_no = int(rng.integers(10000, 99999))
+    d.text(sc(80, 150), f"Vendor: {vendor}", font=f_head, fill=(30, 30, 30))
+    d.text(sc(80, 185), f"Invoice No: {inv_no}", font=f_body, fill=(30, 30, 30))
+    lines += [f"Vendor: {vendor}", f"Invoice No: {inv_no}"]
+
+    photo_w, photo_h = int(360 * s), int(260 * s)
+    photo_x, photo_y = int(800 * s), int(300 * s)
+    texture = _photo_texture(seed, (photo_w, photo_h))
+    page.paste(Image.fromarray(cv2.cvtColor(texture, cv2.COLOR_BGR2RGB)),
+               (photo_x, photo_y))
+    d.rectangle(sc(800, 300, 1160, 560), outline=(90, 90, 90),
+                width=max(1, int(2 * s)))
+    regions.append({"kind": "photo",
+                    "bbox": [photo_x, photo_y, photo_x + photo_w,
+                             photo_y + photo_h]})
+
+    table_y = int(640 * s)
+    d.text(sc(80, table_y), "Description", font=f_head, fill=(0, 0, 0))
+    d.text(sc(760, table_y), "Amount", font=f_head, fill=(0, 0, 0))
+    lines.append("Description Amount")
+    total = 0.0
+    y = table_y + int(50 * s)
+    n_items = int(rng.integers(2, 5))
+    picked = [int(i) for i in rng.choice(len(_ITEMS), size=n_items,
+                                         replace=False)]
+    for idx in picked:
+        name, qty, unit = _ITEMS[idx]
+        amount = (int(qty) + int(rng.integers(0, 3))) * float(unit)
+        total += amount
+        d.text((int(80 * s), y), name, font=f_body, fill=(25, 25, 25))
+        d.text((int(760 * s), y), f"{amount:.2f}", font=f_body, fill=(25, 25, 25))
+        lines.append(f"{name} {amount:.2f}")
+        y += int(44 * s)
+    grand = round(total * 1.13, 2)
+    d.text((int(700 * s), y + int(40 * s)), "TOTAL", font=f_title,
+           fill=(10, 10, 10))
+    d.text((int(920 * s), y + int(40 * s)), f"{grand:.2f}", font=f_title,
+           fill=(10, 10, 10))
+    lines.append(f"TOTAL {grand:.2f}")
+
+    sig_bbox = sc(120, 1180, 560, 1360)
+    pts = [(sig_bbox[0] + int(20 * s), sig_bbox[3] - int(60 * s))]
+    for k in range(6):
+        pts.append((sig_bbox[0] + int((40 + k * 70) * s),
+                    sig_bbox[1] + int((60 + (k % 3) * 40) * s)))
+    pts.append((sig_bbox[2] - int(20 * s), sig_bbox[3] - int(40 * s)))
+    d.line(pts, fill=(20, 20, 60), width=max(1, int(3 * s)), joint="curve")
+    regions.append({"kind": "signature", "bbox": list(sig_bbox)})
+
+    text_bbox = sc(60, 40, 1180, 1500)
+    regions.append({"kind": "text", "bbox": list(text_bbox)})
+
+    arr = cv2.cvtColor(np.array(page), cv2.COLOR_RGB2BGR)
+    return arr, normalize_text("\n".join(lines)), regions
+
+
+def build_mixed_dataset(out_dir: str, n: int = 6, dpi: int = 300,
+                        seed: int = 100) -> Dict:
+    """Mixed pages with exact text GT + region sidecars (P5 router set)."""
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_dir = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_dir, exist_ok=True)
+    entries: List[Dict] = []
+    for i in range(n):
+        img, gt, regions = render_mixed_document(seed=seed + i, dpi=dpi)
+        pid = f"mixed_{i:04d}"
+        clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
+        gt_path = os.path.join(gt_dir, f"{pid}.txt")
+        regions_path = os.path.join(gt_dir, f"{pid}.regions.json")
+        imwrite_safe(clean_path, img)
+        with open(gt_path, "w", encoding="utf-8") as f:
+            f.write(gt)
+        with open(regions_path, "w", encoding="utf-8") as f:
+            json.dump(regions, f, ensure_ascii=False, indent=1)
+        entries.append({
+            "id": pid, "source": "synthetic_mixed", "seed": seed + i,
+            "gt_chars": len(gt), "kinds": sorted({r["kind"] for r in regions}),
+            "clean": os.path.relpath(clean_path, out_dir),
+            "degraded": os.path.relpath(clean_path, out_dir),
+            "gt": os.path.relpath(gt_path, out_dir),
+            "regions": os.path.relpath(regions_path, out_dir),
+        })
+    manifest = {"kind": "mixed_pages", "name": "mixed_pages", "dpi": dpi,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "entries": entries}
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
 # real-photo datasets from Hugging Face (annotations, no clean reference)
 # ---------------------------------------------------------------------------
 
@@ -955,6 +1105,10 @@ def load_dataset(data_dir: str) -> Dict:
         e["_gt_path"] = os.path.join(data_dir, e["gt"])
         if e.get("boxes"):
             e["_boxes_path"] = os.path.join(data_dir, e["boxes"])
+        if e.get("regions"):
+            with open(os.path.join(data_dir, e["regions"]),
+                      encoding="utf-8") as rf:
+                e["_regions"] = json.load(rf)
     return manifest
 
 
