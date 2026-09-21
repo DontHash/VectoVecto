@@ -1277,6 +1277,25 @@ Gate: cost **+8.3 s/page > +1 s/page -> FAIL**; the verifier stays opt-in.
 The cost is the model itself on this hardware, not batching: batching beyond
 12 crops/page cannot help because the per-crop forward pass dominates.
 
+### W0.3 2x digit re-pass (PASS; Devanagari default ON)
+
+Appendix A.1's re-pass verdict was invalidated by the RapidOCR state-leak bug;
+Appendix I's corrected sweep measured it on Latin photos and kept it off
+(top-5 precision 0.325 < 0.5 gate). Re-measured now on the frozen Devanagari
+sets via `eval_flags.py --repass-digits` (text never changes; a disagreeing
+2x re-read raises `digit_conflict`, risk 3.0):
+
+| set | digit R@5 | digit R@10 | digit P@10 | token R@10 | cost |
+|---|---|---|---|---|---|
+| heiDATA letterpress (69 p) | 0.533 -> **0.679** | 0.730 -> **0.883** | 0.160 -> 0.176 | 0.313 -> 0.315 | +0.46 s/page |
+| `nepali_pdf_v2` anchor (41 p) | 0.154 -> **0.333** | 0.154 -> **0.385** | 0.240 -> 0.258 | 0.119 -> 0.148 | +0.34 s/page |
+
+Gate (digit R@10 up, precision not worse, no text change): **PASS on both
+sets**. Decision: `repass_digits=None` is now the pipeline default - ON for
+Devanagari, OFF for Latin (the Appendix I verdict stands for photos); CLI
+gains `--no-repass-digits` to force it off. The queue's weakest area (clean
+PDFs, R@10 0.15) more than doubled.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display

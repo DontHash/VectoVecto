@@ -42,7 +42,8 @@ def _digit_tokens(text: str) -> List[str]:
 
 
 def run(data_dir: str, lang: str, limit: int = 0,
-        digit_verifier=None, verifier_scope: str = "flagged") -> Dict:
+        digit_verifier=None, verifier_scope: str = "flagged",
+        repass_digits: bool = False) -> Dict:
     manifest = doc_data.load_dataset(data_dir)
     entries = manifest["entries"]
     if limit:
@@ -69,7 +70,8 @@ def run(data_dir: str, lang: str, limit: int = 0,
         gt = open(e["_gt_path"], encoding="utf-8").read()
         gt_digits = {doc_metrics.digit_string(t) for t in _digit_tokens(gt)}
         gt_digits.discard("")
-        rec = ocr_page(img, backend="rapidocr", lang=lang)
+        rec = ocr_page(img, backend="rapidocr", lang=lang,
+                       recheck_digits=repass_digits)
         vconflicts = 0
         if digit_verifier is not None:
             vconflicts = apply_digit_verifier(
@@ -160,6 +162,9 @@ def main():
     ap.add_argument("--digit-verifier-scope", choices=["flagged", "all"],
                     default="flagged", dest="digit_verifier_scope",
                     help="flagged (default) or all digit tokens (R3 gate)")
+    ap.add_argument("--repass-digits", action="store_true", dest="repass_digits",
+                    help="re-read digit tokens on 2x crops (W0.3 measurement; "
+                         "disagreements raise digit_conflict)")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -179,7 +184,8 @@ def main():
         print(f"[flags] digit verifier enabled: {args.digit_verifier}")
 
     result = run(args.data_dir, args.lang, args.limit, digit_verifier=verifier,
-                 verifier_scope=args.digit_verifier_scope)
+                 verifier_scope=args.digit_verifier_scope,
+                 repass_digits=args.repass_digits)
     if verifier is not None:
         verifier.close()
     s = result["summary"]

@@ -268,8 +268,12 @@ def main():
     doc.add_argument("--deskew", action="store_true",
                      help="rotate to deskew; OCR then runs on the display for alignment")
     doc.add_argument("--repass-digits", action="store_true", dest="repass_digits",
-                     help="re-read digit tokens for the review queue; off until "
-                          "re-measured with the engine fix (Appendix A.1)")
+                     default=None,
+                     help="force the 2x digit re-pass on (default: on for "
+                          "Devanagari, off for Latin - Appendix Q W0.3)")
+    doc.add_argument("--no-repass-digits", action="store_false",
+                     dest="repass_digits",
+                     help="force the 2x digit re-pass off")
     doc.add_argument("--digit-verifier", choices=["off", "bodhan"], default="off",
                      dest="digit_verifier",
                      help="optional second-model digit check (Devanagari): a "

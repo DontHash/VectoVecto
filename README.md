@@ -69,8 +69,8 @@ Measured behaviour, not marketing (full tables in
 | Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
 | Single-column layout | identity — 60/60 real pages untouched |
 | Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end; all 4 unlabeled real splits verified by geometry; >2 columns unsupported |
-| Digit-number honesty | review queue ranked by risk; letterpress digit R@10 0.74 (0.75 with verifier), clean-PDF R@10 0.24; general token R@10 0.31 / 0.12. Weak but documented and improving (Appendix Q) |
-| Devanagari flags + calibration (Appendix M, Q) | `script_mismatch` + `invalid_sequence` (impossible combining sequence = misread by construction) + conf-90 digit bar + isotonic `cal_conf`: letterpress digit R@10 0.73→**0.74**, token R@10 0.28→**0.31**; clean gov PDFs token R@10 0.04→**0.12**, digit R@10 0.15→**0.24**. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
+| Digit-number honesty | review queue ranked by risk; **2x digit re-pass is ON by default for Devanagari**: letterpress digit R@10 **0.88**, clean-PDF R@10 **0.38** (was 0.73 / 0.15), at ~+0.4 s/page; Latin photos keep it off (Appendix I gate). General token R@10 0.31 / 0.15. Documented and improving (Appendix Q) |
+| Devanagari flags + calibration (Appendix M, Q) | `script_mismatch` + `invalid_sequence` (impossible combining sequence = misread by construction) + 2x digit re-pass (default on) + conf-90 digit bar + isotonic `cal_conf`: letterpress digit R@10 **0.88**, token R@10 0.31; clean gov PDFs digit R@10 **0.38**, token R@10 0.15. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
 | Optional digit verifier (`--digit-verifier bodhan`, Appendix L/N/Q) | second model re-reads suspect digits; disagreement is flagged `cross_model_conflict` with the alt reading kept (text never changed). Frozen: flag recall 0.71 / precision 0.81; queue R@10 0.730→0.752 (`--digit-verifier-scope flagged`). Cost reality (W0.2): ~0.9 s/crop floor on this hardware, +8.3 s/page end-to-end, junk-crop filter + 64-token cap shipped; **stays opt-in** (cost gate failed). Needs a one-time `hf auth login` + license acceptance, ~1.9 GB. License: Indic Open Model License 1.0 (self-host OK, no third-party hosting, attribution) |
 | Multi-page PDF (P6) | `--max-pages 0` processes every page and writes `<stem>_combined.pdf` / `.txt` (per-page artifacts unchanged); GUI "All pages (PDF)" checkbox, default stays first page. Verified: 3-page demo → 3-page searchable PDF, text extractable on every page |
 | Mixed-page router (P5, opt-in `--mixed-router`) | restored text regions + untouched logos/photos/signatures (non-text PSNR 60–67 dB vs 18–23 dB after a naive full-page restore). Pre-registered gates: text CER +0%, cost 0.31 s/page, non-text PASS, but 1 invented token on a photo texture → **not auto-enabled** (Appendix O) |
@@ -87,7 +87,7 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-204 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
+207 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
 mixed-page router), layout (14), orientation (13), language plumbing,
 engine-state regressions, frozen-manifest + bootstrap-CI guards, GT-validity
 audits, error taxonomy, anchor harness (engine worksheet + Gemini

@@ -142,6 +142,18 @@ def test_apply_digit_verifier_verifies_riskiest_first():
     assert len(seen) == 1, "only the top-risk suspect is verified"
 
 
+def test_repass_default_is_devanagari_only():
+    from document_pipeline import resolve_repass_digits
+
+    assert resolve_repass_digits(None, "ne") is True
+    assert resolve_repass_digits(None, "nepali") is True
+    assert resolve_repass_digits(None, "hi") is True
+    assert resolve_repass_digits(None, "en") is False
+    assert resolve_repass_digits(None, None) is False
+    assert resolve_repass_digits(True, "en") is True
+    assert resolve_repass_digits(False, "ne") is False
+
+
 def test_get_digit_verifier_factory():
     assert get_digit_verifier(None) is None
     assert get_digit_verifier("off") is None

@@ -7,9 +7,13 @@ document_pipeline.py — the single document-restore pipeline used by CLI and ap
 
 API:
     run_document_pipeline(img_bgr, *, backend=None, lang=None, deskew=False,
-                          repass_digits=False, dpi=None, out_dir=None, stem="page",
+                          repass_digits=None, dpi=None, out_dir=None, stem="page",
                           make_pdf=True, make_overlay=True, make_txt=True,
                           make_json=True) -> DocumentResult
+
+`repass_digits=None` uses the language default: ON for Devanagari (frozen
+digit R@10 0.73->0.88 / 0.15->0.38, ~+0.4 s/page), OFF for Latin photos
+(Appendix I gate failed there). True/False forces the choice.
 
 `DocumentResult.display_bgr` is the cleaned page embedded in the PDF/overlay;
 `DocumentResult.ocr.tokens` bboxes live in display coordinates by construction:
@@ -81,9 +85,26 @@ class _Pass:
     audit_error: Optional[str]
 
 
+def resolve_repass_digits(repass_digits: Optional[bool],
+                          lang: Optional[str]) -> bool:
+    """Default policy for the 2x digit re-pass.
+
+    Devanagari: ON by default - the frozen measurement (W0.3) shows digit R@10
+    0.73 -> 0.88 (letterpress) and 0.15 -> 0.38 (anchor PDFs) at ~+0.4 s/page,
+    with precision improving. Latin photos: OFF - Appendix I's corrected sweep
+    measured top-5 precision 0.325 < 0.5 there, so that verdict stands.
+    Explicit True/False always wins.
+    """
+    if repass_digits is not None:
+        return repass_digits
+    from document_ocr import normalize_lang
+    return normalize_lang(lang) == "devanagari"
+
+
 def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           lang: Optional[str] = None, deskew: bool = False,
-                          scale: int = 1, repass_digits: bool = False,
+                          scale: int = 1,
+                          repass_digits: Optional[bool] = None,
                           reading_order: bool = True,
                           auto_rotate: bool = True,
                           primary_stream: Optional[str] = None,
@@ -110,6 +131,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
+    repass_effective = resolve_repass_digits(repass_digits, lang)
 
     # One coordinate space: fit the page once, up front, so the display, the
     # OCR boxes and the exported page always agree. (Regression: >MAX_SIDE
@@ -133,7 +155,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
             primary_img, audit_img, primary_name = image, display, "raw"
 
         result = ocr_page(primary_img, backend=backend, lang=lang,
-                          conf_threshold=conf_threshold, recheck_digits=repass_digits)
+                          conf_threshold=conf_threshold,
+                          recheck_digits=repass_effective)
         conflicts = 0
         audit_error = None
         try:
@@ -264,7 +287,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "orientation_suspect": suspect,
         "auto_rotate": rot.as_dict(),
         "orientation_evidence": result.meta["orientation_evidence"],
-        "repass_digits": repass_digits,
+        "repass_digits": repass_effective,
         "mixed_router": mixed_router,
         "resized": resized,
         "downscale": round(fit, 4),
