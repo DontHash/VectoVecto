@@ -128,6 +128,28 @@ def test_empty_input():
     assert sort_reading_order([]) == []
 
 
+def test_table_cells_are_not_a_column():
+    # Devanagari invoice regression: description | qty | rate | amount table
+    # plus a totals block passed coverage/raggedness and got columnized
+    # (pipeline CER 0.041 -> 0.256). Real columns are long lines; these are
+    # short cells.
+    toks = []
+    for i in range(6):
+        y = 40 + i * 50
+        toks.append(T(f"cell{i}", 40, y, 180 + (i * 17) % 40, y + 30))
+    right_cells = []
+    for i in range(6):
+        y = 40 + i * 50
+        right_cells.append(T(f"{i}", 400, y, 430, y + 30))
+    for i in range(3):
+        y = 340 + i * 50
+        right_cells.append(T(f"totals label {i}", 400, y, 640, y + 30))
+    toks.extend(right_cells)
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks], \
+        "table cells + totals labels must stay row-major"
+
+
 def test_thin_label_strip_stays_engine_order():
     # sroie_00003 regression: a 6-token label strip (24% of content width)
     # beside a value column passes coverage/raggedness but is not a column.

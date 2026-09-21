@@ -150,6 +150,24 @@ def _mostly_numeric(tokens: Sequence[Token], threshold: float = 0.4) -> bool:
     return numeric / len(tokens) >= 0.5
 
 
+def _fills_column(tokens: Sequence[Token], min_fill: float = 0.4) -> bool:
+    """Do the tokens read like text LINES filling the side, not table cells?
+
+    Measured failure this guards: a Hindi invoice table (description | qty |
+    rate | amount + a totals block) passed every other guard, got columnized,
+    and the reading order broke (pipeline CER 0.041 -> 0.256). Real text
+    columns are long lines (median width near the column width); table cells
+    are short. Rejected sides fall through to the band logic instead.
+    """
+    if not tokens:
+        return False
+    side_w = max(t.bbox[2] for t in tokens) - min(t.bbox[0] for t in tokens)
+    if side_w <= 0:
+        return False
+    widths = [t.bbox[2] - t.bbox[0] for t in tokens]
+    return statistics.median(widths) >= min_fill * side_w
+
+
 def row_major(tokens: Sequence[Token]) -> List[Token]:
     """Rows top-down (y-overlap grouping), left-right inside a row."""
     items = sorted(tokens, key=lambda t: (t.bbox[1] + t.bbox[3]) / 2.0)
@@ -247,6 +265,8 @@ def _column_split(tokens: Sequence[Token], med_h: float, min_side: int,
     if len(left) < min_side or len(right) < min_side:
         return None
     if not _ragged_right(right) or _mostly_numeric(right):
+        return None
+    if not _fills_column(left) or not _fills_column(right):
         return None
     cw = _content_width(tokens)
     if (_side_width(left) < SIDE_MIN_WIDTH_FRACTION * cw
