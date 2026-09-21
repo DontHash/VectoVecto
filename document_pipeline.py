@@ -26,8 +26,9 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from document_ocr import (RECOMMENDED_STREAM, OCRResult, available_backends,
-                          compare_digit_streams, get_backend, ocr_page, review_queue)
+from document_ocr import (RECOMMENDED_STREAM, OCRResult, apply_digit_verifier,
+                          available_backends, compare_digit_streams, get_backend,
+                          ocr_page, review_queue)
 from document_orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
                                   RotationInfo, detect_rotation, infer_angle,
                                   rotate_bgr, vertical_fraction)
@@ -86,13 +87,19 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           reading_order: bool = True,
                           auto_rotate: bool = True,
                           primary_stream: Optional[str] = None,
+                          digit_verifier=None,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
                           make_txt: bool = True, make_json: bool = True,
                           conf_threshold: float = 60.0) -> DocumentResult:
     """`primary_stream` ("raw"|"restored", None = RECOMMENDED_STREAM) exists
-    for evaluation A/Bs; production callers leave it unset."""
+    for evaluation A/Bs; production callers leave it unset.
+
+    `digit_verifier` is an optional callable (crops -> texts) that re-reads
+    suspect digit tokens; disagreements become `cross_model_conflict` flags
+    with the alternative reading in `alt_text`. Flag-only; see
+    document_verifier.py."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -174,6 +181,16 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
 
     result = p.result
     result.meta["digit_conflicts"] = p.conflicts
+    if digit_verifier is not None:
+        try:
+            vconflicts = apply_digit_verifier(result.tokens, p.primary_img,
+                                              digit_verifier)
+            result.meta["digit_verifier"] = {
+                "name": getattr(digit_verifier, "name", "?"),
+                "conflicts": vconflicts,
+            }
+        except Exception as e:  # noqa: BLE001
+            result.meta["digit_verifier_error"] = str(e)
     result.meta["primary_stream"] = p.primary_name
     if p.audit_error:
         result.meta["audit_error"] = p.audit_error

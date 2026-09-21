@@ -522,6 +522,7 @@ def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
 
 RISK_WEIGHTS: Dict[str, float] = {
     "digit_conflict": 3.0,   # two independent streams read different digits
+    "cross_model_conflict": 3.0,  # a second model read different digits (Appendix L/M)
     "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
     "low_conf": 1.0,
@@ -554,6 +555,40 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
             from calibration import apply_isotonic
             tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)
     return sum(1 for t in tokens if t.flags)
+
+
+def apply_digit_verifier(tokens: List["Token"], img_bgr: np.ndarray,
+                         verify_fn, pad_ratio: float = 0.08,
+                         max_tokens: int = 12,
+                         only_flagged: bool = True) -> int:
+    """Second-model digit re-read on suspect tokens. Returns conflict count.
+
+    `verify_fn(crops) -> texts` may be batch or single-crop (both accepted).
+    Never replaces text: a disagreeing read raises `cross_model_conflict` and
+    is stored as `alt_text` (same contract as the dual-stream conflict).
+    On the frozen letterpress set this flag had recall 0.71 / precision 0.81
+    against baseline digit errors (Appendix L, bodhan verifier role).
+    """
+    suspects = [t for t in tokens
+                if t.has_digits and (not only_flagged or t.flags)]
+    if max_tokens:
+        suspects = suspects[:max_tokens]
+    if not suspects:
+        return 0
+    crops = [_crop_with_pad(img_bgr, t.bbox, pad_ratio) for t in suspects]
+    try:
+        texts = verify_fn(crops)
+    except TypeError:
+        texts = [verify_fn(c) for c in crops]
+    conflicts = 0
+    for tok, text in zip(suspects, texts):
+        if text is None:
+            continue
+        if _digits_of(str(text)) and _digits_of(str(text)) != _digits_of(tok.text):
+            tok.flags.append("cross_model_conflict")
+            tok.alt_text = str(text).strip()
+            conflicts += 1
+    return conflicts
 
 
 def token_risk(tok: "Token") -> float:

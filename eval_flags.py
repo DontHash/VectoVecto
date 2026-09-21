@@ -31,7 +31,7 @@ sys.path.insert(0, BASE_DIR)
 
 import doc_data  # noqa: E402
 import doc_metrics  # noqa: E402
-from document_ocr import ocr_page, review_queue  # noqa: E402
+from document_ocr import apply_digit_verifier, ocr_page, review_queue  # noqa: E402
 
 DEVA_DIGITS = {chr(0x0966 + i) for i in range(10)}
 
@@ -41,7 +41,8 @@ def _digit_tokens(text: str) -> List[str]:
             if any(c in DEVA_DIGITS or c.isdigit() for c in t)]
 
 
-def run(data_dir: str, lang: str, limit: int = 0) -> Dict:
+def run(data_dir: str, lang: str, limit: int = 0,
+        digit_verifier=None) -> Dict:
     manifest = doc_data.load_dataset(data_dir)
     entries = manifest["entries"]
     if limit:
@@ -66,6 +67,9 @@ def run(data_dir: str, lang: str, limit: int = 0) -> Dict:
         gt_digits = {doc_metrics.digit_string(t) for t in _digit_tokens(gt)}
         gt_digits.discard("")
         rec = ocr_page(img, backend="rapidocr", lang=lang)
+        vconflicts = 0
+        if digit_verifier is not None:
+            vconflicts = apply_digit_verifier(rec.tokens, img, digit_verifier)
         toks = rec.tokens
         tokens_total += len(toks)
         ece_raw.append(doc_metrics.ece(toks, gt))
@@ -99,7 +103,7 @@ def run(data_dir: str, lang: str, limit: int = 0) -> Dict:
                 p_total[k] += len(top)
                 r_hits[k] += sum(1 for t in errs if t in top)
         rows.append({"page": e["id"], "digit_errors": len(errs),
-                     "queue": queue_len,
+                     "queue": queue_len, "verifier_conflicts": vconflicts,
                      "script_mismatch": sum(1 for t in toks
                                             if "script_mismatch" in t.flags)})
         print(f"  [{len(rows)}/{len(entries)}] {e['id']} "
@@ -114,6 +118,7 @@ def run(data_dir: str, lang: str, limit: int = 0) -> Dict:
         "digit_tokens": digit_tok_total,
         "digit_token_error_rate": _safe(digit_tok_err, digit_tok_total),
         "pages_with_digit_errors": pages_with_errors,
+        "verifier_conflicts": sum(r["verifier_conflicts"] for r in rows),
         **{f"digit_recall@{k}": _safe(r_hits[k], r_total) for k in topk},
         **{f"digit_precision@{k}": _safe(p_hits[k], p_total[k]) for k in topk},
         "script_mismatch_tokens": sm_total,
@@ -131,6 +136,9 @@ def main():
     ap.add_argument("--lang", default="ne")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--frozen", default=None)
+    ap.add_argument("--digit-verifier", choices=["off", "bodhan"], default="off",
+                    dest="digit_verifier",
+                    help="optional second-model digit check before scoring")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -143,7 +151,15 @@ def main():
             raise SystemExit("frozen drift - refusing to score")
         print(f"[flags] frozen verified: {os.path.basename(args.frozen)}")
 
-    result = run(args.data_dir, args.lang, args.limit)
+    verifier = None
+    if args.digit_verifier != "off":
+        from document_verifier import get_digit_verifier
+        verifier = get_digit_verifier(args.digit_verifier)
+        print(f"[flags] digit verifier enabled: {args.digit_verifier}")
+
+    result = run(args.data_dir, args.lang, args.limit, digit_verifier=verifier)
+    if verifier is not None:
+        verifier.close()
     s = result["summary"]
     print("\n=== FLAG QUALITY (frozen) ===")
     for k, v in s.items():

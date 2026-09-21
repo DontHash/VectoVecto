@@ -34,30 +34,9 @@ sys.path.insert(0, BASE_DIR)
 import doc_data  # noqa: E402
 
 def _shim_broken_torchaudio() -> None:
-    """Neutralize the broken `torchaudio` build on this machine (WinError 127).
-
-    transformers gates `import torchaudio` on `is_torchaudio_available()`,
-    which only checks package metadata, so the native crash fires while
-    importing vision classes we need. If the real import fails, put a stub in
-    sys.modules so transformers skips it (we never use audio).
-    """
-    import importlib.machinery
-    import types
-
-    if "torchaudio" in sys.modules:
-        return
-    try:
-        import torchaudio  # noqa: F401
-        return
-    except ImportError:
-        return
-    except Exception:  # noqa: BLE001
-        pass
-    mod = types.ModuleType("torchaudio")
-    mod.__spec__ = importlib.machinery.ModuleSpec("torchaudio", loader=None)
-    mod.__version__ = "0.0.0-stub"
-    mod.__path__ = []  # behave like a package for find_spec users
-    sys.modules["torchaudio"] = mod
+    """Delegate to the runtime shim (document_verifier)."""
+    from document_verifier import shim_broken_torchaudio
+    shim_broken_torchaudio()
 
 
 CandidateResult = Tuple[bool, str]

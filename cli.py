@@ -135,9 +135,15 @@ def run_document_mode(args) -> int:
             return "skipped"
         os.makedirs(args.output, exist_ok=True)
         try:
+            verifier = getattr(process, "_verifier", None)
+            if verifier is None and getattr(args, "digit_verifier", "off") != "off":
+                from document_verifier import get_digit_verifier
+                verifier = get_digit_verifier(args.digit_verifier)
+                process._verifier = verifier  # type: ignore[attr-defined]
             res = run_document_pipeline(
                 img, backend=backend, lang=args.lang, deskew=args.deskew,
                 repass_digits=args.repass_digits, dpi=dpi,
+                digit_verifier=verifier,
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -236,6 +242,13 @@ def main():
     doc.add_argument("--repass-digits", action="store_true", dest="repass_digits",
                      help="re-read digit tokens for the review queue; off until "
                           "re-measured with the engine fix (Appendix A.1)")
+    doc.add_argument("--digit-verifier", choices=["off", "bodhan"], default="off",
+                     dest="digit_verifier",
+                     help="optional second-model digit check (Devanagari): a "
+                          "disagreeing read is flagged `cross_model_conflict` "
+                          "(alt reading kept, text never changed). Needs a "
+                          "one-time `hf auth login` + license acceptance; "
+                          "~0.4 s per suspect token (Appendix L)")
     doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
                      help="max pages per PDF input (default 1)")
     doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",
