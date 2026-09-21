@@ -63,7 +63,7 @@ Measured behaviour, not marketing (full tables in
 |---|---|
 | Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations (and 0/19 on unlabeled Nepali scans); rotated 90/90 decided |
 | Devanagari (Nepali/Hindi) — rendered fixture | clean CER 0.030/0.028 (Latin engine 0.85 — the language model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
-| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481], exact-token recall 0.647 [0.619–0.675]. Modern gov PDFs (n=41): **the text layer is corrupt** (41/41 pages above the 2% invalid-sequence bar, mean 22.4%; wrong ToUnicode maps), so CER 0.338 is *not* a recognition estimate — on valid GT tokens exact-token recall is 0.522 [0.480–0.562]; the unbiased anchor comes from human-verified pages (`eval_anchor.py`, Appendix N). Devanagari digits essentially unread by the mobile model |
+| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481], exact-token recall 0.647 [0.619–0.675]. Modern gov PDFs (n=41, **Gemini 2.5 Pro GT anchor**, bodhan-corroborated 0.881): CER **0.135 [0.097–0.186]** / bagCER 0.142, exact-token recall 0.877 [0.732–0.968]; per-doc bagCER 0.06–0.20. The older 0.338 was scored against a corrupt text layer (41/41 pages >2% invalid tokens) and is historical only |
 | Devanagari — alternative models (bake-off, Appendix L) | Tesseract/TrOCR/GLM-OCR all scored on frozen sets and **rejected**: invented tokens, domain mismatch, or 200 s/page. The harness stays for future models (`python eval_models.py --list`) |
 | Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740]; GT audit: 0.07% invalid tokens — the defect is *alignment* (machine-generated GT, partly misaligned), so numbers stay "behavior only" until a human pass |
 | Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
@@ -113,4 +113,7 @@ change is a new freeze version.
 Ground-truth integrity is checked before freezing: `doc_metrics.devanagari_validity()`
 reports the invalid-combining-sequence rate of Devanagari text (reordered
 matras, dangling viramas, orphan marks), and `harvest_nepali_pdfs.py` rejects
-PDFs whose text layer scores >2%.
+PDFs whose text layer scores >2%. Where no clean reference exists, the anchor
+is model-produced and labeled: `anchor_gemini.py` (Vertex AI) transcribes the
+pages, the local engines corroborate (`eval_anchor.py --score`), and the
+disagreement list is the human review artifact (`out/anchor_gemini/audit.html`).

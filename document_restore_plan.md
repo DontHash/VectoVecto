@@ -933,11 +933,19 @@ better detector for degraded text or a server-size Devanagari rec model
 > virama-for-space) and a ~60-document source hunt across ~25 government
 > sites found no clean batch. **CER 0.338 is therefore not a
 > recognition-error estimate** - it measures GT damage as much as OCR error.
-> `nepali_pdf_v2` (same 41 pages, re-frozen with the audit) scores on the
-> valid-GT-token subset: exact-token recall **0.522 [0.480-0.562]**, unmatched
-> hypothesis 0.576; the unbiased absolute anchor comes from human-verified
-> pages (`eval_anchor.py`). Digit claims are re-scoped in Appendix N. v1
-> numbers stay as the historical record.
+>
+> **Anchor (N5b, Gemini 2.5 Pro GT via Vertex AI).** All 41 v2 pages were
+> transcribed by Gemini 2.5 Pro (2 strips/page); the model's Devanagari is
+> clean (invalid-sequence rate 0.0002) and bodhan corroborates it on every
+> page (bag agreement mean 0.881, min 0.750). Against this reference RapidOCR
+> lands at **CER 0.135 [0.097-0.186] / bagCER 0.142 [0.111-0.186]**,
+> valid-token recall **0.877 [0.732-0.968]**, per-doc bagCER 0.060-0.200.
+> Provenance is explicit: this GT is *model-produced*, corroborated by a
+> second model family, and the human pass is a disagreement review
+> (`out/anchor_gemini/audit.html`), not a transcription. The earlier
+> engine-vs-engine worksheet (`out/anchor/`) stays as the historical record.
+> Digit claims are re-scoped in Appendix N. v1 numbers stay as the historical
+> record.
 
 The reality check's top two gaps were: (1) no real Nepali data anywhere in the
 P4 claim, (2) all numbers were point estimates on small sets that the
@@ -1126,15 +1134,16 @@ letterpress text. `det_x` = OCR tokens whose center falls in no ALTO line
 
 | domain | set | valid-token recall | digit CER | digit-exact pages | queue R@10 |
 |---|---|---|---|---|---|
-| modern gov PDFs | `nepali_pdf_v2` (41 p) | 0.522 [0.480-0.562] | 0.289 [0.227-0.352] | 0.049 | 0.154 |
+| modern gov PDFs (**anchor**, Gemini GT) | `nepali_pdf_v2` (41 p) | 0.877 [0.732-0.968] | 0.126 | 0.073 | 0.154 |
+| modern gov PDFs (corrupt text-layer GT, historical) | `nepali_pdf_v2` (41 p) | 0.522 [0.480-0.562] | 0.289 [0.227-0.352] | 0.049 | 0.154 |
 | letterpress scans | `heidata_printed` (69 p) | 0.647 [0.619-0.675] | 8.95 [5.86-12.50] | 0.000 | 0.730 |
 
 Digits are broken in *different* ways per domain: letterpress digits are
 essentially unread (the model emits Latin insertions - digit CER 8.95), while
-on clean PDFs most digits are individually readable but whole-page digit
-sequences are exactly right on only 2/41 pages. The review queue helps on
-scans (R@10 0.73) and not on clean PDFs (0.154) - their errors are confidently
-wrong.
+on clean PDFs most digits are individually readable (digit CER 0.126) but
+whole-page digit sequences are exactly right on only 3/41 pages. The review
+queue helps on scans (R@10 0.73) and not on clean PDFs (0.154) - their errors
+are confidently wrong.
 
 ### N3. Verifier coverage, pre-registered (R3)
 
