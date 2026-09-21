@@ -88,6 +88,57 @@ def digit_cer(gt: str, hyp: str, bag: bool = False) -> float:
     return float(jiwer.cer(gt_d, hyp_d))
 
 
+_DEVA_DIGIT_MAP = {chr(0x0966 + i): str(i) for i in range(10)}
+_DIGIT_RUN_RE = None
+
+
+def digit_string(text: str) -> str:
+    """All digit runs of `text`, Devanagari digits normalized to ASCII.
+
+    'रु. १२०.५०' -> '120.50'; 'total: 1,200.00' -> '1,200.00'. Only
+    separators *inside* a number are kept, so sentence punctuation is not
+    mistaken for an amount.
+    """
+    import re
+
+    global _DIGIT_RUN_RE
+    if _DIGIT_RUN_RE is None:
+        _DIGIT_RUN_RE = re.compile(
+            r"[0-9\u0966-\u096f](?:[0-9\u0966-\u096f.,:/-]*[0-9\u0966-\u096f])?")
+    runs = _DIGIT_RUN_RE.findall(text)
+    return " ".join("".join(_DEVA_DIGIT_MAP.get(c, c) for c in run)
+                    for run in runs)
+
+
+def digit_exact(gt: str, hyp: str) -> bool:
+    """Exact whole-page digit-sequence match (the 'money is right' check)."""
+    return digit_string(gt) == digit_string(hyp)
+
+
+def bag_stats(gt: str, hyp: str) -> Dict[str, float]:
+    """Bag-of-tokens match between GT and hypothesis (order-insensitive).
+
+    Works without Token objects, so it covers recognizers that return plain
+    text (generative models). `miss_rate`: share of GT tokens absent from the
+    hypothesis (recall failure). `invented_rate`: share of hypothesis tokens
+    absent from GT (hallucination proxy; on incomplete GT it is an upper
+    bound).
+    """
+    gt_toks = {_norm_tok(t) for t in tokens_of(gt) if _norm_tok(t)}
+    hyp_toks = [_norm_tok(t) for t in tokens_of(hyp) if _norm_tok(t)]
+    hyp_set = set(hyp_toks)
+    matched = len(gt_toks & hyp_set)
+    invented = sum(1 for t in hyp_toks if t and t not in gt_toks)
+    return {
+        "gt_tokens": len(gt_toks),
+        "hyp_tokens": len(hyp_toks),
+        "matched": matched,
+        "miss_rate": (1.0 - matched / len(gt_toks)) if gt_toks else 0.0,
+        "invented_tokens": invented,
+        "invented_rate": (invented / len(hyp_toks)) if hyp_toks else 0.0,
+    }
+
+
 def _iou(a, b) -> float:
     ax0, ay0, ax1, ay1 = a
     bx0, by0, bx1, by1 = b
