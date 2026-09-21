@@ -227,12 +227,17 @@ def pdf_to_pages(pdf_path: str, dpi: int = 200):
 def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = None,
                       dpi: int = 200, levels=("medium",), max_pages: int = 0,
                       max_pages_per_pdf: int = 0, seed: int = 1234,
-                      degrade: bool = True) -> Dict:
+                      degrade: bool = True, gt_validity: bool = False) -> Dict:
     """Render PDFs, degrade pages, write dataset + manifest. Returns manifest.
 
     `degrade=False` marks the set as real (born-digital): clean == degraded ==
     the render, and metrics are judged against the PDF's own text layer (whose
     order is internal, hence bagCER). Use for real Nepali government PDFs.
+
+    `gt_validity=True` audits every page's text layer with
+    `doc_metrics.devanagari_validity` and stores `gt_invalid_tokens` /
+    `gt_invalid_token_rate` on the entry: modern Nepali PDFs routinely have
+    corrupt ToUnicode maps, so the GT quality must travel with the data.
     """
     pages_dir = os.path.join(out_dir, "pages")
     gt_dir = os.path.join(out_dir, "gt")
@@ -264,13 +269,19 @@ def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = Non
                 deg_path = clean_path
             with open(gt_path, "w", encoding="utf-8") as f:
                 f.write(gt)
-            entries.append({
+            entry = {
                 "id": pid, "source": pdf_path, "page": idx, "level": level,
                 "real": not degrade, "seed": page_seed, "gt_chars": len(gt),
                 "clean": os.path.relpath(clean_path, out_dir),
                 "degraded": os.path.relpath(deg_path, out_dir),
                 "gt": os.path.relpath(gt_path, out_dir),
-            })
+            }
+            if gt_validity:
+                from doc_metrics import devanagari_validity
+                audit = devanagari_validity(gt)
+                entry["gt_invalid_tokens"] = audit["invalid_tokens"]
+                entry["gt_invalid_token_rate"] = audit["invalid_token_rate"]
+            entries.append(entry)
             count += 1
         if max_pages and count >= max_pages:
             break
