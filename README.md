@@ -32,7 +32,7 @@ python cli.py --mode document --input page.jpg --output out/run1
 python cli.py --mode document --input scan.pdf --output out/run1 --max-pages 3
 
 # Knobs (all default to the measured best config)
-#   --ocr rapidocr|tesseract   --lang <code>      --deskew
+#   --ocr rapidocr|tesseract   --lang en|ne|hi     --deskew
 #   --no-reading-order         --rotate auto|off --repass-digits
 #   --no-pdf --no-overlay --no-txt
 ```
@@ -61,6 +61,7 @@ Measured behaviour, not marketing (full tables in
 | Capability | Status |
 |---|---|
 | Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations; rotated 90/90 decided |
+| Devanagari (Nepali/Hindi) | clean fixture CER 0.030/0.028 (Latin engine 0.85 — model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy level fails) |
 | Single-column layout | identity — 60/60 real pages untouched |
 | Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end |
 | Digit-number honesty | review queue ranked by risk; best case recalls ~23% of digit errors in the top-5 — **weak, documented, improving** |

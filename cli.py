@@ -228,7 +228,9 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     doc = ap.add_argument_group("document mode")
     doc.add_argument("--ocr", default=None, help="rapidocr | tesseract (default: best available)")
-    doc.add_argument("--lang", default=None, help="OCR language (backend dependent)")
+    doc.add_argument("--lang", default=None,
+                     help="OCR language: en (default), ne/nepali, hi/hindi "
+                          "(Devanagari PP-OCRv5 model; first use downloads once)")
     doc.add_argument("--deskew", action="store_true",
                      help="rotate to deskew; OCR then runs on the display for alignment")
     doc.add_argument("--repass-digits", action="store_true", dest="repass_digits",

@@ -129,7 +129,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     # common upright case). A rotation re-runs the pass on the rotated page.
     p = _run_pass(img_bgr)
     passes = 1
-    votes = be.line_orientation_votes(p.primary_img, p.result)
+    votes = be.line_orientation_votes(p.primary_img, p.result, lang=lang)
     vfrac = vertical_fraction(p.result.tokens)
     info = infer_angle(p.result.tokens, votes, auto_rotate=auto_rotate)
     rot = info
@@ -143,10 +143,18 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         probe = rotate_bgr(img_bgr, 90)
         pp = _run_pass(probe)
         passes = 2
-        pvotes = be.line_orientation_votes(pp.primary_img, pp.result)
+        pvotes = be.line_orientation_votes(pp.primary_img, pp.result, lang=lang)
         if vertical_fraction(pp.result.tokens) < VERTICAL_ACTION:
             p = pp
-            if (pvotes and pvotes[0] >= VOTE180_FRAC and pvotes[1] >= VOTE180_HI):
+            if pvotes is None:
+                # No line classifier for this language (devanagari): the probe
+                # fixed the axis, let OSD pick the direction instead of a coin
+                # flip; without OSD the 90cw default stays and the suspect
+                # flag covers it.
+                osd = _osd_sideways(img_bgr)
+                angle = osd.angle if osd.angle in (90, 270) else 90
+                rot = RotationInfo(angle, osd.confidence, "probe-osd", raw_angle=angle)
+            elif pvotes[0] >= VOTE180_FRAC and pvotes[1] >= VOTE180_HI:
                 p = _run_pass(rotate_bgr(probe, 180))
                 passes = 3
                 rot = RotationInfo(270, round(pvotes[0], 3), "probe-270", raw_angle=270)

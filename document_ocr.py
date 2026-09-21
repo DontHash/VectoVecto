@@ -31,7 +31,26 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-DIGIT_RUN_RE = re.compile(r"[0-9][0-9.,:\-/]*[0-9]|[0-9]")
+DIGIT_RUN_RE = re.compile(r"[0-9\u0966-\u096f][0-9\u0966-\u096f.,:\-/]*"
+                          r"[0-9\u0966-\u096f]|[0-9\u0966-\u096f]")
+
+# User-facing language codes -> RapidOCR rec lang_type ("default" = shipped
+# PP-OCRv6 model). Devanagari needs the PP-OCRv5 rec model (PP-OCRv6 does not
+# ship that script); it covers both Nepali and Hindi.
+LANG_ALIASES: Dict[str, str] = {
+    "": "default", "en": "default", "eng": "default", "english": "default",
+    "latin": "default",
+    "ne": "devanagari", "nep": "devanagari", "nepali": "devanagari",
+    "hi": "devanagari", "hin": "devanagari", "hindi": "devanagari",
+    "devanagari": "devanagari",
+}
+
+
+def normalize_lang(lang: Optional[str]) -> str:
+    """Map a user language code to a RapidOCR rec lang_type."""
+    if not lang:
+        return "default"
+    return LANG_ALIASES.get(lang.strip().lower(), "default")
 
 # Measured on the frozen synthetic set (6 pages @300dpi, mild/medium/heavy):
 #   rapidocr  raw            CER 0.0937
@@ -89,7 +108,8 @@ class OCRBackend:
         raise NotImplementedError
 
     def line_orientation_votes(self, img_bgr: np.ndarray,
-                               result: OCRResult) -> Optional[Tuple[float, float, int]]:
+                               result: OCRResult,
+                               lang: Optional[str] = None) -> Optional[Tuple[float, float, int]]:
         """Page-flip evidence from the PP-LCNet line classifier: (frac180, hi180, n).
 
         `frac180` = share of line crops classed 180; `hi180` = share classed 180
@@ -129,7 +149,8 @@ class RapidOCRBackend(OCRBackend):
     name = "rapidocr"
 
     def __init__(self):
-        self._engine = None
+        self._engine = None          # default-language engine (also cls votes)
+        self._lang_engines: Dict[str, object] = {}
         self._error: Optional[str] = None
         self.using_dml = False
 
@@ -140,32 +161,61 @@ class RapidOCRBackend(OCRBackend):
         except Exception as e:  # noqa: BLE001
             return False, f"rapidocr not importable: {e}"
 
+    def _base_params(self) -> Dict:
+        params: Dict = {"Global.log_level": os.environ.get("RAPIDOCR_LOG_LEVEL", "error")}
+        self.using_dml = _dml_enabled()
+        if self.using_dml:
+            params["EngineConfig.onnxruntime.use_dml"] = True
+        max_side = os.environ.get("RAPIDOCR_MAX_SIDE")
+        if max_side:
+            params["Global.max_side_len"] = int(max_side)
+        return params
+
     def _ensure(self):
         if self._engine is None and self._error is None:
             try:
                 from rapidocr import RapidOCR
-                params: Dict = {"Global.log_level": os.environ.get("RAPIDOCR_LOG_LEVEL", "error")}
-                self.using_dml = _dml_enabled()
+                self._engine = RapidOCR(params=self._base_params())
                 if self.using_dml:
-                    params["EngineConfig.onnxruntime.use_dml"] = True
-                max_side = os.environ.get("RAPIDOCR_MAX_SIDE")
-                if max_side:
-                    params["Global.max_side_len"] = int(max_side)
-                self._engine = RapidOCR(params=params)
-                if self.using_dml:
-                    self._warmup()
+                    self._warmup(self._engine)
             except Exception as e:  # noqa: BLE001
                 self._error = str(e)
         if self._engine is None:
             raise RuntimeError(f"RapidOCR unavailable: {self._error}")
 
-    def _warmup(self):
+    def _engine_for(self, lang: Optional[str]):
+        """Engine for a language code; devanagari uses the PP-OCRv5 rec model
+        (PP-OCRv6 does not ship that script) and is cached per language."""
+        key = normalize_lang(lang)
+        if key == "default":
+            self._ensure()
+            return self._engine
+        self._ensure()
+        eng = self._lang_engines.get(key)
+        if eng is None:
+            from rapidocr import RapidOCR
+            from rapidocr.utils.typings import ModelType, OCRVersion
+            params = self._base_params()
+            if key == "devanagari":
+                params["Rec.lang_type"] = "devanagari"
+                params["Rec.ocr_version"] = OCRVersion("PP-OCRv5")
+                params["Rec.model_type"] = ModelType("mobile")
+                # The 0/180 textline classifier is trained on Chinese/English
+                # and flips Devanagari crops: measured page CER 0.537 with it,
+                # 0.039 without (isolated crops read perfectly either way).
+                params["Global.use_cls"] = False
+            self._lang_engines[key] = eng = RapidOCR(params=params)
+            if self.using_dml:
+                self._warmup(eng)
+        return eng
+
+    def _warmup(self, engine):
         """Pay DirectML's kernel-compile cost once (first call is ~25 s, then <1 s)."""
         t0 = time.time()
         warm = np.full((64, 320, 3), 255, dtype=np.uint8)
         cv2.putText(warm, "warmup 123", (8, 42), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
         try:
-            self._engine(warm)
+            engine(warm)
             print(f"[document_ocr] RapidOCR DirectML warm-up: {time.time() - t0:.1f}s "
                   f"(subsequent pages ~0.8s)")
         except Exception as e:  # noqa: BLE001
@@ -173,9 +223,9 @@ class RapidOCRBackend(OCRBackend):
             self.using_dml = False
 
     def run(self, img_bgr: np.ndarray, lang: Optional[str] = None) -> OCRResult:
-        self._ensure()
+        engine = self._engine_for(lang)
         t0 = time.time()
-        res = self._engine(img_bgr)
+        res = engine(img_bgr)
         tokens: List[Token] = []
         boxes = getattr(res, "boxes", None)
         txts = getattr(res, "txts", None) or ()
@@ -191,7 +241,8 @@ class RapidOCRBackend(OCRBackend):
         text = "\n".join(t.text for t in tokens)
         return OCRResult(text=text, tokens=tokens, backend=self.name,
                          meta={"seconds": round(time.time() - t0, 3),
-                               "n_tokens": len(tokens), "lang": lang or "default"})
+                               "n_tokens": len(tokens),
+                               "lang": normalize_lang(lang)})
 
     def recognize_crop(self, crop_bgr: np.ndarray, lang: Optional[str] = None) -> Tuple[str, float]:
         """Recognition-only read of one crop.
@@ -202,13 +253,12 @@ class RapidOCRBackend(OCRBackend):
         for every later page — silently yielding zero tokens. We save/restore
         the flags around the call (verified by test_document_ocr_state.py).
         """
-        self._ensure()
-        saved = (self._engine.use_det, self._engine.use_cls, self._engine.use_rec)
+        engine = self._engine_for(lang)
+        saved = (engine.use_det, engine.use_cls, engine.use_rec)
         try:
-            out = self._engine(crop_bgr, use_det=False, use_cls=False, use_rec=True)
+            out = engine(crop_bgr, use_det=False, use_cls=False, use_rec=True)
         finally:
-            (self._engine.use_det, self._engine.use_cls,
-             self._engine.use_rec) = saved
+            (engine.use_det, engine.use_cls, engine.use_rec) = saved
         txts = getattr(out, "txts", None) or ()
         scores = getattr(out, "scores", None) or ()
         if not txts:
@@ -216,14 +266,20 @@ class RapidOCRBackend(OCRBackend):
         return str(txts[0]), float(scores[0]) * 100.0 if len(scores) else 0.0
 
     def line_orientation_votes(self, img_bgr: np.ndarray,
-                               result: OCRResult) -> Optional[Tuple[float, float, int]]:
+                               result: OCRResult,
+                               lang: Optional[str] = None) -> Optional[Tuple[float, float, int]]:
         """Re-run the PP-LCNet line classifier on the detected line crops.
 
         RapidOCR 3.x applies the classifier internally (rotating crops), but
         does not surface the labels; re-running it on our own crops is cheap
         and gives page-flip evidence the public output lacks. Returns
         (frac180, hi_conf_180, n_lines) - see the base-class docstring.
+
+        Not available for non-default languages: the classifier is trained on
+        Chinese/English and measurably flips Devanagari crops.
         """
+        if normalize_lang(lang) != "default":
+            return None
         if not result.tokens:
             return None
         self._ensure()

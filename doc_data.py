@@ -359,6 +359,209 @@ def build_synthetic_dataset(out_dir: str, n: int = 20,
 
 
 # ---------------------------------------------------------------------------
+# synthetic Devanagari (Nepali / Hindi) documents
+# ---------------------------------------------------------------------------
+
+_DEVA_FONT_CANDIDATES = (
+    r"C:\Windows\Fonts\Nirmala.ttc",
+    r"C:\Windows\Fonts\mangal.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+    "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+)
+
+# Text needs complex-script shaping (conjuncts, matras) - PIL cannot do it, so
+# the fixture renders through Qt (HarfBuzz), offscreen. Verified: QTextLayout
+# reports shaped glyph runs (e.g. 'क्ष' 3 codepoints -> 1 glyph).
+_DEVA_STRINGS = {
+    "ne": {
+        "org": "नेपाल सरकार",
+        "dept": "आन्तरिक राजस्व कार्यालय, काठमाडौं",
+        "doc": "बीजक नं",
+        "date": "मिति",
+        "to": "ग्राहकको नाम",
+        "to_val": "हिमालय ट्रेडर्स प्रा. लि.",
+        "addr": "पोखरा, कास्की",
+        "head": ("विवरण", "संख्या", "दर", "रकम"),
+        "items": (
+            ("कापी", "२", "८५.००", "१७०.००"),
+            ("कलम", "५", "२५.००", "१२५.००"),
+            ("झोला", "१", "४५०.००", "४५०.००"),
+        ),
+        "subtotal": "उप-जम्मा",
+        "vat": "मूल्य अभिवृद्धि कर",
+        "total": "कुल जम्मा",
+        "thanks": "धन्यवाद",
+    },
+    "hi": {
+        "org": "भारत सरकार",
+        "dept": "आयकर विभाग, नई दिल्ली",
+        "doc": "बीजक संख्या",
+        "date": "दिनांक",
+        "to": "ग्राहक का नाम",
+        "to_val": "श्री गणेश ट्रेडर्स",
+        "addr": "जयपुर, राजस्थान",
+        "head": ("विवरण", "मात्रा", "दर", "राशि"),
+        "items": (
+            ("पुस्तक", "३", "१२०.००", "३६०.००"),
+            ("कागज", "२", "९०.००", "१८०.००"),
+            ("स्याही", "१", "२५०.००", "२५०.००"),
+        ),
+        "subtotal": "उप-योग",
+        "vat": "मूल्य वर्धित कर",
+        "total": "कुल योग",
+        "thanks": "धन्यवाद",
+    },
+}
+
+
+def _qt_app():
+    """Offscreen Qt app for shaped text rendering (dev fixture generation)."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QGuiApplication
+    return QGuiApplication.instance() or QGuiApplication([])
+
+
+def _deva_font(size_px: int):
+    from PySide6.QtGui import QFont, QFontDatabase
+    for path in _DEVA_FONT_CANDIDATES:
+        if os.path.exists(path):
+            fid = QFontDatabase.addApplicationFont(path)
+            fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+            if fams:
+                font = QFont(fams[0])
+                font.setPixelSize(size_px)
+                return font
+    raise RuntimeError("no Devanagari font found (tried: %s)"
+                       % ", ".join(_DEVA_FONT_CANDIDATES))
+
+
+def render_devanagari_invoice(seed: int = 0, dpi: int = 300,
+                              script: str = "ne") -> Tuple[np.ndarray, str]:
+    """Devanagari invoice page (Nepali/Hindi) rendered through Qt shaping.
+
+    GT is the exact drawn-string list in reading order (row-major: header,
+    parties, table rows left-to-right, totals, footer). Amounts use Devanagari
+    digits for the money metric's sake.
+    """
+    _qt_app()
+    from PySide6.QtGui import QColor, QImage, QPainter
+
+    t = _DEVA_STRINGS[script]
+    s = dpi / 200.0
+    w, h = int(1240 * s), int(1754 * s)
+    img = QImage(w, h, QImage.Format.Format_RGB888)
+    img.fill(QColor(252, 251, 248))
+    p = QPainter(img)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+    def draw(x, y, text, size):
+        p.setFont(_deva_font(int(size * s)))
+        p.setPen(QColor(22, 22, 28))
+        p.drawText(int(x * s), int(y * s), text)
+
+    gt: List[str] = []
+    rng = np.random.default_rng(seed)
+
+    draw(60, 70, t["org"], 46)
+    gt.append(t["org"])
+    draw(60, 126, t["dept"], 30)
+    gt.append(t["dept"])
+
+    doc_no = f"{rng.integers(10000, 99999)}"
+    draw(60, 210, f"{t['doc']}: {doc_no}", 30)
+    gt.append(f"{t['doc']}: {doc_no}")
+    draw(60, 256, f"{t['date']}: 2082-09-05", 30)
+    gt.append(f"{t['date']}: 2082-09-05")
+
+    draw(60, 340, f"{t['to']}:", 30)
+    gt.append(f"{t['to']}:")
+    draw(60, 386, t["to_val"], 30)
+    gt.append(t["to_val"])
+    draw(60, 432, t["addr"], 30)
+    gt.append(t["addr"])
+
+    cols = (60, 660, 850, 1000)
+    y = 530
+    table_top = y - 34
+    for cx, head in zip(cols, t["head"]):
+        draw(cx, y, head, 30)
+    gt.extend(t["head"])
+    y += 56
+    for item in t["items"]:
+        for cx, cell in zip(cols, item):
+            draw(cx, y, cell, 30)
+        gt.extend(item)
+        y += 56
+    table_bottom = y - 34
+
+    # Light table rules: real invoices have them, and they measurably help the
+    # detector keep adjacent cells apart (without them the DB detector merged
+    # neighbouring table cells on this fixture and recognition went with it).
+    from PySide6.QtCore import Qt as _Qt
+    pen = p.pen()
+    pen.setColor(QColor(120, 120, 125))
+    pen.setWidth(2)
+    p.setPen(pen)
+    rows = [table_top] + [table_top + 56 * (i + 1) for i in range(len(t["items"]) + 1)]
+    for ry in rows:
+        p.drawLine(int(60 * s), int(ry * s), int(1080 * s), int(ry * s))
+    for cx in (60, 660, 850, 1000, 1080):
+        p.drawLine(int(cx * s), int(table_top * s), int(cx * s), int(table_bottom * s))
+    p.setPen(pen)
+
+    y += 40
+    for label, key in (("subtotal", "subtotal"), ("vat", "vat"), ("total", "total")):
+        draw(660, y, t[key], 30)
+        gt.append(t[key])
+        y += 56
+    draw(60, y + 80, t["thanks"], 36)
+    gt.append(t["thanks"])
+
+    p.end()
+    ptr = img.constBits()
+    arr = np.frombuffer(ptr, np.uint8).reshape(h, img.bytesPerLine())[:, :w * 3]
+    bgr = cv2.cvtColor(arr.copy().reshape(h, w, 3), cv2.COLOR_RGB2BGR)
+    return bgr, "\n".join(gt)
+
+
+def build_devanagari_dataset(out_dir: str, n: int = 6, script: str = "ne",
+                             levels=("mild", "medium", "heavy"), dpi: int = 300,
+                             seed: int = 700) -> Dict:
+    """Render + degrade Devanagari invoice pages with exact GT."""
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_dir = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_dir, exist_ok=True)
+    entries: List[Dict] = []
+    for i in range(n):
+        img, gt = render_devanagari_invoice(seed, dpi=dpi, script=script)
+        level = levels[i % len(levels)]
+        page_seed = seed * 1000 + i
+        pid = f"deva_{script}_{i:04d}"
+        clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
+        deg_path = os.path.join(pages_dir, f"{pid}_degraded.png")
+        gt_path = os.path.join(gt_dir, f"{pid}.txt")
+        cv2.imwrite(clean_path, img)
+        cv2.imwrite(deg_path, degrade_page(img, seed=page_seed, level=level))
+        with open(gt_path, "w", encoding="utf-8") as f:
+            f.write(gt)
+        entries.append({
+            "id": pid, "source": f"synthetic_{script}", "level": level,
+            "seed": page_seed, "gt_chars": len(gt),
+            "clean": os.path.relpath(clean_path, out_dir),
+            "degraded": os.path.relpath(deg_path, out_dir),
+            "gt": os.path.relpath(gt_path, out_dir),
+        })
+        seed += 1
+    manifest = {"kind": "synthetic", "name": f"devanagari_{script}",
+                "script": script, "dpi": dpi,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"), "entries": entries}
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
 # real-photo datasets from Hugging Face (annotations, no clean reference)
 # ---------------------------------------------------------------------------
 
