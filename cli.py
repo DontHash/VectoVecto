@@ -132,7 +132,7 @@ def run_document_mode(args) -> int:
         pdf_path = os.path.join(args.output, f"{name}.pdf")
         if args.skip_existing and os.path.exists(pdf_path):
             records.append({"src": src, "name": name, "status": "skipped"})
-            return "skipped"
+            return "skipped", None
         os.makedirs(args.output, exist_ok=True)
         try:
             verifier = getattr(process, "_verifier", None)
@@ -164,29 +164,55 @@ def run_document_mode(args) -> int:
             print(f"  {name}: {res.status_line}")
             for tok in review[:3]:
                 print(f"    review: {tok.text!r} ({', '.join(tok.flags)})")
-            return "ok"
+            return "ok", res
         except Exception as e:  # noqa: BLE001
             failed += 1
             records.append({"src": src, "name": name, "status": "error", "error": str(e)})
             print(f"  FAILED {name}: {e}")
-            return "error"
+            return "error", None
 
     for src in files:
         try:
             if src.lower().endswith(".pdf"):
-                pages = list(doc_data.pdf_to_pages(src, dpi=args.dpi or 200))
+                pdf_dpi = args.dpi or 200
+                pages = list(doc_data.pdf_to_pages(src, dpi=pdf_dpi))
                 if args.max_pages:
                     pages = pages[:args.max_pages]
                 stem = os.path.splitext(os.path.basename(src))[0]
+                page_results = []
                 for idx, page_img, _gt in pages:
-                    process(page_img, f"{stem}_p{idx:03d}", f"{src}#p{idx}")
+                    status, res = process(page_img, f"{stem}_p{idx:03d}",
+                                          f"{src}#p{idx}")
+                    if status == "ok" and res is not None:
+                        page_results.append(res)
+                if args.max_pages == 0 and page_results:
+                    from document_export import write_searchable_pdf_pages
+                    combined_pdf = os.path.join(args.output, f"{stem}_combined.pdf")
+                    write_searchable_pdf_pages(
+                        combined_pdf,
+                        [(r.display_bgr, r.ocr.tokens, pdf_dpi)
+                         for r in page_results],
+                        title=stem)
+                    combined_txt = os.path.join(args.output, f"{stem}_combined.txt")
+                    with open(combined_txt, "w", encoding="utf-8") as f:
+                        f.write("\n\n".join(r.ocr.text for r in page_results) + "\n")
+                    records.append({"src": src, "name": f"{stem}_combined",
+                                    "status": "combined",
+                                    "pages": len(page_results),
+                                    "outputs": {"pdf": combined_pdf,
+                                                "txt": combined_txt}})
+                    print(f"  combined: {os.path.basename(combined_pdf)} "
+                          f"({len(page_results)} pages)")
+                elif args.max_pages == 0 and len(page_results) < len(pages):
+                    print(f"  [cli] combined output skipped: only "
+                          f"{len(page_results)}/{len(pages)} pages processed")
             else:
                 from document_orientation import load_image_bgr
                 img = load_image_bgr(src)
                 if img is None:
                     raise ValueError("unreadable image")
                 stem = os.path.splitext(os.path.basename(src))[0]
-                status = process(img, stem, src)
+                status, _res = process(img, stem, src)
                 if status == "skipped":
                     skipped += 1
         except SystemExit:
@@ -255,7 +281,8 @@ def main():
                      help="flagged (default): re-read only tokens the first "
                           "pass suspects; all: every digit token (costlier)")
     doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
-                     help="max pages per PDF input (default 1)")
+                     help="max pages per PDF input (default 1; 0 = all pages, "
+                          "also writes <stem>_combined.pdf/.txt)")
     doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",
                      help="skip XY-cut reading-order repair for column layouts")
     doc.add_argument("--rotate", choices=["auto", "off"], default="auto",

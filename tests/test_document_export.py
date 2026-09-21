@@ -16,8 +16,28 @@ sys.path.insert(0, BASE_DIR)
 
 import doc_data  # noqa: E402
 from degradation_document import degrade_page  # noqa: E402
-from document_export import export_document_outputs, write_overlay_png, write_searchable_pdf  # noqa: E402
+from document_export import (export_document_outputs, write_overlay_png,  # noqa: E402
+                             write_searchable_pdf,
+                             write_searchable_pdf_pages)
 from document_ocr import Token, available_backends, ocr_page  # noqa: E402
+
+
+def test_searchable_pdf_pages_writes_one_page_per_entry(tmp_path):
+    pages = []
+    for i in range(3):
+        img = np.full((300, 200 + 40 * i, 3), 255, dtype=np.uint8)
+        toks = [Token(text=f"PAGE{i}", conf=99, bbox=(10, 10, 180, 40),
+                      granularity="word")]
+        pages.append((img, toks, 150))
+    path = write_searchable_pdf_pages(str(tmp_path / "multi.pdf"), pages)
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(path)
+    assert len(doc) == 3
+    for i in range(3):
+        w, h = doc[i].get_size()
+        assert abs(w - (200 + 40 * i) * 72 / 150) < 1
+        assert abs(h - 300 * 72 / 150) < 1
+        assert f"PAGE{i}" in doc[i].get_textpage().get_text_range()
 
 
 def test_searchable_pdf_pagesize_matches_dpi(tmp_path):

@@ -63,6 +63,45 @@ def test_cli_document_mode_writes_outputs(tmp_path):
     assert "INVOICE" in text
 
 
+def _make_pdf(path, n_pages=3):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    c = canvas.Canvas(str(path), pagesize=A4)
+    for i in range(n_pages):
+        c.setFont("Helvetica-Bold", 22)
+        c.drawString(72, 780, f"INVOICE PAGE {i}")
+        c.setFont("Helvetica", 12)
+        c.drawString(72, 750, f"TOTAL {1200 + i}.00")
+        c.showPage()
+    c.save()
+
+
+@pytest.mark.skipif(not available_backends(), reason="no OCR backend available")
+def test_cli_document_all_pages_writes_combined(tmp_path):
+    from cli import run_document_mode
+
+    src = tmp_path / "multi.pdf"
+    _make_pdf(src, 3)
+    out_dir = tmp_path / "out"
+    args = _doc_args(input=str(src), output=str(out_dir), max_pages=0, dpi=100,
+                     report=str(tmp_path / "report.json"))
+    assert run_document_mode(args) == 0
+
+    combined = out_dir / "multi_combined.pdf"
+    assert combined.exists(), "max-pages 0 must write the combined searchable PDF"
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(str(combined))
+    assert len(doc) == 3
+    for i in range(3):
+        text = doc[i].get_textpage().get_text_range().upper()
+        assert f"PAGE {i}" in text, f"searchable text missing on page {i}"
+
+    txt = (out_dir / "multi_combined.txt").read_text(encoding="utf-8").upper()
+    assert "PAGE 0" in txt and "PAGE 2" in txt
+    assert (out_dir / "multi_p000.pdf").exists(), "per-page artifacts stay"
+
+
 @pytest.mark.skipif(not available_backends(), reason="no OCR backend available")
 def test_cli_document_mode_skip_existing(tmp_path):
     from cli import run_document_mode

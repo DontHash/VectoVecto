@@ -14,7 +14,7 @@ Powered by Gradio 6 and gr.ImageSlider.
 import os
 import sys
 import time
-from typing import Optional, Tuple, Any, List, Union
+from typing import Dict, Optional, Tuple, Any, List, Union
 import cv2
 import numpy as np
 import gradio as gr
@@ -100,11 +100,16 @@ def process_document(
     want_pdf: bool = True,
     want_txt: bool = True,
     lang: Optional[str] = None,
+    all_pages: bool = False,
 ):
     """Gradio handler for the document tab.
 
     `input_img` is a file path from the filepath-typed upload (EXIF applied via
     `load_image_bgr`); a numpy RGB array is still accepted for API/tests.
+
+    `all_pages` (PDF input only, default off = first page) processes every
+    page and writes `<stem>_combined.pdf` / `<stem>_combined.txt` next to the
+    per-page artifacts.
 
     Returns: (slider_tuple, overlay_rgb, transcript_md, pdf_path, txt_path, status_md)
     """
@@ -115,14 +120,41 @@ def process_document(
 
     backend = None if ocr_backend in (None, "auto") else ocr_backend
     ts = int(time.time() * 1000)
+    combined: Dict[str, str] = {}
+    pages_done = 1
 
     if pdf_file:
         import doc_data
-        pages = list(doc_data.pdf_to_pages(pdf_file, dpi=200))[:1]
+        pages = list(doc_data.pdf_to_pages(pdf_file, dpi=200))
+        if not all_pages:
+            pages = pages[:1]
         if not pages:
             return None, None, None, None, None, "Could not read that PDF."
-        _idx, img_bgr, _gt = pages[0]
+        _idx0, img_bgr, _gt0 = pages[0]
         stem = f"pdf_{ts}"
+        results = []
+        try:
+            for idx, page_img, _gt in pages:
+                results.append(run_document_pipeline(
+                    page_img, backend=backend, deskew=deskew_flag, lang=lang,
+                    out_dir=OUTPUT_DIR, stem=f"{stem}_p{idx:03d}",
+                    make_pdf=want_pdf, make_overlay=want_overlay,
+                    make_txt=want_txt, make_json=True))
+        except Exception as e:  # noqa: BLE001
+            return None, None, None, None, None, f"**Document pipeline failed:** {e}"
+        result = results[0]
+        pages_done = len(results)
+        if all_pages:
+            from document_export import write_searchable_pdf_pages
+            pdf_path = os.path.join(OUTPUT_DIR, f"{stem}_combined.pdf")
+            write_searchable_pdf_pages(
+                pdf_path,
+                [(r.display_bgr, r.ocr.tokens, 200) for r in results],
+                title=stem)
+            txt_path = os.path.join(OUTPUT_DIR, f"{stem}_combined.txt")
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write("\n\n".join(r.ocr.text for r in results) + "\n")
+            combined = {"pdf": pdf_path, "txt": txt_path}
     else:
         if isinstance(input_img, str):
             from document_orientation import load_image_bgr
@@ -132,15 +164,14 @@ def process_document(
         else:
             img_bgr = cv2.cvtColor(input_img, cv2.COLOR_RGB2BGR)
         stem = f"doc_{ts}"
-
-    try:
-        result = run_document_pipeline(
-            img_bgr, backend=backend, deskew=deskew_flag, lang=lang,
-            out_dir=OUTPUT_DIR, stem=stem,
-            make_pdf=want_pdf, make_overlay=want_overlay,
-            make_txt=want_txt, make_json=True)
-    except Exception as e:  # noqa: BLE001
-        return None, None, None, None, None, f"**Document pipeline failed:** {e}"
+        try:
+            result = run_document_pipeline(
+                img_bgr, backend=backend, deskew=deskew_flag, lang=lang,
+                out_dir=OUTPUT_DIR, stem=stem,
+                make_pdf=want_pdf, make_overlay=want_overlay,
+                make_txt=want_txt, make_json=True)
+        except Exception as e:  # noqa: BLE001
+            return None, None, None, None, None, f"**Document pipeline failed:** {e}"
 
     orig_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
     display_rgb = cv2.cvtColor(result.display_bgr, cv2.COLOR_BGR2RGB)
@@ -152,17 +183,22 @@ def process_document(
             overlay_rgb = cv2.cvtColor(ov, cv2.COLOR_BGR2RGB)
 
     resized = bool(result.meta.get("resized"))
+    files = {**result.outputs, **combined}
     status = f"""### Restore complete ({result.meta['seconds']:.1f}s)
 - **Engine**: `document` (classical restore + {result.meta['backend']}) | **Primary stream**: `{result.meta['primary_stream']}`
 - **Deskew applied**: `{result.meta['skew_angle']:.2f}°` | **Device**: `{_compute_device()}`
 - **Audit**: {result.status_line}
-- **Files**: {' · '.join(os.path.basename(p) for p in result.outputs.values()) or 'none'}
+- **Files**: {' · '.join(os.path.basename(p) for p in files.values()) or 'none'}
 """
+    if pages_done > 1:
+        status += (f"- **Pages**: {pages_done} processed "
+                   f"(slider/overlay show page 1; combined PDF/TXT cover all)\n")
     if resized:
         status += "- **Note**: page was downscaled to 2500 px for processing.\n"
 
     return ((orig_rgb, display_rgb), overlay_rgb, _transcript_md(result),
-            result.outputs.get("pdf"), result.outputs.get("txt"), status)
+            combined.get("pdf") or result.outputs.get("pdf"),
+            combined.get("txt") or result.outputs.get("txt"), status)
 
 
 def _document_example_path() -> Optional[str]:
@@ -326,6 +362,9 @@ def create_app():
                         with gr.Row():
                             doc_pdf_out = gr.Checkbox(value=True, label="Searchable PDF")
                             doc_txt_out = gr.Checkbox(value=True, label="Transcript .txt")
+                        doc_all_pages = gr.Checkbox(
+                            value=False, label="All pages (PDF)",
+                            info="default: first page only; writes a combined PDF/TXT")
 
                         doc_btn = gr.Button("Restore & read", variant="primary", size="lg")
 
@@ -354,7 +393,8 @@ def create_app():
                 doc_btn.click(
                     fn=process_document,
                     inputs=[doc_input, doc_pdf, doc_ocr, doc_deskew,
-                            doc_overlay, doc_pdf_out, doc_txt_out, doc_lang],
+                            doc_overlay, doc_pdf_out, doc_txt_out, doc_lang,
+                            doc_all_pages],
                     outputs=[doc_slider, doc_overlay_img, doc_transcript,
                              doc_pdf_file, doc_txt_file, doc_status],
                 )

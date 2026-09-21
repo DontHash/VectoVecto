@@ -43,38 +43,48 @@ def _estimate_dpi(img: np.ndarray, dpi: Optional[int] = None) -> int:
     return 300 if max(img.shape[:2]) >= 2000 else 150
 
 
-def write_searchable_pdf(path: str, image_bgr: np.ndarray, tokens: List[Token],
-                         dpi: Optional[int] = None) -> str:
-    """Image page + invisible, selectable text at token boxes."""
+def write_searchable_pdf_pages(path: str, pages, title: Optional[str] = None) -> str:
+    """Multi-page searchable PDF: one (image_bgr, tokens, dpi|None) per page.
+
+    Each page keeps its own size (derived from pixels + dpi), so mixed-size
+    inputs stay honest. Per-page artifacts are unaffected; this is the
+    combined output for multi-page PDF inputs (P6).
+    """
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas
 
-    dpi = _estimate_dpi(image_bgr, dpi)
-    h, w = image_bgr.shape[:2]
-    pw, ph = w * 72.0 / dpi, h * 72.0 / dpi
-    px2pt = 72.0 / dpi
-
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    c = canvas.Canvas(path, pagesize=(pw, ph))
-    c.setTitle(os.path.splitext(os.path.basename(path))[0])
-    rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-    c.drawImage(ImageReader(Image.fromarray(rgb)), 0, 0, width=pw, height=ph)
-
-    for tok in tokens:
-        text = (tok.text or "").strip()
-        if not text:
-            continue
-        x0, y0, x1, y1 = tok.bbox
-        size = max(4.0, (y1 - y0) * px2pt * 0.85)
-        t = c.beginText()
-        t.setTextRenderMode(3)  # invisible but selectable/extractable
-        t.setFont("Helvetica", size)
-        t.setTextOrigin(x0 * px2pt, ph - y1 * px2pt)
-        t.textOut(text)
-        c.drawText(t)
-    c.showPage()
+    c = canvas.Canvas(path)
+    c.setTitle(title or os.path.splitext(os.path.basename(path))[0])
+    for image_bgr, tokens, dpi in pages:
+        dpi = _estimate_dpi(image_bgr, dpi)
+        h, w = image_bgr.shape[:2]
+        pw, ph = w * 72.0 / dpi, h * 72.0 / dpi
+        px2pt = 72.0 / dpi
+        c.setPageSize((pw, ph))
+        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        c.drawImage(ImageReader(Image.fromarray(rgb)), 0, 0, width=pw, height=ph)
+        for tok in tokens:
+            text = (tok.text or "").strip()
+            if not text:
+                continue
+            x0, y0, x1, y1 = tok.bbox
+            size = max(4.0, (y1 - y0) * px2pt * 0.85)
+            t = c.beginText()
+            t.setTextRenderMode(3)  # invisible but selectable/extractable
+            t.setFont("Helvetica", size)
+            t.setTextOrigin(x0 * px2pt, ph - y1 * px2pt)
+            t.textOut(text)
+            c.drawText(t)
+        c.showPage()
     c.save()
     return path
+
+
+def write_searchable_pdf(path: str, image_bgr: np.ndarray, tokens: List[Token],
+                         dpi: Optional[int] = None) -> str:
+    """Image page + invisible, selectable text at token boxes."""
+    return write_searchable_pdf_pages(path, [(image_bgr, tokens, dpi)])
 
 
 def _tok_color(tok: Token):

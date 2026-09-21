@@ -43,6 +43,53 @@ def test_process_document_returns_outputs():
     assert "INVOICE" in transcript.upper() or "no low-confidence" in transcript.lower()
 
 
+def test_process_document_all_pages_writes_combined(monkeypatch, tmp_path):
+    import numpy as np
+
+    import app
+    import document_pipeline
+    from document_ocr import OCRResult, Token
+
+    class _FakeResult:
+        def __init__(self, i):
+            self.display_bgr = np.full((60, 40, 3), 255, np.uint8)
+            self.ocr = OCRResult(text=f"PAGE {i} TEXT",
+                                 tokens=[Token(text=f"PAGE{i}", conf=99,
+                                               bbox=(2, 2, 36, 18))],
+                                 backend="fake")
+            self.meta = {"seconds": 0.1, "backend": "fake",
+                         "primary_stream": "raw", "skew_angle": 0.0,
+                         "resized": False}
+            self.outputs = {}
+
+        @property
+        def status_line(self):
+            return "fake"
+
+    def fake_pages(path, dpi=200):
+        for i in range(3):
+            yield i, np.full((60, 40, 3), 255, np.uint8), f"gt{i}"
+
+    monkeypatch.setattr(doc_data, "pdf_to_pages", fake_pages)
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        lambda img, **kw: _FakeResult(int(kw["stem"][-1])))
+    monkeypatch.setattr(app, "OUTPUT_DIR", str(tmp_path))
+
+    pdf_in = tmp_path / "in.pdf"
+    pdf_in.write_bytes(b"%PDF-1.4")
+    _slider, _ov, _tr, pdf, txt, status = app.process_document(
+        None, str(pdf_in), "auto", False, False, False, False, None, True)
+
+    assert pdf and os.path.exists(pdf)
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(pdf)
+    assert len(doc) == 3
+    for i in range(3):
+        assert f"PAGE{i}" in doc[i].get_textpage().get_text_range()
+    assert txt and os.path.exists(txt)
+    assert "3 processed" in status
+
+
 def test_process_document_no_input():
     import app
     slider, overlay, transcript, pdf, txt, status = app.process_document(
