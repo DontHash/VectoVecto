@@ -88,6 +88,28 @@ def digit_cer(gt: str, hyp: str, bag: bool = False) -> float:
     return float(jiwer.cer(gt_d, hyp_d))
 
 
+def bootstrap_ci(values: Sequence[float], n_boot: int = 2000, alpha: float = 0.05,
+                 seed: int = 0) -> List[float]:
+    """Percentile bootstrap CI of the mean. Deterministic for a given seed.
+
+    Small eval sets (30-60 pages) make point deltas meaningless without an
+    error bar; this is the cheapest honest one. Returns [lo, hi] at
+    (alpha/2, 1-alpha/2).
+    """
+    import numpy as np
+
+    vals = np.asarray([v for v in values if v == v and v is not None], dtype=float)
+    if vals.size == 0:
+        return [float("nan"), float("nan")]
+    if vals.size == 1:
+        return [float(vals[0]), float(vals[0])]
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, vals.size, size=(n_boot, vals.size))
+    means = vals[idx].mean(axis=1)
+    lo, hi = np.percentile(means, [100.0 * alpha / 2.0, 100.0 * (1.0 - alpha / 2.0)])
+    return [float(lo), float(hi)]
+
+
 @dataclass
 class TokenStats:
     total: int = 0

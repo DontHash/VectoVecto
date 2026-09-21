@@ -32,6 +32,7 @@ import json
 import os
 import sys
 import time
+import zlib
 from typing import Callable, Dict, List, Optional
 
 import cv2
@@ -129,7 +130,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                    max_side: int = 0, with_photo: bool = False,
                    conf_threshold: float = 60.0, recheck_digits: bool = False,
                    repass_conf_below: float = 95.0,
-                   lang: Optional[str] = None) -> Dict:
+                   lang: Optional[str] = None,
+                   bootstrap: int = 0) -> Dict:
     results: Dict[str, Dict] = {}
     per_page: List[Dict] = []
     for i, entry in enumerate(entries, 1):
@@ -275,6 +277,16 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "invented_digits": agg["invented_digits"],
             "repass_conflicts": agg["repass_conflicts"],
         }
+        if bootstrap:
+            for m in ("cer", "cer_bag", "digit_cer", "digit_cer_bag", "wer",
+                      "coverage", "false_alarm"):
+                vals = agg.get(m)
+                if not vals:
+                    continue
+                stable_seed = zlib.crc32(f"{key}:{m}".encode("utf-8"))
+                lo, hi = doc_metrics.bootstrap_ci(vals, n_boot=bootstrap,
+                                                  seed=stable_seed)
+                summary[key][f"{m}_ci"] = [round(lo, 4), round(hi, 4)]
     return {"summary": summary, "per_page": per_page}
 
 
@@ -290,12 +302,27 @@ def print_summary(summary: Dict) -> None:
     print("\n=== DOCUMENT EVAL (sorted by CER) ===")
     print(header)
     print("-" * len(header))
+    has_ci = False
     for key, m in order:
         print(f"{key:<22}{m['cer']:>8.4f}{_fmt(m.get('cer_bag')):>8}{_fmt(m.get('digit_cer')):>8}"
               f"{_fmt(m.get('digit_cer_bag')):>8}{_fmt(m.get('digit_coverage')):>8}"
               f"{_fmt(m.get('digit_false_alarm')):>7}"
               f"{m['coverage']:>7.3f}{m['false_alarm']:>9.3f}{m['ece']:>7.3f}"
               f"{m['invented']:>7d}{m['seconds']:>8.2f}")
+        if m.get("cer_ci"):
+            has_ci = True
+    if has_ci:
+        print("\n--- 95% bootstrap CI (mean) ---")
+        for key, m in order:
+            parts = []
+            for name, mkey in (("CER", "cer_ci"), ("bagCER", "cer_bag_ci"),
+                               ("digCER", "digit_cer_ci"), ("digBAG", "digit_cer_bag_ci"),
+                               ("WER", "wer_ci")):
+                ci = m.get(mkey)
+                if ci:
+                    parts.append(f"{name} [{ci[0]:.3f}-{ci[1]:.3f}]")
+            if parts:
+                print(f"  {key}: " + "  ".join(parts))
 
 
 def main():
@@ -324,6 +351,12 @@ def main():
                     help="re-pass digit tokens with conf below this (100 = all)")
     ap.add_argument("--pages", type=int, default=0)
     ap.add_argument("--max-side", type=int, default=0)
+    ap.add_argument("--bootstrap", type=int, default=0,
+                    help="bootstrap resamples for 95%% CIs on headline metrics "
+                         "(e.g. 2000; reported in JSON and below the table)")
+    ap.add_argument("--frozen", default=None,
+                    help="path to a freeze manifest (eval_freeze.py); scoring "
+                         "refuses to run if any dataset file drifted")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -348,6 +381,20 @@ def main():
     if not args.data_dir:
         raise SystemExit("provide --data-dir or --build-synthetic N")
 
+    frozen_info = None
+    if args.frozen:
+        from eval_freeze import freeze_info, verify_manifest
+        ok, problems = verify_manifest(args.frozen, data_dir=args.data_dir)
+        frozen_info = freeze_info(args.frozen)
+        frozen_info["verified"] = bool(ok)
+        if not ok:
+            for p in problems[:20]:
+                print(f"  [frozen] DRIFT: {p}")
+            raise SystemExit(f"frozen dataset drift: {len(problems)} file(s) changed — "
+                             f"refusing to score (freeze a new version instead)")
+        print(f"[doc-eval] frozen manifest verified: {frozen_info['name']} "
+              f"({frozen_info['manifest_sha256'][:12]})")
+
     manifest = doc_data.load_dataset(args.data_dir)
     entries = manifest["entries"]
     if args.pages:
@@ -365,10 +412,12 @@ def main():
                             with_photo=args.with_photo,
                             recheck_digits=args.recheck_digits,
                             repass_conf_below=args.repass_conf_below,
-                            lang=args.lang)
+                            lang=args.lang, bootstrap=args.bootstrap)
     report["args"] = vars(args)
     report["dataset"] = {"dir": args.data_dir, "kind": manifest.get("kind"),
                          "pages": len(entries)}
+    if frozen_info:
+        report["frozen"] = frozen_info
     print_summary(report["summary"])
 
     if args.json:
