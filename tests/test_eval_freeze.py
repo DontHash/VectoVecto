@@ -16,7 +16,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from doc_metrics import bootstrap_ci  # noqa: E402
-from eval_freeze import build_manifest, freeze_info, verify_manifest  # noqa: E402
+from eval_freeze import (BASE_DIR, _resolve_data_dir, build_manifest,  # noqa: E402
+                         freeze_info, verify_manifest)
 
 
 def _make_dataset(tmp_path):
@@ -79,6 +80,21 @@ def test_freeze_detects_missing_file(tmp_path):
     ok, problems = verify_manifest(str(out), data_dir=str(tmp_path))
     assert not ok
     assert any("p2:gt" in x and "missing" in x for x in problems)
+
+
+def test_freeze_records_and_resolves_data_dir(tmp_path):
+    _make_dataset(tmp_path)
+    out = tmp_path / "FROZEN.json"
+    m = build_manifest(str(tmp_path), "unit_test_v1", str(out))
+    assert "data_dir" in m and os.path.isdir(m["data_dir"])
+    # recorded absolute here (tmp is outside the repo); verify without override
+    ok, problems = verify_manifest(str(out))
+    assert ok, problems
+    # resolution rules
+    assert _resolve_data_dir(None, str(out)) == str(tmp_path)
+    rel = _resolve_data_dir("data/doc_eval/does_not_exist_yet", str(out))
+    assert rel.startswith(BASE_DIR)
+    assert _resolve_data_dir(str(tmp_path), str(out)) == str(tmp_path)
 
 
 def test_bootstrap_ci_deterministic_and_bounded():

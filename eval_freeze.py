@@ -74,6 +74,11 @@ def build_manifest(data_dir: str, name: str, out_path: str,
                 "sha256": sha256_file(path),
             }
         frozen_entries.append(rec)
+    abs_data = os.path.abspath(data_dir)
+    try:
+        rel_data = os.path.relpath(abs_data, BASE_DIR).replace("\\", "/")
+    except ValueError:  # different drive (Windows)
+        rel_data = abs_data
     manifest = {
         "freeze_version": version,
         "name": name,
@@ -81,6 +86,7 @@ def build_manifest(data_dir: str, name: str, out_path: str,
         "license": license,
         "provenance": provenance,
         "notes": notes,
+        "data_dir": rel_data if not rel_data.startswith("..") else abs_data,
         "n_entries": len(frozen_entries),
         "entries": frozen_entries,
     }
@@ -88,6 +94,18 @@ def build_manifest(data_dir: str, name: str, out_path: str,
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     return manifest
+
+
+def _resolve_data_dir(recorded: Optional[str], manifest_path: str) -> str:
+    """Manifest data_dir may be repo-relative (portable) or absolute."""
+    if not recorded:
+        return os.path.dirname(os.path.abspath(manifest_path))
+    if os.path.isabs(recorded):
+        return recorded
+    local = os.path.abspath(recorded)
+    if os.path.isdir(local):
+        return local
+    return os.path.join(BASE_DIR, recorded)
 
 
 def verify_manifest(manifest_path: str, data_dir: Optional[str] = None,
@@ -102,7 +120,7 @@ def verify_manifest(manifest_path: str, data_dir: Optional[str] = None,
         manifest = json.load(f)
     if expect_hash and sha256_file(manifest_path) != expect_hash:
         return False, [f"manifest itself changed: {manifest_path}"]
-    base = data_dir or manifest.get("data_dir") or os.path.dirname(manifest_path)
+    base = data_dir or _resolve_data_dir(manifest.get("data_dir"), manifest_path)
     problems: List[str] = []
     for e in manifest.get("entries", []):
         for role in ("clean", "degraded", "gt", "image"):
@@ -143,7 +161,7 @@ def main():
     args = ap.parse_args()
 
     if args.check:
-        ok, problems = verify_manifest(args.check)
+        ok, problems = verify_manifest(args.check, data_dir=args.data_dir)
         info = freeze_info(args.check)
         print(f"[freeze] check {info['name']} ({info['manifest_sha256'][:12]}): "
               f"{'OK' if ok else 'DRIFT'}")

@@ -832,7 +832,8 @@ def parse_alto_page(xml_bytes: bytes) -> Dict:
 
 
 def build_heidata_dataset(zips_dir: str, out_dir: str,
-                          max_pages_per_book: int = 0) -> Dict:
+                          max_pages_per_book: int = 0,
+                          books: List[str] | None = None) -> Dict:
     """Real scanned Devanagari book pages + ALTO word/line ground truth.
 
     Source: heiDATA "Ground Truth data for printed Devanagari" (Merkel-Hilf
@@ -851,6 +852,8 @@ def build_heidata_dataset(zips_dir: str, out_dir: str,
     entries: List[Dict] = []
     for zip_path in sorted(glob.glob(os.path.join(zips_dir, "*.zip"))):
         book = os.path.splitext(os.path.basename(zip_path))[0]
+        if books and book not in books:
+            continue
         with zipfile.ZipFile(zip_path) as z:
             names = z.namelist()
             jpgs = sorted(n for n in names if n.lower().endswith(".jpg"))
