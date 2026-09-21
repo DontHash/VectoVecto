@@ -1296,6 +1296,29 @@ Devanagari, OFF for Latin (the Appendix I verdict stands for photos); CLI
 gains `--no-repass-digits` to force it off. The queue's weakest area (clean
 PDFs, R@10 0.15) more than doubled.
 
+### W0.5 photo-proxy set (A5 stand-in; measured, labeled proxy)
+
+41 `nepali_pdf_v2` pages degraded with `degradation_document` (seeded,
+max_side 1700) and scored against the Gemini anchor GT; heavy preset is frozen
+as `nepali_photo_proxy_v1`. This is a proxy, not real photographs.
+
+| preset | CER | valid-token recall | queue coverage | false alarm |
+|---|---|---|---|---|
+| clean anchor | 0.135 | 0.877 | 0.036 | 0.412 |
+| medium | **0.370 [0.266-0.474]** | 0.499 | 0.625 | 0.050 |
+| heavy | **0.757 [0.660-0.851]** | 0.174 | 0.875 | 0.005 |
+
+Stream A/B on the medium proxy (`--methods raw,restore`): restored is not
+better (CER 0.376 vs 0.370, digit CER 0.501 vs 0.441) and adds **2041
+invented tokens** - the restore stream hallucinates text on degraded photos,
+so `raw` stays the primary stream (confirms Appendix I).
+
+Verdict: photo artifacts are the largest recognition gap measured so far
+(3-6x CER); the queue becomes honest (coverage rises) but recognition itself
+collapses. Wave 2 (real A5 photographs + photo preprocessing/dewarp) is
+high priority; the proxy tells us the size of the problem before field data
+arrives.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display

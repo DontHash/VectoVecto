@@ -73,6 +73,7 @@ Measured behaviour, not marketing (full tables in
 | Devanagari flags + calibration (Appendix M, Q) | `script_mismatch` + `invalid_sequence` (impossible combining sequence = misread by construction) + 2x digit re-pass (default on) + conf-90 digit bar + isotonic `cal_conf`: letterpress digit R@10 **0.88**, token R@10 0.31; clean gov PDFs digit R@10 **0.38**, token R@10 0.15. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
 | Optional digit verifier (`--digit-verifier bodhan`, Appendix L/N/Q) | second model re-reads suspect digits; disagreement is flagged `cross_model_conflict` with the alt reading kept (text never changed). Frozen: flag recall 0.71 / precision 0.81; queue R@10 0.730→0.752 (`--digit-verifier-scope flagged`). Cost reality (W0.2): ~0.9 s/crop floor on this hardware, +8.3 s/page end-to-end, junk-crop filter + 64-token cap shipped; **stays opt-in** (cost gate failed). Needs a one-time `hf auth login` + license acceptance, ~1.9 GB. License: Indic Open Model License 1.0 (self-host OK, no third-party hosting, attribution) |
 | Multi-page PDF (P6) | `--max-pages 0` processes every page and writes `<stem>_combined.pdf` / `.txt` (per-page artifacts unchanged); GUI "All pages (PDF)" checkbox, default stays first page. Verified: 3-page demo → 3-page searchable PDF, text extractable on every page |
+| Phone-photo proxy (W0.5, **not real photos**) | modern Nepali pages under synthetic camera artifacts: CER 0.370 [0.266–0.474] medium / 0.757 [0.660–0.851] heavy (clean 0.135); queue coverage 0.63/0.88 — recognition, not honesty, is what breaks. Real A5 field set still open |
 | Mixed-page router (P5, opt-in `--mixed-router`) | restored text regions + untouched logos/photos/signatures (non-text PSNR 60–67 dB vs 18–23 dB after a naive full-page restore). Pre-registered gates: text CER +0%, cost 0.31 s/page, non-text PASS, but 1 invented token on a photo texture → **not auto-enabled** (Appendix O) |
 | Tesseract backend | fails on real photos (CORD CER 0.90 raw / 1.57 restored) — clean-scan fallback only |
 | Numeric flags bar (coverage ≥0.55) | **not met** on real photos; replaced by the ranked review queue |
@@ -87,7 +88,7 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-207 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
+209 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
 mixed-page router), layout (14), orientation (13), language plumbing,
 engine-state regressions, frozen-manifest + bootstrap-CI guards, GT-validity
 audits, error taxonomy, anchor harness (engine worksheet + Gemini

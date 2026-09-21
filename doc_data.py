@@ -763,6 +763,58 @@ def build_mixed_dataset(out_dir: str, n: int = 6, dpi: int = 300,
     return manifest
 
 
+def build_photo_proxy_dataset(src_data_dir: str, out_dir: str,
+                              level: str = "heavy", max_side: int = 1700,
+                              seed: int = 1234,
+                              gt_dir: Optional[str] = None) -> Dict:
+    """Phone-photo proxy: degrade an existing page set (seeded, deterministic).
+
+    `gt_dir` optionally replaces the source GT files (matched by entry id) -
+    e.g. the Gemini anchor texts, since modern-PDF text layers are corrupt.
+    This is a *proxy* for the A5 field set (real photographs), labeled as
+    such: photo artifacts come from `degradation_document.degrade_page`.
+    """
+    src = load_dataset(src_data_dir)
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_out = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_out, exist_ok=True)
+    entries: List[Dict] = []
+    for i, e in enumerate(src["entries"]):
+        img = imread_safe(e["_degraded_path"])
+        if img is None:
+            continue
+        h, w = img.shape[:2]
+        if max_side and max(h, w) > max_side:
+            f = max_side / max(h, w)
+            img = cv2.resize(img, (max(1, int(w * f)), max(1, int(h * f))),
+                             interpolation=cv2.INTER_AREA)
+        degraded = degrade_page(img, seed=seed + i, level=level)
+        pid = e["id"]
+        page_path = os.path.join(pages_dir, f"{pid}_photo.png")
+        imwrite_safe(page_path, degraded)
+        gt_src = (os.path.join(gt_dir, f"{pid}.txt")
+                  if gt_dir else e["_gt_path"])
+        gt_text = open(gt_src, encoding="utf-8").read()
+        gt_path = os.path.join(gt_out, f"{pid}.txt")
+        with open(gt_path, "w", encoding="utf-8") as f:
+            f.write(gt_text)
+        entries.append({
+            "id": pid, "source": f"photo_proxy:{level}", "level": level,
+            "seed": seed + i, "gt_chars": len(gt_text),
+            "clean": os.path.relpath(page_path, out_dir),
+            "degraded": os.path.relpath(page_path, out_dir),
+            "gt": os.path.relpath(gt_path, out_dir),
+        })
+    manifest = {"kind": "photo_proxy", "name": f"photo_proxy_{level}",
+                "level": level, "max_side": max_side, "seed": seed,
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "entries": entries}
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
 # ---------------------------------------------------------------------------
 # real-photo datasets from Hugging Face (annotations, no clean reference)
 # ---------------------------------------------------------------------------
