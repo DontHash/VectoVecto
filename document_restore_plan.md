@@ -1392,6 +1392,62 @@ degradation (the `degradation_document` heavy preset, not light blur);
 Vertex job -> per-epoch GCS checkpoints -> gate harness) is built and proven,
 so a second attempt is a data/config change, not a rebuild.
 
+---
+
+## Appendix R2 - W1 attempt 2: real-line mix, multi-font, heavy augmentation
+
+**What changed (all committed).**
+* `doc_data`: multi-font pool (Nirmala UI x2 weights, Adobe Devanagari
+  regular/bold/italic - every Devanagari font on the box) + per-line
+  letter-spacing and stretch jitter (`synthesize_deva_lines(fonts=..., jitter=)`).
+* `deva_crnn.augment`: `level="heavy"` - ink spread/erosion, resolution loss
+  (downscale-upscale), illumination ramp, blur 0.5-2.2, noise 4-20, JPEG
+  28-72, +/-1.5 deg rotation.
+* `scripts/label_real_lines.py`: **montage** Gemini labeling - the RapidOCR
+  line *crops* are stacked into one image and transcribed one strip per line,
+  so labels are 1:1 with the units the recognizer actually sees (page-level
+  transcription + DP alignment was tried first and failed: Gemini reads table
+  *rows*, RapidOCR detects *cells*). DP fallback on count mismatch, resumable,
+  non-Devanagari pages skipped, 3-48 char labels.
+* Training mix (v3): 36k multi-font heavy-aug synthetic + heiDATA **dev**
+  1322 human-GT letterpress lines x3 + 745 Gemini-labeled v2 lines x3
+  (42,183 lines, charset matched to v2 for warm start via `--match-charset`).
+* `deva_crnn.train`: `--init` warm start (charset-checked), `--workers`
+  (torch shared-file-mapping dies on this box's page-file limit with 2
+  workers under memory pressure - error 1455).
+
+**Frozen-gate trajectory** (bar: digit-exact >= 0.75):
+
+| model | heiDATA digit-exact | heiDATA CER | heiDATA bagCER | v2 anchor bagCER |
+|---|---|---|---|---|
+| attempt 1: synthetic only | 0.011 | 1.071 | 1.094 | 0.779 |
+| attempt 2a: + dev letterpress lines, multi-font, heavy aug | 0.367 | 0.447 | 0.566 | 0.757 |
+| attempt 2b: 2a + 745 Gemini real v2 lines (fine-tune) | **0.424** | **0.390** | **0.506** | **0.643** |
+| RapidOCR (shipped) | 0.533 (line, App. L) | 0.434 (page) | - | 0.142 |
+
+**Verdict: gate FAILED, model not adopted.** Attempt 1 -> 2 is a 38x digit
+improvement (0.011 -> 0.424), so the real-line hypothesis is confirmed; the
+bar still is not met.
+
+**Declared trade-offs.**
+* heiDATA **dev is consumed as training data** from attempt 2 on: it stops
+  being a tuning set. The 7 frozen eval books stay untouched and remain the
+  clean generalization measure.
+* The v2 anchor improvement is optimistic: v3 trained on Gemini-labeled v2
+  sibling pages and is scored against Gemini-labeled anchor pages (shared
+  model bias). heiDATA (human GT, unseen books) is the honest number.
+* Montage mining stats: 30 pages -> 745 lines kept (52%); drops are long
+  merged table rows (>48 chars) and English pages (skipped before any call).
+
+**Next levers (recorded).**
+1. **More real letterpress GT** is the binding constraint. Local heiDATA zips
+   are exactly the 11 used books; harvest more of the collection (or a
+   Transkribus Devanagari set) with the same GT-audit + gate discipline.
+2. Input height 32 -> 48 px (small letterpress type is resolution-limited).
+3. CTC beam search / scale TTA instead of greedy decode.
+4. Real-line oversampling x10 (cheap; same data, more weight).
+5. Wider CRNN (hidden 256 -> 384) once data supports it.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display

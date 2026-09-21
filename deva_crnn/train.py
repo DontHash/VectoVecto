@@ -101,7 +101,8 @@ def _upload_if_gcs(local_path: str, out_dir: str) -> None:
 
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
-          max_hours: float = 3.0, init: Optional[str] = None) -> Dict:
+          max_hours: float = 3.0, init: Optional[str] = None,
+          workers: int = -1) -> Dict:
     images, texts = load_npz(resolve_data_path(data_path))
     charset = build_charset(texts)
     rng = np.random.default_rng(seed)
@@ -111,8 +112,10 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
     ds_tr = LineDataset(images[train_idx], [texts[i] for i in train_idx], charset)
     ds_va = LineDataset(images[val_idx], [texts[i] for i in val_idx], charset)
     # Worker processes cost ~3 s per epoch on Windows regardless of dataset
-    # size; only worth it for real datasets.
-    workers = 0 if len(ds_tr) < 512 else 2
+    # size; only worth it for real datasets. `workers=0` avoids torch's shared
+    # file mapping, which fails on memory-constrained Windows boxes.
+    if workers < 0:
+        workers = 0 if len(ds_tr) < 512 else 2
     dl_tr = DataLoader(ds_tr, batch_size=batch, shuffle=True, collate_fn=_collate,
                        num_workers=workers,
                        drop_last=len(ds_tr) >= batch)
@@ -187,10 +190,12 @@ def main():
     ap.add_argument("--max-hours", type=float, default=3.0)
     ap.add_argument("--init", default=None,
                     help="checkpoint to warm-start from (charset must match)")
+    ap.add_argument("--workers", type=int, default=-1,
+                    help="DataLoader workers (-1 auto; 0 avoids shared memory)")
     args = ap.parse_args()
     train(args.data, args.out, epochs=args.epochs, batch=args.batch,
           lr=args.lr, seed=args.seed, max_hours=args.max_hours,
-          init=args.init)
+          init=args.init, workers=args.workers)
 
 
 if __name__ == "__main__":

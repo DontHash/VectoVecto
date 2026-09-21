@@ -1,0 +1,24 @@
+{
+  "n": 39966,
+  "seed": 1,
+  "clean_frac": 0.5,
+  "aug_level": "heavy",
+  "fonts": "all",
+  "font_files": [
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Bold.otf",
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Italic.otf",
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Regular.otf",
+    "C:\\Windows\\Fonts\\Nirmala.ttc"
+  ],
+  "counts": {
+    "synthetic": 36000,
+    "heidata_dev": 1322,
+    "real_repeat": 3,
+    "real_total": 3966,
+    "total": 39966
+  },
+  "charset_size": 102,
+  "size_mb": 107.8,
+  "source": "doc_data.synthesize_deva_lines + deva_crnn.gate.heidata_line_crops + label_real_lines + augment_line",
+  "created": "2026-09-22 00:20:45"
+}

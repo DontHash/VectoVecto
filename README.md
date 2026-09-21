@@ -88,13 +88,14 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-209 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
+232 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
 mixed-page router), layout (14), orientation (13), language plumbing,
 engine-state regressions, frozen-manifest + bootstrap-CI guards, GT-validity
 audits, error taxonomy, anchor harness (engine worksheet + Gemini
 transcription), queue metrics (digit + all-token), Unicode-path IO, line eval,
-box metrics, sanity audit. `legacy/` holds archived photo-training scripts and
-is not part of the product.
+box metrics, sanity audit, Devanagari line synthesis (multi-font), CRNN
+plumbing (overfit proof, heavy augmentation) and the real-line mining gate.
+`legacy/` holds archived photo-training scripts and is not part of the product.
 
 ## Real-data evaluation (frozen)
 

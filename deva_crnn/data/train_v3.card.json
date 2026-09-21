@@ -1,0 +1,27 @@
+{
+  "n": 42183,
+  "seed": 1,
+  "clean_frac": 0.5,
+  "aug_level": "heavy",
+  "fonts": "all",
+  "match_charset": "deva_crnn/data/train_v2.npz",
+  "font_files": [
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Bold.otf",
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Italic.otf",
+    "C:\\Windows\\Fonts\\AdobeDevanagari-Regular.otf",
+    "C:\\Windows\\Fonts\\Nirmala.ttc"
+  ],
+  "counts": {
+    "synthetic": 36000,
+    "heidata_dev": 1322,
+    "real_gemini": 745,
+    "real_repeat": 3,
+    "real_total": 6201,
+    "total": 42183,
+    "charset_filtered": 18
+  },
+  "charset_size": 102,
+  "size_mb": 111.5,
+  "source": "doc_data.synthesize_deva_lines + deva_crnn.gate.heidata_line_crops + label_real_lines + augment_line",
+  "created": "2026-09-22 02:00:38"
+}

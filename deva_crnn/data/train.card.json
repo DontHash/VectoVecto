@@ -1,0 +1,9 @@
+{
+  "n": 30000,
+  "seed": 1,
+  "clean_frac": 0.5,
+  "charset_size": 65,
+  "size_mb": 49.3,
+  "source": "doc_data.synthesize_deva_lines + deva_crnn.data.augment_line",
+  "created": "2026-09-21 22:47:17"
+}
