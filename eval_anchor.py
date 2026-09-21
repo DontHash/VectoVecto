@@ -103,12 +103,17 @@ def mark_disagreements(text: str, other: str) -> str:
     return " ".join(out)
 
 
-def render_html(rows: List[Dict], out_path: str) -> str:
-    """Self-contained worksheet: page image + engine readings, disagreements marked.
+def render_html(rows: List[Dict], out_path: str,
+                engine_keys: tuple = ("rapidocr", "bodhan"),
+                engine_labels: tuple = ("RapidOCR (edit this in verified/*.txt)",
+                                        "bodhan"),
+                text_layer_key: str = "text_layer",
+                text_layer_label: str = "corrupt text layer (record only)") -> str:
+    """Self-contained worksheet: page image + two readings, disagreements marked.
 
-    The corrupt text layer is kept in a collapsed block for the record; the
-    human pass compares RapidOCR (the system under test, pre-filled in
-    `verified/<page>.txt`) against bodhan and edits only the marked spots.
+    Labels are caller-supplied so the same renderer serves the engine-vs-engine
+    worksheet and the Gemini-vs-engine audit. The third reading goes in a
+    collapsed block for the record.
     """
     parts = [
         "<!doctype html><meta charset='utf-8'>",
@@ -123,11 +128,12 @@ def render_html(rows: List[Dict], out_path: str) -> str:
         ".rate{color:#555;font-size:13px;}"
         "details{margin-top:6px;color:#777;font-size:13px;}</style>",
         "<h1>Anchor worksheet</h1>",
-        "<p>For each page: read the image, edit "
-        "<code>verified/&lt;page&gt;.txt</code> (pre-filled with RapidOCR). "
-        "Highlighted tokens are where the two engines disagree - those are the "
-        "only spots that need a decision; agreement spots are usually right.</p>",
+        "<p>For each page: read the image and compare the two readings. "
+        "Highlighted tokens are the only spots that differ - those need a "
+        "decision; agreement spots are usually right.</p>",
     ]
+    ka, kb = engine_keys
+    la, lb = engine_labels
     for r in rows:
         uri = _img_data_uri(r.get("image", ""))
         img_tag = f"<img src='{uri}'>" if uri else "<em>no image</em>"
@@ -136,15 +142,15 @@ def render_html(rows: List[Dict], out_path: str) -> str:
         parts.append(
             f"<div class='page' id='{html_mod.escape(r['page'])}'>"
             f"<h2>{html_mod.escape(r['page'])}</h2>"
-            f"<div class='rate'>engine agreement {r['agreement_rate']:.1%} | "
+            f"<div class='rate'>agreement {r['agreement_rate']:.1%} | "
             f"disagreements: {html_mod.escape(dis) or 'none'}</div>"
             f"{img_tag}"
-            "<table><tr><th>RapidOCR (edit this in verified/*.txt)</th>"
-            "<th>bodhan</th></tr>"
-            f"<tr><td>{mark_disagreements(rd.get('rapidocr', ''), rd.get('bodhan', ''))}</td>"
-            f"<td>{mark_disagreements(rd.get('bodhan', ''), rd.get('rapidocr', ''))}</td></tr></table>"
-            f"<details><summary>corrupt text layer (record only)</summary>"
-            f"{html_mod.escape(rd.get('text_layer', ''))}</details>"
+            f"<table><tr><th>{html_mod.escape(la)}</th>"
+            f"<th>{html_mod.escape(lb)}</th></tr>"
+            f"<tr><td>{mark_disagreements(rd.get(ka, ''), rd.get(kb, ''))}</td>"
+            f"<td>{mark_disagreements(rd.get(kb, ''), rd.get(ka, ''))}</td></tr></table>"
+            f"<details><summary>{html_mod.escape(text_layer_label)}</summary>"
+            f"{html_mod.escape(rd.get(text_layer_key, ''))}</details>"
             "</div>")
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
