@@ -177,6 +177,9 @@ def main():
                     help="write a GT-vs-OCR contact sheet for human review")
     ap.add_argument("--sheet-n", type=int, default=25)
     ap.add_argument("--review-csv", default=None)
+    ap.add_argument("--gt-audit", action="store_true",
+                    help="audit the GT itself (Devanagari invalid-sequence "
+                         "rate) instead of running OCR")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -200,6 +203,20 @@ def main():
         entries = entries[:args.limit]
     print(f"[lines] {len(entries)} crops from {args.data_dir} "
           f"(lang={normalize_lang(args.lang)})")
+
+    if args.gt_audit:
+        texts = [open(e["_gt_path"], encoding="utf-8").read() for e in entries]
+        audit = doc_metrics.validity_report(texts)
+        print("\n=== GT AUDIT (invalid Devanagari sequences) ===")
+        for k, v in audit.items():
+            print(f"  {k:<24} {v}")
+        if args.json:
+            os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
+            with open(args.json, "w", encoding="utf-8") as f:
+                json.dump({"data_dir": args.data_dir, **audit}, f,
+                          indent=2, ensure_ascii=False)
+            print(f"[lines] wrote {args.json}")
+        return
 
     if args.ocr not in available_backends():
         raise SystemExit(f"OCR backend {args.ocr!r} unavailable")

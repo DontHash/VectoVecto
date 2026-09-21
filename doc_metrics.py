@@ -131,6 +131,10 @@ _DEVA_VOWEL_SIGN = frozenset(
 _DEVA_VIRAMA = "\u094d"
 _DEVA_NUKTA = "\u093c"
 _DEVA_MARKS = frozenset("\u0901\u0902\u0903")  # candrabindu, anusvara, visarga
+_DEVA_INDEPENDENT = frozenset(
+    [chr(c) for c in range(0x0904, 0x0915)]
+    + [chr(c) for c in range(0x0960, 0x0962)]
+    + [chr(c) for c in range(0x0972, 0x0978)])
 
 
 def _invalid_devanagari_token(tok: str) -> bool:
@@ -142,8 +146,11 @@ def _invalid_devanagari_token(tok: str) -> bool:
     """
     if "\ufffd" in tok:
         return True
+    body = tok.strip(_PUNCT)
+    if body and all(ch in _DEVA_MARKS for ch in body):
+        return False  # standalone anusvara/candrabindu/visarga is valid
     prev = "start"
-    for ch in tok.strip(_PUNCT):
+    for ch in body:
         if ch in _DEVA_VOWEL_SIGN:
             if prev not in ("consonant", "nukta"):
                 return True
@@ -157,11 +164,14 @@ def _invalid_devanagari_token(tok: str) -> bool:
                 return True
             prev = "nukta"
         elif ch in _DEVA_MARKS:
-            if prev not in ("consonant", "vowel_sign", "nukta", "mark"):
+            if prev not in ("consonant", "vowel_sign", "nukta", "mark",
+                            "independent"):
                 return True
             prev = "mark"
         elif ch in _DEVA_CONSONANT:
             prev = "consonant"
+        elif ch in _DEVA_INDEPENDENT:
+            prev = "independent"
         else:
             prev = "other"
     return False
@@ -210,6 +220,34 @@ def bag_stats(gt: str, hyp: str) -> Dict[str, float]:
         "miss_rate": (1.0 - matched / len(gt_toks)) if gt_toks else 0.0,
         "invented_tokens": invented,
         "invented_rate": (invented / len(hyp_toks)) if hyp_toks else 0.0,
+    }
+
+
+def validity_report(texts: Sequence[str]) -> Dict:
+    """Aggregate `devanagari_validity` over a dataset's GT texts.
+
+    Used to quantify reference corruption before quoting any metric: the
+    nepali_lines slice (N6 audit) and the modern-PDF set (N2 gate).
+    """
+    total = deva = invalid = bad_texts = 0
+    examples: List[str] = []
+    for t in texts:
+        v = devanagari_validity(t)
+        total += v["tokens"]
+        deva += v["devanagari_tokens"]
+        invalid += v["invalid_tokens"]
+        if v["invalid_tokens"]:
+            bad_texts += 1
+        if len(examples) < 20:
+            examples.extend(v["examples"][:20 - len(examples)])
+    return {
+        "texts": len(texts),
+        "texts_with_invalid": bad_texts,
+        "tokens": total,
+        "devanagari_tokens": deva,
+        "invalid_tokens": invalid,
+        "invalid_token_rate": round(invalid / deva, 4) if deva else 0.0,
+        "examples": examples,
     }
 
 

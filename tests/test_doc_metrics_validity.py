@@ -14,7 +14,8 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import devanagari_validity, valid_gt_stats  # noqa: E402
+from doc_metrics import (devanagari_validity, valid_gt_stats,  # noqa: E402
+                         validity_report)
 
 
 def test_clean_devanagari_text_is_valid():
@@ -53,6 +54,26 @@ def test_latin_and_digits_do_not_count_as_invalid():
 def test_replacement_char_and_matra_after_digit():
     v = devanagari_validity("धारा\ufffd 12ा")
     assert v["invalid_tokens"] == 2
+
+
+def test_marks_after_independent_vowels_are_valid():
+    v = devanagari_validity("तपाईंले उँ अंश आँखा")
+    assert v["invalid_tokens"] == 0
+
+
+def test_standalone_visarga_token_is_valid():
+    v = devanagari_validity("धारा ः")
+    assert v["invalid_tokens"] == 0
+
+
+def test_standalone_matra_is_still_invalid():
+    v = devanagari_validity("ो")
+    assert v["invalid_tokens"] == 1
+
+
+def test_double_matra_still_invalid():
+    v = devanagari_validity("पूम्पूू")
+    assert v["invalid_tokens"] == 1
 
 
 def test_empty_text():
@@ -94,3 +115,19 @@ def test_valid_gt_stats_empty():
     s = valid_gt_stats("", "")
     assert s["valid_recall"] == 0.0
     assert s["unmatched_rate"] == 0.0
+
+
+def test_validity_report_aggregates_texts():
+    r = validity_report(["नेपालको संविधान", "िक देश", "धारा १"])
+    assert r["texts"] == 3
+    assert r["texts_with_invalid"] == 1
+    assert r["invalid_tokens"] == 1
+    assert r["devanagari_tokens"] == 6
+    assert r["invalid_token_rate"] == round(1 / 6, 4)
+    assert r["examples"] == ["िक"]
+
+
+def test_validity_report_empty():
+    r = validity_report([])
+    assert r["texts"] == 0
+    assert r["invalid_token_rate"] == 0.0

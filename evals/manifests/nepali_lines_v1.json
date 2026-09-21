@@ -4,7 +4,7 @@
   "created": "2026-09-21 10:36:17",
   "license": "unknown",
   "provenance": "huggingface:himalaya-ai/nepali-deva-ocr-eval (extraction of gauravgiri/nepali-ocr-dataset)",
-  "notes": "Real Nepali printed text-line crops, 500 rows, recognition-only eval. PROVENANCE UNVERIFIED: no license declared by the source; GT appears machine-generated and partially misaligned with the crops (probe evidence: GT implausibly short for the visual line length, e.g. a 2640px crop labeled with 18 chars; a 1766px crop labeled '1 7 2 6'). Internal evaluation only; quote numbers with this caveat until a human eyeball pass clears it.",
+  "notes": "Real Nepali printed text-line crops, 500 rows, recognition-only eval. PROVENANCE UNVERIFIED: no license declared by the source; GT appears machine-generated and partially misaligned with the crops (probe evidence: GT implausibly short for the visual line length, e.g. a 2640px crop labeled with 18 chars; a 1766px crop labeled '1 7 2 6'). N6 audit (doc_metrics.devanagari_validity, checker fixed for independent-vowel marks): 2/3007 Devanagari tokens invalid (0.07%) - the defect is alignment, not invalid sequences. GT INVALID for CER claims: behavior only until a human pass realigns it. Internal evaluation only.",
   "data_dir": "data/doc_eval/nepali_lines",
   "n_entries": 500,
   "entries": [
