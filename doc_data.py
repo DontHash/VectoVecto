@@ -763,6 +763,93 @@ def build_mixed_dataset(out_dir: str, n: int = 6, dpi: int = 300,
     return manifest
 
 
+def render_devanagari_line(text: str, px: int = 48, pad: int = 12) -> np.ndarray:
+    """One shaped Devanagari line as a BGR crop (training data, W1)."""
+    _qt_app()
+    from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter
+
+    font = _deva_font(px)
+    fm = QFontMetrics(font)
+    w = max(8, fm.horizontalAdvance(text) + 2 * pad)
+    h = max(8, fm.height() + 2 * pad)
+    img = QImage(w, h, QImage.Format.Format_RGB888)
+    img.fill(QColor(252, 251, 248))
+    p = QPainter(img)
+    p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    p.setFont(font)
+    p.setPen(QColor(22, 22, 28))
+    p.drawText(pad, pad + fm.ascent(), text)
+    p.end()
+    arr = np.frombuffer(img.constBits(), dtype=np.uint8,
+                        count=h * img.bytesPerLine())
+    arr = arr.reshape(h, img.bytesPerLine())[:, : w * 3].reshape(h, w, 3)
+    return cv2.cvtColor(np.ascontiguousarray(arr), cv2.COLOR_RGB2BGR)
+
+
+_DEVA_LINE_WORDS = (
+    "मिति", "नेपाल", "सरकार", "कार्यालय", "काठमाडौं", "विधेयक", "ऐन", "धारा",
+    "संविधान", "प्रतिवेदन", "श्री", "न्यायाधीश", "फैसला", "आदेश", "रकम",
+    "जम्मा", "कुल", "मूल्य", "कर", "दर", "संख्या", "विवरण", "ग्राहक",
+    "बीजक", "दर्ता", "प्रमाणीकरण", "समिति", "निर्णय", "योजना", "कार्यक्रम",
+    "सूचना", "पत्र", "आवेदन", "स्वीकृति", "अनुसूची", "उप-जम्मा", "रु.",
+)
+_DEVA_LINE_PATTERNS = (
+    "मिति २०८१-०४-२७",
+    "मिति २०८२/०९/०५",
+    "दर्ता नं. ०७९-DP-०४४५",
+    "बीजक नं. {n}",
+    "रु. {amount}",
+    "जम्मा {amount}",
+    "कुल जम्मा रु. {amount}",
+    "धारा {n} को उपधारा {m}",
+    "फैसला मिति २०८१-०९-२८",
+    "कर दर {n}.{m} प्रतिशत",
+    "फोन: ०१-{n}",
+    "प.सं. {n}/{m}",
+)
+
+
+def build_synthetic_line_dataset(out_dir: str, n: int = 1000, seed: int = 1,
+                                 min_px: int = 30, max_px: int = 64) -> Dict:
+    """Digit-rich synthetic Devanagari lines with exact GT (W1 training data).
+
+    Writes `pages/<id>.png` + `labels.tsv` (name<TAB>text) + manifest. The
+    pool over-samples dates/amounts because digit reading is the headline gap.
+    """
+    pages_dir = os.path.join(out_dir, "pages")
+    os.makedirs(pages_dir, exist_ok=True)
+    rng = np.random.default_rng(seed)
+    entries: List[Dict] = []
+    labels: List[str] = []
+    for i in range(n):
+        if rng.random() < 0.6:
+            pat = _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))]
+            text = pat.format(n=int(rng.integers(1, 99999)),
+                              m=int(rng.integers(1, 99)),
+                              amount=f"{int(rng.integers(100, 99999)):,}.{int(rng.integers(0, 99)):02d}")
+        else:
+            k = int(rng.integers(2, 6))
+            idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
+            text = " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)
+        px = int(rng.integers(min_px, max_px + 1))
+        img = render_devanagari_line(text, px=px)
+        pid = f"line_{i:06d}"
+        name = f"{pid}.png"
+        imwrite_safe(os.path.join(pages_dir, name), img)
+        labels.append(f"{name}\t{text}")
+        entries.append({"id": pid, "text": text, "px": px,
+                        "image": os.path.relpath(os.path.join(pages_dir, name),
+                                                 out_dir)})
+    with open(os.path.join(out_dir, "labels.tsv"), "w", encoding="utf-8") as f:
+        f.write("\n".join(labels) + "\n")
+    manifest = {"kind": "synthetic_lines", "name": "synthetic_deva_lines",
+                "seed": seed, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "entries": entries}
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
+    return manifest
+
+
 def build_photo_proxy_dataset(src_data_dir: str, out_dir: str,
                               level: str = "heavy", max_side: int = 1700,
                               seed: int = 1234,
