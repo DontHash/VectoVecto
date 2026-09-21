@@ -53,3 +53,27 @@ def test_synthetic_line_pool_is_digit_rich(tmp_path):
                       if any(c.isdigit() or "\u0966" <= c <= "\u096f"
                              for c in e["text"]))
     assert with_digits >= 20, "at least half the lines must carry digits"
+
+
+def test_multi_font_pool_renders_distinct_lines():
+    from doc_data import available_deva_font_specs, synthesize_deva_lines
+    specs = available_deva_font_specs()
+    assert specs, "at least one Devanagari font must be installed"
+    imgs, texts = synthesize_deva_lines(24, seed=7, fonts=specs, jitter=True)
+    assert len(imgs) == 24 and all(t for t in texts)
+    paths = {s["path"] for s in specs}
+    if len(paths) >= 2:
+        a = render_devanagari_line("नेपाल सरकार", px=40,
+                                   spec=specs[0])
+        b = render_devanagari_line("नेपाल सरकार", px=40,
+                                   spec=[s for s in specs
+                                         if s["path"] != specs[0]["path"]][0])
+        assert a.shape != b.shape or not np.array_equal(a, b), \
+            "different font files must render differently"
+
+
+def test_letter_spacing_and_stretch_change_the_line():
+    a = render_devanagari_line("मिति २०८१-०४-२७", px=40)
+    b = render_devanagari_line("मिति २०८१-०४-२७", px=40, letter_spacing=1.5,
+                               stretch=110)
+    assert a.shape != b.shape or not np.array_equal(a, b)

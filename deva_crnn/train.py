@@ -15,7 +15,7 @@ import argparse
 import json
 import os
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -101,7 +101,7 @@ def _upload_if_gcs(local_path: str, out_dir: str) -> None:
 
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
-          max_hours: float = 3.0) -> Dict:
+          max_hours: float = 3.0, init: Optional[str] = None) -> Dict:
     images, texts = load_npz(resolve_data_path(data_path))
     charset = build_charset(texts)
     rng = np.random.default_rng(seed)
@@ -121,6 +121,14 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = CRNN(n_classes=len(charset)).to(device)
+    if init:
+        ck = torch.load(init, map_location=device, weights_only=False)
+        if list(ck["charset"]) != list(charset):
+            raise SystemExit(
+                f"--init charset mismatch ({len(ck['charset'])} vs "
+                f"{len(charset)}): rebuild the data with --match-charset")
+        model.load_state_dict(ck["model"])
+        print(f"initialized from {init} (epoch {ck.get('epoch')})", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     ctc = nn.CTCLoss(blank=0, zero_infinity=True)
 
@@ -177,9 +185,12 @@ def main():
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--max-hours", type=float, default=3.0)
+    ap.add_argument("--init", default=None,
+                    help="checkpoint to warm-start from (charset must match)")
     args = ap.parse_args()
     train(args.data, args.out, epochs=args.epochs, batch=args.batch,
-          lr=args.lr, seed=args.seed, max_hours=args.max_hours)
+          lr=args.lr, seed=args.seed, max_hours=args.max_hours,
+          init=args.init)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,21 @@ from deva_crnn.train import train  # noqa: E402
 from doc_data import render_devanagari_line  # noqa: E402
 
 
+def test_heavy_augment_is_deterministic_and_keeps_ink():
+    img = render_devanagari_line("मिति २०८१-०४-२७", px=40)
+    r1 = augment_line(img, np.random.default_rng(5), level="heavy")
+    r2 = augment_line(img, np.random.default_rng(5), level="heavy")
+    assert r1.shape == img.shape and r1.dtype == np.uint8
+    assert np.array_equal(r1, r2), "same rng must give the same image"
+    light = augment_line(img, np.random.default_rng(5), level="light")
+    assert not np.array_equal(r1, light)
+    for seed in (0, 1, 2, 3):
+        out = augment_line(img, np.random.default_rng(seed), level="heavy")
+        assert int((out.min(axis=2) < 160).sum()) > 20, \
+            "heavy augmentation must not wash the ink out"
+        assert out.std() > 8, "heavy augmentation must not flatten to one tone"
+
+
 def test_charset_roundtrip():
     cs = build_charset(["नेपाल १२", "मिति"])
     ids = encode("नेपाल १२", cs)

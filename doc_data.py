@@ -421,6 +421,34 @@ _DEVA_FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
 )
 
+# Multi-font pool for training-data synthesis (W1 attempt 2): the first
+# attempt rendered every line in one family/weight, and the recognizer learned
+# the renderer instead of the script. Weight/italic variants of the same file
+# still differ enough in stroke weight and slant to matter.
+_DEVA_FONT_SPECS = (
+    {"path": r"C:\Windows\Fonts\Nirmala.ttc", "weight": 400},
+    {"path": r"C:\Windows\Fonts\Nirmala.ttc", "weight": 700},
+    {"path": r"C:\Windows\Fonts\AdobeDevanagari-Regular.otf", "weight": 400},
+    {"path": r"C:\Windows\Fonts\AdobeDevanagari-Bold.otf", "weight": 700},
+    {"path": r"C:\Windows\Fonts\AdobeDevanagari-Italic.otf", "weight": 400,
+     "italic": True},
+    {"path": "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+     "weight": 400},
+    {"path": "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Bold.ttf",
+     "weight": 700},
+    {"path": "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+     "weight": 400},
+)
+
+
+def available_deva_font_specs() -> List[Dict]:
+    """Font specs whose files exist on this machine (multi-font synthesis)."""
+    specs = [dict(s) for s in _DEVA_FONT_SPECS if os.path.exists(s["path"])]
+    if not specs:
+        raise RuntimeError("no Devanagari font found (tried: %s)"
+                           % ", ".join(s["path"] for s in _DEVA_FONT_SPECS))
+    return specs
+
 # Text needs complex-script shaping (conjuncts, matras) - PIL cannot do it, so
 # the fixture renders through Qt (HarfBuzz), offscreen. Verified: QTextLayout
 # reports shaped glyph runs (e.g. 'क्ष' 3 codepoints -> 1 glyph).
@@ -473,18 +501,27 @@ def _qt_app():
     return QGuiApplication.instance() or QGuiApplication([])
 
 
-def _deva_font(size_px: int):
+def _deva_font(size_px: int, spec: Optional[Dict] = None):
     from PySide6.QtGui import QFont, QFontDatabase
-    for path in _DEVA_FONT_CANDIDATES:
-        if os.path.exists(path):
-            fid = QFontDatabase.addApplicationFont(path)
-            fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
-            if fams:
-                font = QFont(fams[0])
-                font.setPixelSize(size_px)
-                return font
-    raise RuntimeError("no Devanagari font found (tried: %s)"
-                       % ", ".join(_DEVA_FONT_CANDIDATES))
+    if spec is None:
+        for path in _DEVA_FONT_CANDIDATES:
+            if os.path.exists(path):
+                spec = {"path": path}
+                break
+        if spec is None:
+            raise RuntimeError("no Devanagari font found (tried: %s)"
+                               % ", ".join(_DEVA_FONT_CANDIDATES))
+    fid = QFontDatabase.addApplicationFont(spec["path"])
+    fams = QFontDatabase.applicationFontFamilies(fid) if fid >= 0 else []
+    if not fams:
+        raise RuntimeError("font file did not register: %s" % spec["path"])
+    font = QFont(fams[0])
+    font.setPixelSize(size_px)
+    if spec.get("weight"):
+        font.setWeight(QFont.Weight(int(spec["weight"])))
+    if spec.get("italic"):
+        font.setItalic(True)
+    return font
 
 
 def render_devanagari_invoice(seed: int = 0, dpi: int = 300,
@@ -763,12 +800,25 @@ def build_mixed_dataset(out_dir: str, n: int = 6, dpi: int = 300,
     return manifest
 
 
-def render_devanagari_line(text: str, px: int = 48, pad: int = 12) -> np.ndarray:
-    """One shaped Devanagari line as a BGR crop (training data, W1)."""
-    _qt_app()
-    from PySide6.QtGui import QColor, QFontMetrics, QImage, QPainter
+def render_devanagari_line(text: str, px: int = 48, pad: int = 12,
+                           spec: Optional[Dict] = None,
+                           letter_spacing: float = 0.0,
+                           stretch: int = 100) -> np.ndarray:
+    """One shaped Devanagari line as a BGR crop (training data, W1).
 
-    font = _deva_font(px)
+    `spec` selects a font from `available_deva_font_specs()` (weight/italic);
+    `letter_spacing`/`stretch` add per-line typographic jitter so the
+    recognizer cannot lock onto one renderer.
+    """
+    _qt_app()
+    from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter
+
+    font = _deva_font(px, spec=spec)
+    if letter_spacing:
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing,
+                              float(letter_spacing))
+    if stretch and stretch != 100:
+        font.setStretch(int(stretch))
     fm = QFontMetrics(font)
     w = max(8, fm.horizontalAdvance(text) + 2 * pad)
     h = max(8, fm.height() + 2 * pad)
@@ -822,15 +872,27 @@ def sample_deva_line_text(rng: np.random.Generator) -> str:
 
 
 def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
-                          max_px: int = 64):
-    """In-memory synthetic Devanagari lines: (images_bgr, texts)."""
+                          max_px: int = 64, fonts: Optional[List[Dict]] = None,
+                          jitter: bool = False):
+    """In-memory synthetic Devanagari lines: (images_bgr, texts).
+
+    `fonts` = specs from `available_deva_font_specs()`; when given, each line
+    picks one at random. `jitter` adds letter-spacing / stretch variation.
+    Defaults preserve the single-font, unjittered pool of attempt 1.
+    """
     rng = np.random.default_rng(seed)
     images: List[np.ndarray] = []
     texts: List[str] = []
     for _ in range(n):
         text = sample_deva_line_text(rng)
         px = int(rng.integers(min_px, max_px + 1))
-        images.append(render_devanagari_line(text, px=px))
+        spec = None
+        if fonts:
+            spec = fonts[int(rng.integers(0, len(fonts)))]
+        ls = float(rng.uniform(-0.8, 1.6)) if jitter else 0.0
+        st = int(rng.integers(88, 113)) if jitter else 100
+        images.append(render_devanagari_line(text, px=px, spec=spec,
+                                             letter_spacing=ls, stretch=st))
         texts.append(text)
     return images, texts
 

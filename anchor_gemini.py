@@ -65,11 +65,15 @@ def strip_images(img_bgr: np.ndarray, strips: int = 2,
 def transcribe_page(client, img_bgr: np.ndarray, model: str = DEFAULT_MODEL,
                     strips: int = 2, prompt: str = PROMPT,
                     temperature: float = 0.0, timeout_s: float = 90.0,
-                    retries: int = 2) -> str:
+                    retries: int = 2, keep_lines: bool = False) -> str:
     """One Gemini transcription per page (strips joined with newlines).
 
     Each strip call gets a hard timeout and `retries` retries with backoff, so
     a hung request cannot stall the run silently.
+
+    `keep_lines=True` preserves the per-line structure (needed for line-level
+    alignment); the default collapses whitespace, which is what the anchor's
+    page-level metrics want.
     """
     import time
 
@@ -101,6 +105,8 @@ def transcribe_page(client, img_bgr: np.ndarray, model: str = DEFAULT_MODEL,
         if last_err is not None:
             raise RuntimeError(f"gemini call failed after {retries + 1} "
                                f"attempts: {last_err}")
+    if keep_lines:
+        return "\n".join(t for t in texts if t).strip()
     return doc_metrics.normalize_text("\n".join(t for t in texts if t))
 
 
