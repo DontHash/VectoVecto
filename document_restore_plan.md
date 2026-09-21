@@ -1362,6 +1362,36 @@ BatchNorm (small-batch CTC diverged to NaN), non-finite-step guard,
 `drop_last` only when a full batch exists (a 7-sample set trained on *zero*
 batches before the fix), Windows DataLoader workers off for small sets.
 
+### Result: gate FAILED - model not adopted
+
+Local GPU run (RTX 2050, same data): synthetic val_exact hit **1.000 by epoch
+4** - it memorized the renderer, not the script. Frozen gate evaluation
+(`scripts/eval_deva_crnn_gate.py`, epoch-18 checkpoint):
+
+| set | metric | deva_crnn | RapidOCR baseline |
+|---|---|---|---|
+| heiDATA lines (1451) | CER | **1.071** | 0.434 (page) / 0.316 (line, App. L) |
+| heiDATA digit lines (373) | digit-exact | **0.011** | 0.533 (line, App. L) |
+| v2 anchor pages (41) | bagCER | **0.779** | 0.142 |
+| v2 anchor pages | digit-exact pages | **0.000** | 0.073 |
+
+**Verdict: not adopted** (bar was digit-exact >= 0.75; measured 0.011). The
+Vertex job (8696792149963833344) ran the same data and was cancelled after the
+local gate result - no reason to pay for a known-failing configuration.
+
+**Diagnosis.** Synthetic-only training has a domain gap that mild augmentation
+cannot close: one font family, one renderer, clean backgrounds vs real scans.
+Synthetic val_exact 1.000 after 4 epochs is the tell.
+
+**Next attempt (recorded, not started).** (1) Real lines in the training mix:
+label *extra* v2 pages (beyond the 41 anchor pages) with Gemini and align to
+RapidOCR line boxes - same provenance discipline as the anchor; (2) multi-font
+rendering (Noto Sans/Serif Devanagari, Mukta, Kalimati) + scan-realistic
+degradation (the `degradation_document` heavy preset, not light blur);
+(3) keep the same gate and frozen sets. The infrastructure (export -> wheel ->
+Vertex job -> per-epoch GCS checkpoints -> gate harness) is built and proven,
+so a second attempt is a data/config change, not a rebuild.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display
