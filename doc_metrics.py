@@ -213,6 +213,39 @@ def bag_stats(gt: str, hyp: str) -> Dict[str, float]:
     }
 
 
+def valid_gt_stats(gt: str, hyp: str) -> Dict:
+    """Bag metrics over the valid subset of a (possibly corrupt) GT.
+
+    Modern Nepali PDF text layers carry systematic combining-sequence damage,
+    so page CER against them is not a recognition-error estimate. This scores
+    what can be trusted: exact-token recall over GT tokens that pass
+    `devanagari_validity`, plus the share of hypothesis tokens matching
+    neither valid nor invalid GT. A *correct* reading of a corrupt GT token
+    also lands in `unmatched` (the corrupt form is in neither set), so
+    `unmatched_rate` is an upper bound on inventions.
+    """
+    gt_toks = [t for t in tokens_of(gt) if _norm_tok(t)]
+    valid, invalid = [], []
+    for t in gt_toks:
+        (invalid if _invalid_devanagari_token(t) else valid).append(_norm_tok(t))
+    hyp_toks = [_norm_tok(t) for t in tokens_of(hyp) if _norm_tok(t)]
+    hset = set(hyp_toks)
+    matched = sum(1 for t in valid if t in hset)
+    known = set(valid) | set(invalid)
+    unmatched = [t for t in hyp_toks if t not in known]
+    return {
+        "gt_tokens": len(gt_toks),
+        "gt_valid_tokens": len(valid),
+        "gt_invalid_tokens": len(invalid),
+        "gt_invalid_rate": round(len(invalid) / len(gt_toks), 4) if gt_toks else 0.0,
+        "valid_recall": round(matched / len(valid), 4) if valid else 0.0,
+        "hyp_tokens": len(hyp_toks),
+        "unmatched_tokens": len(unmatched),
+        "unmatched_rate": (round(len(unmatched) / len(hyp_toks), 4)
+                           if hyp_toks else 0.0),
+    }
+
+
 def _iou(a, b) -> float:
     ax0, ay0, ax1, ay1 = a
     bx0, by0, bx1, by1 = b

@@ -208,6 +208,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 box = doc_metrics.box_match_report(
                     gt_boxes, [{"bbox": t.bbox} for t in res.tokens],
                     image_size=(img.shape[1], img.shape[0]))
+            vgs = doc_metrics.valid_gt_stats(gt, res.text)
             row = {
                 "page": entry["id"], "method": method, "backend": backend,
                 "cer": doc_metrics.cer(gt, res.text),
@@ -229,6 +230,10 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 "repass_conflicts": res.meta.get("digit_repass_conflicts", 0),
                 "seconds": round(elapsed_by_key[key], 3),
                 "gt_chars": len(gt),
+                "gt_invalid_tokens": vgs["gt_invalid_tokens"],
+                "gt_invalid_rate": vgs["gt_invalid_rate"],
+                "valid_recall": vgs["valid_recall"],
+                "unmatched_rate": vgs["unmatched_rate"],
             }
             if box:
                 row["box_coverage"] = box["coverage"]
@@ -247,6 +252,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                                            "invented_digits": 0, "repass_conflicts": 0,
                                            "digit_errors": 0, "digit_flagged_errors": 0,
                                            "digit_flagged": 0,
+                                           "valid_recall": [], "unmatched_rate": [],
+                                           "gt_invalid_rate": [], "gt_invalid_tokens": 0,
                                            "pages": 0})
             agg["cer"].append(row["cer"])
             agg["cer_bag"].append(row["cer_bag"])
@@ -270,6 +277,10 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             agg["digit_errors"] += row["digit_errors"]
             agg["digit_flagged_errors"] += row["digit_flagged_errors"]
             agg["digit_flagged"] += row["digit_flagged"]
+            agg["valid_recall"].append(row["valid_recall"])
+            agg["unmatched_rate"].append(row["unmatched_rate"])
+            agg["gt_invalid_rate"].append(row["gt_invalid_rate"])
+            agg["gt_invalid_tokens"] += row["gt_invalid_tokens"]
             agg["pages"] += 1
         print(f"  [{i}/{len(entries)}] {entry['id']} done", flush=True)
 
@@ -305,10 +316,18 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "invented": agg["invented"],
             "invented_digits": agg["invented_digits"],
             "repass_conflicts": agg["repass_conflicts"],
+            "valid_recall": (float(np.mean(agg["valid_recall"]))
+                             if agg["valid_recall"] else None),
+            "unmatched_rate": (float(np.mean(agg["unmatched_rate"]))
+                               if agg["unmatched_rate"] else None),
+            "gt_invalid_rate": (float(np.mean(agg["gt_invalid_rate"]))
+                                if agg["gt_invalid_rate"] else None),
+            "gt_invalid_tokens": agg["gt_invalid_tokens"],
         }
         if bootstrap:
             for m in ("cer", "cer_bag", "digit_cer", "digit_cer_bag", "wer",
-                      "coverage", "false_alarm"):
+                      "coverage", "false_alarm", "valid_recall",
+                      "unmatched_rate"):
                 vals = agg.get(m)
                 if not vals:
                     continue
@@ -352,6 +371,15 @@ def print_summary(summary: Dict) -> None:
                     parts.append(f"{name} [{ci[0]:.3f}-{ci[1]:.3f}]")
             if parts:
                 print(f"  {key}: " + "  ".join(parts))
+    gt_rows = [(k, m) for k, m in order if m.get("gt_invalid_rate")]
+    if gt_rows:
+        print("\n--- GT-valid subset (corrupt text-layer tokens excluded) ---")
+        for k, m in gt_rows:
+            ci = m.get("valid_recall_ci")
+            ci_s = f" [{ci[0]:.3f}-{ci[1]:.3f}]" if ci else ""
+            print(f"  {k}: GT invalid {m['gt_invalid_rate']:.1%} of tokens | "
+                  f"valid-token recall {m['valid_recall']:.3f}{ci_s} | "
+                  f"unmatched hyp {m['unmatched_rate']:.3f}")
     box_rows = [(k, m) for k, m in order if m.get("box_coverage") is not None]
     if box_rows:
         print("\n--- detection boxes vs GT (IoU>=0.5 greedy / area view) ---")
