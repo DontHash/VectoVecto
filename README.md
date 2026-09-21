@@ -60,16 +60,20 @@ Measured behaviour, not marketing (full tables in
 
 | Capability | Status |
 |---|---|
-| Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations; rotated 90/90 decided |
-| Devanagari (Nepali/Hindi) | clean fixture CER 0.030/0.028 (Latin engine 0.85 — model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy level fails) |
+| Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations (and 0/19 on unlabeled Nepali scans); rotated 90/90 decided |
+| Devanagari (Nepali/Hindi) — rendered fixture | clean CER 0.030/0.028 (Latin engine 0.85 — the language model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
+| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481]; modern gov PDFs (n=41): CER 0.338 [0.305–0.378] (bagCER 0.48); per-document 0.22–0.66; Devanagari digits essentially unread by the mobile model |
+| Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740] on a slice whose GT is machine-generated and partly misaligned — numbers provisional until human-verified |
+| Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
 | Single-column layout | identity — 60/60 real pages untouched |
-| Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end |
-| Digit-number honesty | review queue ranked by risk; best case recalls ~23% of digit errors in the top-5 — **weak, documented, improving** |
+| Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end; all 4 unlabeled real splits verified by geometry; >2 columns unsupported |
+| Digit-number honesty | review queue ranked by risk; best case recalls ~23% of digit errors in the top-5 — **weak, documented**; on real Devanagari pages flag coverage is 0.2–1.6% (calibration ECE ≈ 0.82) |
 | Tesseract backend | fails on real photos (CORD CER 0.90 raw / 1.57 restored) — clean-scan fallback only |
 | Numeric flags bar (coverage ≥0.55) | **not met** on real photos; replaced by the ranked review queue |
+| Frozen eval + CIs | every real-set number above comes from a hash-frozen manifest (`evals/manifests/`) with bootstrap 95% CIs; see plan Appendix K |
 | 180° via soft evidence only | refused, flagged `orientation?` instead of a blind flip |
 | High-Fidelity photo model | rejected (perceptual metrics) and gated behind `artifacts/tier_c/ACCEPTED` |
-| License | RapidOCR/PP-OCR Apache-2.0; reportlab/pypdfium2 permissive; PyMuPDF (AGPL) unused; UltraSharp weights CC-BY-NC-SA (not for commercial builds) |
+| License | RapidOCR/PP-OCR Apache-2.0; reportlab/pypdfium2 permissive; PyMuPDF (AGPL) unused; UltraSharp weights CC-BY-NC-SA (not for commercial builds); eval sets internal-only unless stated |
 
 ## Tests
 
@@ -77,6 +81,23 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-77 tests: OCR/export/routing/CLI/app, layout (13), orientation (13),
-engine state regressions. `legacy/` holds archived photo-training scripts and
-is not part of the product.
+103 tests: OCR/export/routing/CLI/app, layout (14), orientation (13), language
+plumbing, engine-state regressions, frozen-manifest + bootstrap-CI guards,
+Unicode-path IO, line eval, box metrics, sanity audit. `legacy/` holds
+archived photo-training scripts and is not part of the product.
+
+## Real-data evaluation (frozen)
+
+Real Devanagari evidence lives under `evals/manifests/` (content-hash frozen):
+
+```bash
+python eval_freeze.py --check evals/manifests/heidata_printed_v1.json
+python eval_document.py --data-dir data/doc_eval/heidata_printed --frozen \
+    evals/manifests/heidata_printed_v1.json --lang ne --methods raw --bootstrap 2000
+python eval_lines.py --data-dir data/doc_eval/nepali_lines --frozen \
+    evals/manifests/nepali_lines_v1.json --lang ne --bootstrap 2000
+```
+
+Rebuild instructions and dataset provenance are recorded per manifest and in
+plan Appendix K. Frozen sets are never used to tune thresholds; a dataset
+change is a new freeze version.

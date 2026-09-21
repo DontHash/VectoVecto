@@ -518,6 +518,10 @@ real-photo validation.
    for air-gap stays on the P7 checklist.
 2. Phase E mixed-page router (text + logo + signature + photo on one page).
 3. P6 multi-page PDF; P7 license gate + packaging + tag v1.1.0.
+4. ~~Real-data validation + frozen eval + CIs~~ **DONE** (Appendix K): A1-A4
+   shipped; remaining gaps recorded there — Devanagari digit recognition,
+   flag calibration on Devanagari, real phone photos (A5, needs a photographed
+   field set), GT-verified modern Nepali line crops.
 
 ---
 
@@ -917,3 +921,67 @@ better detector for degraded text or a server-size Devanagari rec model
 (none exists for PP-OCRv5 devanagari at server size). Vendoring the model into
 `models/` for air-gap packaging is a P7 item (`Rec.model_path` /
 `Rec.rec_keys_path` accept local files).
+
+---
+
+## Appendix K — real Devanagari evidence: frozen sets + CIs (2026-09-21)
+
+The reality check's top two gaps were: (1) no real Nepali data anywhere in the
+P4 claim, (2) all numbers were point estimates on small sets that the
+thresholds had been tuned on. Both are addressed here.
+
+### D1. Frozen-eval discipline (B)
+
+`eval_freeze.py` pins every page/reference file by size + sha256 and records
+license/provenance; `--frozen` makes scoring *refuse* when a file drifts.
+Contract: thresholds are never tuned on a frozen set; any dataset change is a
+new freeze version. `doc_metrics.bootstrap_ci` + `--bootstrap N` attach 95%
+percentile CIs (deterministic per stable seed) to CER/bagCER/digCER/WER. The
+harvesters/loaders gained `imwrite_safe`/`imread_safe` after discovering that
+`cv2.imwrite` mojibakes non-ASCII paths (Devanagari-named pages landed on disk
+under mangled names invisible to `os.path.exists` and `eval_freeze`; only cv2
+could read them back). 103 tests green.
+
+### D2. Datasets acquired (A1-A4)
+
+| set | source | license | content | GT quality |
+|---|---|---|---|---|
+| `heidata_printed` | heiDATA doi:10.11588/data/EGOKEI | **CC BY 4.0** | 69 pages, 7 letterpress books (Hindi/Sanskrit/Braj), 1451 lines | human-corrected Transkribus ALTO (text + line boxes) |
+| `nepali_pdf` | supremecourt.gov.np, lawcommission.gov.np | gov publications (internal eval) | 41 pages from 6 born-digital PDFs (statutes, judgments) | PDF text layer, Unicode-verified (>=0.4 Devanagari ratio gate; rejects scans and Preeti mojibake) |
+| `nepali_lines` | HF `himalaya-ai/nepali-deva-ocr-eval` (from `gauravgiri/nepali-ocr-dataset`) | **unknown — unverified provenance** | 500 real Nepali print line crops | machine-generated, partly misaligned (probe evidence: 2640px crop with 18-char label). Provisional until a human pass |
+| `nepali_unlabeled` | archive.org public items | public (no GT) | 19 pages (book, 2 newspapers, 1954 inventory) | none — behavior audit only |
+
+### D3. Measured (devanagari engine, `raw` stream, frozen sets, 95% CIs)
+
+| set | n | CER | bagCER | Latin-engine control | notes |
+|---|---|---|---|---|---|
+| rendered fixture (P4) | 12 | 0.030 | — | 0.86 | synthetic; now a *floor*, not a claim |
+| `nepali_lines` | 500 | 0.717 [0.693-0.740] | — | 0.976 [0.968-0.984] | GT caveat above; exact match 1%; 66/500 empty |
+| `nepali_pdf` | 41 | 0.338 [0.305-0.378] | 0.482 | — | per-doc 0.259-0.555; digit CER 0.289 |
+| `heidata_printed` | 69 | 0.434 [0.387-0.481] | 0.553 | 0.96 | per-book 0.222 (jacobi1897) - 0.659 (pyarelala1914); digit CER 8.95 (Devanagari digits -> Latin insertions) |
+
+Detection on `heidata_printed` vs ALTO boxes: **area coverage 0.975**
+(center-extra 0.288; greedy IoU 0.459 is a line-vs-word granularity artifact).
+Detection is not the bottleneck; recognition is.
+
+Honesty signals on real Devanagari are broken: token-flag coverage 0.002
+(`nepali_pdf`) / 0.016 (`heidata`) with ECE 0.82 — the GUI's confidence
+colours carry almost no information on this domain. Devanagari digits must be
+treated as unread (mobile rec model) until a digit-specific fix exists.
+
+`nepali_unlabeled` behavior audit: 19/19 upright, 0 orientation suspects,
+4/19 reading-order repairs — all four verified as genuine two-column splits
+(46/37 and 54/55 tokens at 0.72/0.95 y-overlap); multi-column newspapers
+stayed identity (>2 columns is a documented non-goal). Latency median 6.2
+s/page on real scans (the known perf gap).
+
+### D4. Verdict
+
+P4's "<0.15 synthetic CER" pass does not transfer: on real Devanagari the
+same engine lands at **CER 0.34-0.43**. The language switch is decisive
+(Latin control 0.96-0.98), detection is fine, but the mobile recognizer,
+Devanagari digits, and flag calibration are the product gaps. Nothing here is
+hidden in a mean: per-document ranges, GT provenance, and the sets where no
+CER may be quoted are all recorded. Still unproven: real **phone photos** of
+Nepali documents (A5, needs a photographed field set) and GT-verified modern
+Nepali line crops.
