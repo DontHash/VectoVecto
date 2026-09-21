@@ -809,6 +809,32 @@ _DEVA_LINE_PATTERNS = (
 )
 
 
+def sample_deva_line_text(rng: np.random.Generator) -> str:
+    """One training line text: 60% digit-rich patterns, else word sequences."""
+    if rng.random() < 0.6:
+        pat = _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))]
+        return pat.format(
+            n=int(rng.integers(1, 99999)), m=int(rng.integers(1, 99)),
+            amount=f"{int(rng.integers(100, 99999)):,}.{int(rng.integers(0, 99)):02d}")
+    k = int(rng.integers(2, 6))
+    idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
+    return " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)
+
+
+def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
+                          max_px: int = 64):
+    """In-memory synthetic Devanagari lines: (images_bgr, texts)."""
+    rng = np.random.default_rng(seed)
+    images: List[np.ndarray] = []
+    texts: List[str] = []
+    for _ in range(n):
+        text = sample_deva_line_text(rng)
+        px = int(rng.integers(min_px, max_px + 1))
+        images.append(render_devanagari_line(text, px=px))
+        texts.append(text)
+    return images, texts
+
+
 def build_synthetic_line_dataset(out_dir: str, n: int = 1000, seed: int = 1,
                                  min_px: int = 30, max_px: int = 64) -> Dict:
     """Digit-rich synthetic Devanagari lines with exact GT (W1 training data).
@@ -822,15 +848,7 @@ def build_synthetic_line_dataset(out_dir: str, n: int = 1000, seed: int = 1,
     entries: List[Dict] = []
     labels: List[str] = []
     for i in range(n):
-        if rng.random() < 0.6:
-            pat = _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))]
-            text = pat.format(n=int(rng.integers(1, 99999)),
-                              m=int(rng.integers(1, 99)),
-                              amount=f"{int(rng.integers(100, 99999)):,}.{int(rng.integers(0, 99)):02d}")
-        else:
-            k = int(rng.integers(2, 6))
-            idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
-            text = " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)
+        text = sample_deva_line_text(rng)
         px = int(rng.integers(min_px, max_px + 1))
         img = render_devanagari_line(text, px=px)
         pid = f"line_{i:06d}"

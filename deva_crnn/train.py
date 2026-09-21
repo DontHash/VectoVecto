@@ -27,6 +27,15 @@ from .data import IN_H, IN_W, load_npz
 from .model import CRNN
 
 
+def resolve_data_path(path: str) -> str:
+    """`pkg://data/x.npz` resolves inside the installed package (Vertex jobs
+    ship the npz inside the wheel; local runs use plain paths)."""
+    if path.startswith("pkg://"):
+        import importlib.resources as ir
+        return str(ir.files("deva_crnn").joinpath(path[len("pkg://"):]))
+    return path
+
+
 class LineDataset(Dataset):
     def __init__(self, images: np.ndarray, texts: List[str], charset: List[str]):
         self.images = images
@@ -69,10 +78,31 @@ def evaluate(model: CRNN, loader: DataLoader, charset: List[str],
     return {"lines": total, "exact_match": (exact / total) if total else 0.0}
 
 
+def _upload_if_gcs(local_path: str, out_dir: str) -> None:
+    """Checkpoint to GCS from a Vertex job (best-effort, two backends)."""
+    if not out_dir.startswith("gs://"):
+        return
+    bucket, _, prefix = out_dir[len("gs://"):].partition("/")
+    blob = f"{prefix}/{os.path.basename(local_path)}".lstrip("/")
+    try:
+        from google.cloud import storage
+        storage.Client().bucket(bucket).blob(blob).upload_from_filename(local_path)
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    import subprocess
+    try:
+        subprocess.run(["gcloud", "storage", "cp", local_path,
+                        f"gs://{bucket}/{blob}"], check=True,
+                       capture_output=True, timeout=300)
+    except Exception as e:  # noqa: BLE001
+        print(f"WARN: could not upload {local_path} to GCS: {e}", flush=True)
+
+
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
           max_hours: float = 3.0) -> Dict:
-    images, texts = load_npz(data_path)
+    images, texts = load_npz(resolve_data_path(data_path))
     charset = build_charset(texts)
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(texts))
@@ -123,12 +153,15 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
         print(f"epoch {epoch + 1}/{epochs} loss {rec['loss']:.3f} "
               f"val_exact {val['exact_match']:.3f} ({rec['seconds']}s)",
               flush=True)
+        ckpt_path = os.path.join(out_dir, "ckpt.pt")
         torch.save({"model": model.state_dict(), "charset": charset,
                     "in_h": IN_H, "in_w": IN_W, "epoch": epoch + 1},
-                   os.path.join(out_dir, "ckpt.pt"))
+                   ckpt_path)
         with open(os.path.join(out_dir, "metrics.json"), "w") as f:
             json.dump({"history": history, "charset_size": len(charset),
                        "lines": len(texts), "device": str(device)}, f, indent=2)
+        _upload_if_gcs(ckpt_path, out_dir)
+        _upload_if_gcs(os.path.join(out_dir, "metrics.json"), out_dir)
         if (time.time() - t0) / 3600.0 > max_hours:
             print("time budget reached, stopping", flush=True)
             break

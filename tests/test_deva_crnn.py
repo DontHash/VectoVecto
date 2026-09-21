@@ -17,6 +17,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from deva_crnn.charset import build_charset, decode, encode  # noqa: E402
+from deva_crnn.augment import augment_line  # noqa: F401
 from deva_crnn.data import export_npz, load_npz, normalize_line  # noqa: E402
 from deva_crnn.model import CRNN  # noqa: E402
 from deva_crnn.train import train  # noqa: E402
@@ -61,7 +62,7 @@ def test_overfit_tiny_set(tmp_path):
 
     tr.CRNN.__init__ = small_init
     try:
-        result = train(data, str(tmp_path / "out"), epochs=500, batch=8,
+        result = train(data, str(tmp_path / "out"), epochs=900, batch=8,
                        lr=1e-3, val_split=0.125, seed=3, max_hours=0.2)
     finally:
         tr.CRNN.__init__ = orig_init
