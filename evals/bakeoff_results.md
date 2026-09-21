@@ -37,3 +37,15 @@ Notes:
   pointless while the shippable base fails every gate. Recorded as skipped.
 - bodhan-ai/indic-ocr: blocked on `hf auth login` (gated repo; token belongs
   to the user).
+| bodhan indic-ocr | Indic Open Model License 1.0 | lines 150 | 1.210 raw / **0.361 md-stripped** | - | **0.653** | bag invented 0.395 | 0.44 | **PASSES the verifier role** (license self-host OK): digit-exact 0.653 (baseline 0.533); conflict-flag vs baseline digit errors recall **0.714** precision **0.806** (gate 0.4/0.35); 2.15 GB VRAM; output is markdown/LaTeX-wrapped, so its own CER is meaningless without stripping |
+| bodhan indic-ocr | (same) | pages 3 (probe) | 0.330-0.541 md-stripped | - | digBAG 1.0-58.0 | - | **329-434 s/page** | **fails the primary role** (gate 8 s/page); quality comparable to baseline, one page catastrophically wrong on digits |
+
+**M4 verdict (bodhan):** no shippable primary recognizer (330-430 s/page on
+the HF quickstart path; the vLLM path that would fix this needs a GPU they
+don't document for 4 GB cards), but the **first candidate to pass the
+verifier gate**: when its digit reading disagrees with RapidOCR's, the
+baseline token is wrong 81% of the time and 71% of baseline digit errors are
+caught. Integration (opt-in `--digit-verifier`, flag-only, text never
+changed) follows in the F4 commit. License obligations for shipping:
+attribution/notice, self-hosting allowed, no third-party hosted access,
+>500M MAU / >$250M revenue gate.

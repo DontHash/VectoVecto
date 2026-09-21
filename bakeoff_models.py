@@ -292,7 +292,8 @@ class GLMOCRCandidate(Candidate):
 class BodhanCandidate(Candidate):
     name = "bodhan"
     kind = "both"
-    license = "custom 'Bodhan AI Open Model License', gated repo"
+    license = ("Indic Open Model License 1.0 (self-host OK incl. commercial; "
+               "no third-party hosting; >500M MAU / >$250M rev gate)")
     model_id = "bodhan-ai/indic-ocr"
 
     def available(self):
@@ -302,20 +303,63 @@ class BodhanCandidate(Candidate):
         except Exception:  # noqa: BLE001
             return False, ("gated: run `hf auth login` first "
                            "(anonymous access is not granted)")
-        return True, "logged in; license terms must be reviewed before use"
+        try:
+            from huggingface_hub import snapshot_download
+            snapshot_download(self.model_id, allow_patterns=["*.py", "*.json"])
+        except Exception as e:  # noqa: BLE001
+            return False, f"gated: accept the license on the model page ({str(e)[:80]})"
+        return True, "logged in; license accepted (self-host permitted)"
 
     def load(self, lang=None):
         from huggingface_hub import snapshot_download
-        path = snapshot_download(self.model_id)
-        return {"path": path}
+        _shim_broken_torchaudio()
+        repo = snapshot_download(self.model_id)
+        return {"repo": repo}
+
+    # -- lines: recognizer only, via the repo's HfRecognizer quickstart path -----
+    def _recognizer(self, ctx):
+        if "rec" not in ctx:
+            sys.path.insert(0, ctx["repo"])
+            import torch
+            from idp_recognizer import HfRecognizer
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            ctx["rec"] = HfRecognizer(
+                ckpt=os.path.join(ctx["repo"], "weights", "ocr"),
+                device=device, batch_size=8)
+        return ctx["rec"]
 
     def recognize_lines(self, ctx, crops, lang=None):
-        raise NotImplementedError(
-            "bodhan entry point: read ARCHITECTURE.md/idp_*.py in the downloaded "
-            "repo and wire the inference API (see model card)")
+        import cv2
+        from PIL import Image
+        rec = self._recognizer(ctx)  # inserts the repo path
+        from idp_contract import prompt_for
+        from idp_recognizer import CropRequest
+        prompt = prompt_for("Text")
+        requests = [CropRequest(Image.fromarray(cv2.cvtColor(c, cv2.COLOR_BGR2RGB)),
+                                prompt) for c in crops]
+        return rec.transcribe(requests)
+
+    # -- pages: full two-stage pipeline (layout + block OCR) --------------------
+    def _parser(self, ctx):
+        if "parser" not in ctx:
+            sys.path.insert(0, ctx["repo"])
+            from indic_ocr import IndicOCR
+            ctx["parser"] = IndicOCR.from_pretrained(ctx["repo"])
+        return ctx["parser"]
 
     def recognize_pages(self, ctx, images, lang=None):
-        raise NotImplementedError("bodhan entry point not wired yet")
+        parser = self._parser(ctx)
+        out = []
+        with tempfile.TemporaryDirectory() as td:
+            for i, img in enumerate(images):
+                path = os.path.join(td, f"page_{i}.png")
+                doc_data.imwrite_safe(path, img)
+                page = parser(path)
+                if isinstance(page, dict):
+                    out.append(page.get("markdown", ""))
+                else:
+                    out.append(str(page))
+        return out
 
 
 REGISTRY: Dict[str, Candidate] = {
