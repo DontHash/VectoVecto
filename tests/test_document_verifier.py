@@ -11,11 +11,13 @@ import os
 import sys
 
 import numpy as np
+import pytest
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_ocr import RISK_WEIGHTS, Token, apply_digit_verifier  # noqa: E402
+from document_ocr import (RISK_WEIGHTS, Token, apply_digit_verifier,  # noqa: E402
+                          available_backends)
 from document_verifier import get_digit_verifier  # noqa: E402
 
 
@@ -82,6 +84,28 @@ def test_verifier_only_flagged_and_capped():
 
 def test_verifier_weight_in_queue():
     assert RISK_WEIGHTS["cross_model_conflict"] >= RISK_WEIGHTS["digit_uncertain"]
+
+
+@pytest.mark.skipif("rapidocr" not in available_backends(),
+                    reason="rapidocr unavailable")
+def test_pipeline_verifier_scope_all_covers_unflagged_digit_tokens():
+    import doc_data
+    from document_pipeline import run_document_pipeline
+
+    page, _gt = doc_data.render_synthetic_invoice(seed=301, dpi=150)
+
+    def fake(crops):
+        return ["9"] * len(crops)  # always disagrees
+
+    flagged = run_document_pipeline(page, backend="rapidocr",
+                                    digit_verifier=fake)
+    allscope = run_document_pipeline(page, backend="rapidocr",
+                                     digit_verifier=fake, verifier_scope="all")
+    f = flagged.ocr.meta.get("digit_verifier", {}).get("conflicts", 0)
+    a = allscope.ocr.meta.get("digit_verifier", {}).get("conflicts", 0)
+    assert allscope.ocr.meta["digit_verifier"]["scope"] == "all"
+    assert a >= f
+    assert a > 0
 
 
 def test_get_digit_verifier_factory():

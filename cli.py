@@ -144,6 +144,7 @@ def run_document_mode(args) -> int:
                 img, backend=backend, lang=args.lang, deskew=args.deskew,
                 repass_digits=args.repass_digits, dpi=dpi,
                 digit_verifier=verifier,
+                verifier_scope=getattr(args, "digit_verifier_scope", "flagged"),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -249,6 +250,10 @@ def main():
                           "(alt reading kept, text never changed). Needs a "
                           "one-time `hf auth login` + license acceptance; "
                           "~0.4 s per suspect token (Appendix L)")
+    doc.add_argument("--digit-verifier-scope", choices=["flagged", "all"],
+                     default="flagged", dest="digit_verifier_scope",
+                     help="flagged (default): re-read only tokens the first "
+                          "pass suspects; all: every digit token (costlier)")
     doc.add_argument("--max-pages", type=int, default=1, dest="max_pages",
                      help="max pages per PDF input (default 1)")
     doc.add_argument("--no-reading-order", action="store_true", dest="no_reading_order",

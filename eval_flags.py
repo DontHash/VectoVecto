@@ -42,7 +42,7 @@ def _digit_tokens(text: str) -> List[str]:
 
 
 def run(data_dir: str, lang: str, limit: int = 0,
-        digit_verifier=None) -> Dict:
+        digit_verifier=None, verifier_scope: str = "flagged") -> Dict:
     manifest = doc_data.load_dataset(data_dir)
     entries = manifest["entries"]
     if limit:
@@ -69,7 +69,9 @@ def run(data_dir: str, lang: str, limit: int = 0,
         rec = ocr_page(img, backend="rapidocr", lang=lang)
         vconflicts = 0
         if digit_verifier is not None:
-            vconflicts = apply_digit_verifier(rec.tokens, img, digit_verifier)
+            vconflicts = apply_digit_verifier(
+                rec.tokens, img, digit_verifier,
+                only_flagged=verifier_scope != "all")
         toks = rec.tokens
         tokens_total += len(toks)
         ece_raw.append(doc_metrics.ece(toks, gt))
@@ -139,6 +141,9 @@ def main():
     ap.add_argument("--digit-verifier", choices=["off", "bodhan"], default="off",
                     dest="digit_verifier",
                     help="optional second-model digit check before scoring")
+    ap.add_argument("--digit-verifier-scope", choices=["flagged", "all"],
+                    default="flagged", dest="digit_verifier_scope",
+                    help="flagged (default) or all digit tokens (R3 gate)")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -157,7 +162,8 @@ def main():
         verifier = get_digit_verifier(args.digit_verifier)
         print(f"[flags] digit verifier enabled: {args.digit_verifier}")
 
-    result = run(args.data_dir, args.lang, args.limit, digit_verifier=verifier)
+    result = run(args.data_dir, args.lang, args.limit, digit_verifier=verifier,
+                 verifier_scope=args.digit_verifier_scope)
     if verifier is not None:
         verifier.close()
     s = result["summary"]

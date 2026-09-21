@@ -88,6 +88,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           auto_rotate: bool = True,
                           primary_stream: Optional[str] = None,
                           digit_verifier=None,
+                          verifier_scope: str = "flagged",
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -99,7 +100,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     `digit_verifier` is an optional callable (crops -> texts) that re-reads
     suspect digit tokens; disagreements become `cross_model_conflict` flags
     with the alternative reading in `alt_text`. Flag-only; see
-    document_verifier.py."""
+    document_verifier.py. `verifier_scope` is "flagged" (default: only tokens
+    the first pass already suspects) or "all" (every digit token, costlier)."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -184,9 +186,11 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     if digit_verifier is not None:
         try:
             vconflicts = apply_digit_verifier(result.tokens, p.primary_img,
-                                              digit_verifier)
+                                              digit_verifier,
+                                              only_flagged=verifier_scope != "all")
             result.meta["digit_verifier"] = {
                 "name": getattr(digit_verifier, "name", "?"),
+                "scope": verifier_scope,
                 "conflicts": vconflicts,
             }
         except Exception as e:  # noqa: BLE001
