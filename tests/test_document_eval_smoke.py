@@ -151,6 +151,7 @@ def test_eval_document_pipeline(tmp_path):
     report = run_evaluation(entries, ["raw"], ["rapidocr"])
     assert report["summary"]["raw@rapidocr"]["pages"] == 2
     assert report["summary"]["raw@rapidocr"]["cer"] is not None
+    assert report["summary"]["raw@rapidocr"]["digit_exact_rate"] is not None
     assert len(report["per_page"]) == 2
 
 

@@ -215,6 +215,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 "cer_bag": doc_metrics.cer_bag(gt, res.text),
                 "digit_cer": doc_metrics.digit_cer(gt, res.text),
                 "digit_cer_bag": doc_metrics.digit_cer(gt, res.text, bag=True),
+                "digit_exact": 1.0 if doc_metrics.digit_exact(gt, res.text) else 0.0,
                 "wer": doc_metrics.wer(gt, res.text),
                 "token_err": stats.token_error_rate,
                 "coverage": stats.coverage,
@@ -243,6 +244,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             per_page.append(row)
             agg = results.setdefault(key, {"cer": [], "cer_bag": [],
                                            "digit_cer": [], "digit_cer_bag": [],
+                                           "digit_exact": [],
                                            "wer": [],
                                            "token_err": [],
                                            "coverage": [], "false_alarm": [],
@@ -259,6 +261,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             agg["cer_bag"].append(row["cer_bag"])
             agg["digit_cer"].append(row["digit_cer"])
             agg["digit_cer_bag"].append(row["digit_cer_bag"])
+            agg["digit_exact"].append(row["digit_exact"])
             agg["wer"].append(row["wer"])
             agg["token_err"].append(row["token_err"])
             agg["coverage"].append(row["coverage"])
@@ -293,6 +296,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "digit_cer": float(np.mean(agg["digit_cer"])) if agg["digit_cer"] else None,
             "digit_cer_bag": (float(np.mean(agg["digit_cer_bag"]))
                               if agg["digit_cer_bag"] else None),
+            "digit_exact_rate": (float(np.mean(agg["digit_exact"]))
+                                 if agg["digit_exact"] else None),
             "wer": float(np.mean(agg["wer"])) if agg["wer"] else None,
             "token_err": float(np.mean(agg["token_err"])) if agg["token_err"] else None,
             "coverage": float(np.mean(agg["coverage"])) if agg["coverage"] else None,
@@ -327,7 +332,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
         if bootstrap:
             for m in ("cer", "cer_bag", "digit_cer", "digit_cer_bag", "wer",
                       "coverage", "false_alarm", "valid_recall",
-                      "unmatched_rate"):
+                      "unmatched_rate", "digit_exact"):
                 vals = agg.get(m)
                 if not vals:
                     continue
