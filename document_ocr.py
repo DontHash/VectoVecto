@@ -524,6 +524,8 @@ RISK_WEIGHTS: Dict[str, float] = {
     "digit_conflict": 3.0,   # two independent streams read different digits
     "cross_model_conflict": 3.0,  # a second model read different digits (Appendix L/M)
     "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
+    "invalid_sequence": 1.0,  # impossible Devanagari sequence; dev-tuned to
+                              # not displace digit signals in the top-10
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
     "low_conf": 1.0,
 }
@@ -551,6 +553,13 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
             tok.flags.append("digit_uncertain")
         if devanagari and _LATIN_RE.search(tok.text):
             tok.flags.append("script_mismatch")
+        if devanagari:
+            # Hypothesis-side validity: OCR output containing an impossible
+            # combining sequence (reordered matra, dangling virama) is wrong by
+            # construction - a near-free, high-precision queue signal (W0.1).
+            from doc_metrics import _invalid_devanagari_token
+            if _invalid_devanagari_token(tok.text):
+                tok.flags.append("invalid_sequence")
         if calibration is not None:
             from calibration import apply_isotonic
             tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)

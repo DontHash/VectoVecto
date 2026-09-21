@@ -26,7 +26,7 @@ from typing import Dict, List, Sequence
 
 import jiwer
 
-from document_ocr import Token
+from document_ocr import Token, review_queue
 
 _PUNCT = ".,;:!?()[]{}\"'`“”‘’«»·-–—/\\|@#$%^&*+=~<>"
 
@@ -308,6 +308,31 @@ def three_way_agreement(readings: Sequence[str]) -> Dict:
         "agreement_rate": round(len(agreed) / len(union), 4) if union else 0.0,
         "disagreements": sorted(union - agreed)[:20],
     }
+
+
+def queue_stats(tokens: Sequence[Token], gt: str,
+                top_k: Sequence[int] = (5, 10)) -> Dict:
+    """Ranked review-queue quality over *all* token errors.
+
+    An error is a hypothesis token whose normalized text is absent from the
+    GT token multiset (the page-level definition; digit tokens are a subset).
+    `recall@K` = share of errors inside the top K of `review_queue`;
+    `precision@K` = share of the top K that are errors. Pages without errors
+    return None rates so callers can aggregate over error-bearing pages only.
+    """
+    gt_set = {_norm_tok(t) for t in tokens_of(gt) if _norm_tok(t)}
+    errs = [t for t in tokens
+            if _norm_tok(t.text) and _norm_tok(t.text) not in gt_set]
+    err_ids = {id(t) for t in errs}
+    queue = review_queue(tokens)
+    out: Dict = {"errors": len(errs), "queue": len(queue)}
+    for k in top_k:
+        top = queue[:k]
+        hits = sum(1 for t in top if id(t) in err_ids)
+        out[f"hits@{k}"] = hits
+        out[f"recall@{k}"] = round(hits / len(errs), 4) if errs else None
+        out[f"precision@{k}"] = round(hits / len(top), 4) if top else None
+    return out
 
 
 def _iou(a, b) -> float:

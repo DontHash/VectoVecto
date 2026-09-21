@@ -53,6 +53,32 @@ def test_flags_never_change_text():
     assert [(t.text, t.conf) for t in toks] == before
 
 
+def test_invalid_sequence_flag_on_broken_devanagari():
+    toks = [_tok("िक", 99), _tok("नेपाल", 99), _tok("क्ा", 99)]
+    flag_tokens(toks, conf_threshold=60, devanagari=True)
+    assert "invalid_sequence" in toks[0].flags, "reordered matra is a misread"
+    assert "invalid_sequence" not in toks[1].flags
+    assert "invalid_sequence" in toks[2].flags
+
+
+def test_invalid_sequence_ignores_latin_and_valid_marks():
+    toks = [_tok("Section 12", 99), _tok("तपाईंले", 99), _tok("हाँ", 99)]
+    flag_tokens(toks, conf_threshold=60, devanagari=True)
+    assert not any("invalid_sequence" in t.flags for t in toks)
+
+
+def test_invalid_sequence_is_queued_below_digit_signals():
+    bad = _tok("िक", 99, flags=["invalid_sequence"])
+    digit = _tok("१२", 99, flags=["digit_conflict"])
+    plain = _tok("नेपाल", 99)
+    assert RISK_WEIGHTS["invalid_sequence"] >= RISK_WEIGHTS["low_conf"]
+    assert RISK_WEIGHTS["digit_conflict"] > RISK_WEIGHTS["invalid_sequence"]
+    queue = review_queue([plain, bad, digit])
+    assert queue[0].text == "१२", "digit signals must keep the top of the queue"
+    assert queue[1].text == "िक"
+    assert token_risk(plain) == 0.0
+
+
 def test_calibration_sets_cal_conf_and_preserves_ranking_order():
     toks = [_tok("क", 99), _tok("ख", 85), _tok("ग", 60)]
     cal = load_calibration()

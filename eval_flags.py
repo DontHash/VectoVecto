@@ -53,6 +53,9 @@ def run(data_dir: str, lang: str, limit: int = 0,
     r_total = 0
     p_hits = {k: 0 for k in topk}
     p_total = {k: 0 for k in topk}
+    t_hits = {k: 0 for k in topk}
+    t_total = 0
+    t_top = {k: 0 for k in topk}
     pages_with_errors = 0
     tokens_total = 0
     sm_total = sm_err = 0
@@ -104,8 +107,18 @@ def run(data_dir: str, lang: str, limit: int = 0,
                 p_hits[k] += sum(1 for t in top if id(t) in err_ids)
                 p_total[k] += len(top)
                 r_hits[k] += sum(1 for t in errs if t in top)
+        tq = doc_metrics.queue_stats(toks, gt, top_k=topk)
+        for k in topk:
+            t_hits[k] += tq[f"hits@{k}"]
+            t_top[k] += min(k, tq["queue"])
+        t_total += tq["errors"]
         rows.append({"page": e["id"], "digit_errors": len(errs),
                      "queue": queue_len, "verifier_conflicts": vconflicts,
+                     "token_errors": tq["errors"],
+                     "token_recall@5": tq["recall@5"],
+                     "token_recall@10": tq["recall@10"],
+                     "token_precision@5": tq["precision@5"],
+                     "token_precision@10": tq["precision@10"],
                      "script_mismatch": sum(1 for t in toks
                                             if "script_mismatch" in t.flags)})
         print(f"  [{len(rows)}/{len(entries)}] {e['id']} "
@@ -123,6 +136,9 @@ def run(data_dir: str, lang: str, limit: int = 0,
         "verifier_conflicts": sum(r["verifier_conflicts"] for r in rows),
         **{f"digit_recall@{k}": _safe(r_hits[k], r_total) for k in topk},
         **{f"digit_precision@{k}": _safe(p_hits[k], p_total[k]) for k in topk},
+        "token_errors": t_total,
+        **{f"token_recall@{k}": _safe(t_hits[k], t_total) for k in topk},
+        **{f"token_precision@{k}": _safe(t_hits[k], t_top[k]) for k in topk},
         "script_mismatch_tokens": sm_total,
         "script_mismatch_rate": _safe(sm_total, tokens_total),
         "script_mismatch_precision": _safe(sm_err, sm_total),

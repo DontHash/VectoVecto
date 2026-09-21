@@ -1220,6 +1220,45 @@ where it applies (non-text PSNR 60-67 dB vs 18-23 dB for a naive full-page
 restore), and the failure is a single detection instability, not corrupted
 pixels.
 
+---
+
+## Appendix Q — Wave 0 improvements (2026-09-21)
+
+### W0.1 `invalid_sequence` hypothesis flag (PASS)
+
+Mechanism: OCR output containing an impossible Devanagari combining sequence
+(reordered matra, dangling virama) is a misread *by construction*
+(`doc_metrics._invalid_devanagari_token`); `flag_tokens` now raises
+`invalid_sequence` (flag-only, text never changes). `eval_flags.py` also
+gained all-token queue metrics (`token_recall@K` / `token_precision@K`) via
+`doc_metrics.queue_stats`, because the old queue metric only counted digit
+tokens.
+
+Process (frozen-set discipline): the first pre-registered weight (2.5) was
+measured once on the frozen sets and **failed** - letterpress digit R@10 fell
+0.730 -> 0.526 (invalid-sequence flags displaced digit signals in the top-10).
+Weight was then tuned on `heidata_dev_v1` (the designated tuning set, never
+used for evaluation):
+
+| weight | token R@10 | token P@10 | digit R@5 | digit R@10 |
+|---|---|---|---|---|
+| 0.0 (off) | 0.2829 | 0.9868 | 0.5366 | 0.7561 |
+| **1.0 (chosen)** | 0.2839 | 0.9901 | 0.5366 | **0.7642** |
+| 1.5 | 0.2848 | 0.9934 | 0.5366 | 0.6992 |
+| 2.0 | 0.2858 | 0.9967 | 0.5366 | 0.6179 |
+| 2.5 | 0.2858 | 0.9967 | 0.1789 | 0.5041 |
+
+Single frozen confirmation run (weight 1.0, pre-registered gate: token R@10
++>=3pp on at least one set, digit R@10 no regression):
+
+| set | token R@10 | digit R@10 | digit R@5 | token P@10 |
+|---|---|---|---|---|
+| heiDATA letterpress (69 p) | 0.283 -> **0.313** (+3.0pp) | 0.730 -> **0.737** | 0.533 -> **0.577** | 0.976 -> 0.981 |
+| `nepali_pdf_v2` anchor (41 p) | 0.040 -> **0.119** (+8.0pp) | 0.154 -> **0.237** | 0.154 -> **0.199** | 0.450 -> 0.712 |
+
+Verdict: **PASS** - the flag lifts general token recall on both domains and
+improves the digit queue instead of hurting it; 204 tests green.
+
 ### Geometry fix found by this phase
 
 The pipeline used to OCR >2500 px inputs at full resolution while the display
