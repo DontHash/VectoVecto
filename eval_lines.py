@@ -48,7 +48,7 @@ def score_lines(entries: List[Dict], recognize: Recognizer,
     for e in entries:
         if limit and len(rows) >= limit:
             break
-        img = cv2.imread(e["_image_path"], cv2.IMREAD_COLOR)
+        img = doc_data.imread_safe(e["_image_path"])
         if img is None:
             print(f"  [skip] missing {e['_image_path']}")
             continue
@@ -111,7 +111,7 @@ def make_contact_sheet(rows: List[Dict], out_path: str, n: int = 25,
     draw = ImageDraw.Draw(sheet)
     y = 4
     for r in picked:
-        img = cv2.imread(r["_image_path"], cv2.IMREAD_COLOR)
+        img = doc_data.imread_safe(r["_image_path"])
         if img is None:
             continue
         h, w = img.shape[:2]

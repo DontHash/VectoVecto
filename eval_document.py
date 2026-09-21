@@ -136,8 +136,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
     per_page: List[Dict] = []
     for i, entry in enumerate(entries, 1):
         gt = open(entry["_gt_path"], encoding="utf-8").read()
-        degraded = cv2.imread(entry["_degraded_path"], cv2.IMREAD_COLOR)
-        clean = cv2.imread(entry["_clean_path"], cv2.IMREAD_COLOR)
+        degraded = doc_data.imread_safe(entry["_degraded_path"])
+        clean = doc_data.imread_safe(entry["_clean_path"])
         if degraded is None:
             print(f"  [skip] missing {entry['_degraded_path']}")
             continue

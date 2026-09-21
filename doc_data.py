@@ -40,6 +40,37 @@ from PIL import Image, ImageDraw, ImageFont
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
+
+# ---------------------------------------------------------------------------
+# Unicode-safe image IO
+#
+# OpenCV's imread/imwrite pass the Python path down as a UTF-8 byte string that
+# Windows then interprets in the ANSI codepage: any non-ASCII filename lands on
+# disk mangled ("\u0906..." -> cp1252 mojibake) and only OpenCV can read it
+# back — os.path.exists / freeze hashing / any Python tooling all see a
+# different name. The eval harness must not build on that. imencode+tofile and
+# fromfile+imdecode go through Python's path handling and stay consistent.
+# ---------------------------------------------------------------------------
+
+def imwrite_safe(path: str, img: np.ndarray) -> bool:
+    ok, buf = cv2.imencode(os.path.splitext(path)[1] or ".png", img)
+    if not ok:
+        return False
+    buf.tofile(path)
+    return True
+
+
+def imread_safe(path: str):
+    if not os.path.exists(path):
+        return None
+    try:
+        data = np.fromfile(path, dtype=np.uint8)
+    except OSError:
+        return None
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
 from degradation_document import degrade_page  # noqa: E402
 
 
@@ -195,8 +226,14 @@ def pdf_to_pages(pdf_path: str, dpi: int = 200):
 
 def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = None,
                       dpi: int = 200, levels=("medium",), max_pages: int = 0,
-                      max_pages_per_pdf: int = 0, seed: int = 1234) -> Dict:
-    """Render PDFs, degrade pages, write dataset + manifest. Returns manifest."""
+                      max_pages_per_pdf: int = 0, seed: int = 1234,
+                      degrade: bool = True) -> Dict:
+    """Render PDFs, degrade pages, write dataset + manifest. Returns manifest.
+
+    `degrade=False` marks the set as real (born-digital): clean == degraded ==
+    the render, and metrics are judged against the PDF's own text layer (whose
+    order is internal, hence bagCER). Use for real Nepali government PDFs.
+    """
     pages_dir = os.path.join(out_dir, "pages")
     gt_dir = os.path.join(out_dir, "gt")
     os.makedirs(pages_dir, exist_ok=True)
@@ -214,19 +251,22 @@ def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = Non
             if max_pages_per_pdf and per_pdf >= max_pages_per_pdf:
                 break
             per_pdf += 1
-            level = levels[count % len(levels)]
+            level = levels[count % len(levels)] if degrade else "real"
             page_seed = seed + count
             pid = f"{stem}_p{idx:03d}"
             clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
             deg_path = os.path.join(pages_dir, f"{pid}_degraded.png")
             gt_path = os.path.join(gt_dir, f"{pid}.txt")
-            cv2.imwrite(clean_path, img)
-            cv2.imwrite(deg_path, degrade_page(img, seed=page_seed, level=level))
+            imwrite_safe(clean_path, img)
+            if degrade:
+                imwrite_safe(deg_path, degrade_page(img, seed=page_seed, level=level))
+            else:
+                deg_path = clean_path
             with open(gt_path, "w", encoding="utf-8") as f:
                 f.write(gt)
             entries.append({
                 "id": pid, "source": pdf_path, "page": idx, "level": level,
-                "seed": page_seed, "gt_chars": len(gt),
+                "real": not degrade, "seed": page_seed, "gt_chars": len(gt),
                 "clean": os.path.relpath(clean_path, out_dir),
                 "degraded": os.path.relpath(deg_path, out_dir),
                 "gt": os.path.relpath(gt_path, out_dir),
@@ -339,8 +379,8 @@ def build_synthetic_dataset(out_dir: str, n: int = 20,
         clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
         deg_path = os.path.join(pages_dir, f"{pid}_degraded.png")
         gt_path = os.path.join(gt_dir, f"{pid}.txt")
-        cv2.imwrite(clean_path, img)
-        cv2.imwrite(deg_path, degrade_page(img, seed=page_seed, level=level))
+        imwrite_safe(clean_path, img)
+        imwrite_safe(deg_path, degrade_page(img, seed=page_seed, level=level))
         with open(gt_path, "w", encoding="utf-8") as f:
             f.write(gt)
         entries.append({
@@ -542,8 +582,8 @@ def build_devanagari_dataset(out_dir: str, n: int = 6, script: str = "ne",
         clean_path = os.path.join(pages_dir, f"{pid}_clean.png")
         deg_path = os.path.join(pages_dir, f"{pid}_degraded.png")
         gt_path = os.path.join(gt_dir, f"{pid}.txt")
-        cv2.imwrite(clean_path, img)
-        cv2.imwrite(deg_path, degrade_page(img, seed=page_seed, level=level))
+        imwrite_safe(clean_path, img)
+        imwrite_safe(deg_path, degrade_page(img, seed=page_seed, level=level))
         with open(gt_path, "w", encoding="utf-8") as f:
             f.write(gt)
         entries.append({
@@ -668,7 +708,7 @@ def build_hf_dataset(source: str, out_dir: str, max_pages: int = 30,
         page_path = os.path.join(pages_dir, f"{pid}.png")
         gt_path = os.path.join(gt_dir, f"{pid}.txt")
         arr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        cv2.imwrite(page_path, arr)
+        imwrite_safe(page_path, arr)
         with open(gt_path, "w", encoding="utf-8") as f:
             f.write(gt)
         entries.append({
@@ -723,7 +763,7 @@ def build_line_crop_dataset(source: str, out_dir: str, max_lines: int = 0,
         pid = f"line_{idx:05d}"
         img_path = os.path.join(pages_dir, f"{pid}.png")
         gt_path = os.path.join(gt_dir, f"{pid}.txt")
-        cv2.imwrite(img_path, arr)
+        imwrite_safe(img_path, arr)
         with open(gt_path, "w", encoding="utf-8") as f:
             f.write(gt)
         entries.append({
@@ -847,7 +887,7 @@ def build_heidata_dataset(zips_dir: str, out_dir: str,
                 img_path = os.path.join(pages_dir, f"{pid}.png")
                 gt_path = os.path.join(gt_dir, f"{pid}.txt")
                 boxes_path = os.path.join(gt_dir, f"{pid}.boxes.json")
-                cv2.imwrite(img_path, arr)
+                imwrite_safe(img_path, arr)
                 with open(gt_path, "w", encoding="utf-8") as f:
                     f.write(gt_text)
                 with open(boxes_path, "w", encoding="utf-8") as f:
