@@ -246,6 +246,32 @@ def valid_gt_stats(gt: str, hyp: str) -> Dict:
     }
 
 
+def three_way_agreement(readings: Sequence[str]) -> Dict:
+    """Bag-level agreement across independent readings of the same page.
+
+    Each reading is reduced to its set of normalized tokens (multiplicity is
+    ignored: the same word twice vs once is not a reading disagreement here).
+    A token is *agreed* when every reading contains it; the rate is agreed /
+    union. Used by the modern-Nepali anchor (`eval_anchor.py`): pages where
+    all machines agree are consensus-anchored with a selection-bias caveat,
+    the rest go to the human worksheet.
+    """
+    if not readings:
+        return {"readings": 0, "union_tokens": 0, "agreed_tokens": 0,
+                "agreement_rate": 0.0, "disagreements": []}
+    sets = [{_norm_tok(t) for t in tokens_of(r) if _norm_tok(t)}
+            for r in readings]
+    union = set().union(*sets)
+    agreed = {t for t in union if all(t in s for s in sets)}
+    return {
+        "readings": len(readings),
+        "union_tokens": len(union),
+        "agreed_tokens": len(agreed),
+        "agreement_rate": round(len(agreed) / len(union), 4) if union else 0.0,
+        "disagreements": sorted(union - agreed)[:20],
+    }
+
+
 def _iou(a, b) -> float:
     ax0, ay0, ax1, ay1 = a
     bx0, by0, bx1, by1 = b
