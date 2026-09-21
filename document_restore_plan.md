@@ -1018,6 +1018,19 @@ Devanagari digit reading remains the headline gap. The bake-off harness stays
 in the repo (`eval_models.py --list`) so any future model can be scored on the
 same frozen sets in minutes.
 
+**Addendum (M4, bodhan accepted).** One candidate was still pending at first
+publication of this appendix: bodhan-ai/indic-ocr (gated; the user accepted
+the Indic Open Model License 1.0 — self-hosting incl. commercial is
+permitted, third-party hosted access is not, attribution required). Frozen
+results: digit-exact 0.653 on the 150 lines (baseline 0.533), conflict-flag
+vs baseline digit errors recall 0.714 / precision 0.806, 0.44 s/line, 2.15 GB
+VRAM — **the verifier gate passes**; page mode is 329-434 s/page, so the
+primary role fails. Shipped as an opt-in verifier (commit 865a814): flagged
+digit tokens get a second read; disagreement raises `cross_model_conflict`
+with the alternative reading kept in `alt_text` (text never changed). Frozen
+queue effect: R@5 0.533 -> 0.613, R@10 0.730 -> 0.752. The precision bar
+(>=0.35) is still missed; recall improvements are real.
+
 ---
 
 ## Appendix M — Devanagari flags + calibration (2026-09-22)
@@ -1034,6 +1047,7 @@ never used for evaluation); all results below are frozen-set evaluations.
 | `script_mismatch` (Latin token on a Devanagari page, weight 2.5) | 15.3% of tokens, ~100% junk | letterpress: 73 tokens, **precision 1.00**; gov PDFs: 46 tokens, precision **0.37** (Latin is legitimate there) |
 | digit confidence bar 80 -> 90 (devanagari) | digit-error recall 0.235 -> 0.686 (precision 0.60 -> 0.31) | part of the queue numbers below |
 | isotonic `cal_conf` (0-100) | dev ECE 0.640 -> **0.105** | letterpress ECE 0.818 -> 0.297; PDFs 0.821 -> 0.411 |
+| `cross_model_conflict` (opt-in bodhan verifier, weight 3.0; Appendix L) | line-crop flag recall 0.714 / precision 0.806 | queue R@5 0.533 -> **0.613**, R@10 0.730 -> **0.752** (32 conflicts / 69 pages on flagged suspects) |
 
 Calibration note: temperature scaling was measured to be *structurally
 unsuitable* on this domain — probabilities saturate near 1 while token
