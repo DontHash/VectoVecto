@@ -347,14 +347,20 @@ def hallucination_report(gt_text: str, raw_text: str, restored_text: str,
     }
 
 
-def ece(tokens: Sequence[Token], gt_text: str, bins: int = 10) -> float:
-    """Expected calibration error of token confidence vs exact-match correctness."""
+def ece(tokens: Sequence[Token], gt_text: str, bins: int = 10,
+        conf_attr: str = "conf") -> float:
+    """Expected calibration error of token confidence vs exact-match correctness.
+
+    `conf_attr` selects the confidence field ("conf" raw, "cal_conf"
+    calibrated-by-isotonic). Tokens without the attribute fall back to raw.
+    """
     gt_set = {_norm_tok(t) for t in tokens_of(gt_text)}
     if not tokens:
         return 0.0
     buckets = [[] for _ in range(bins)]
     for tok in tokens:
-        p = max(0.0, min(1.0, tok.conf / 100.0))
+        raw = getattr(tok, conf_attr, None) or tok.conf
+        p = max(0.0, min(1.0, raw / 100.0))
         correct = 1.0 if _norm_tok(tok.text) in gt_set else 0.0
         idx = min(int(p * bins), bins - 1)
         buckets[idx].append((p, correct))

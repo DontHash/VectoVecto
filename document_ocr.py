@@ -79,6 +79,7 @@ class Token:
     alt_text: Optional[str] = None  # second-stream reading, when it disagreed
     repass_text: Optional[str] = None  # recognition-only re-read on a 2x crop
     repass_conf: Optional[float] = None
+    cal_conf: Optional[float] = None  # calibrated confidence (0-100), when fitted
 
     @property
     def has_digits(self) -> bool:
@@ -442,11 +443,16 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     """
     be = get_backend(backend)
     result = be.run(img_bgr, lang=lang)
-    for tok in result.tokens:
-        if tok.conf < conf_threshold:
-            tok.flags.append("low_conf")
-        if tok.has_digits and tok.conf < 80.0:
-            tok.flags.append("digit_uncertain")
+    devanagari = normalize_lang(lang) == "devanagari"
+    calibration = None
+    if devanagari:
+        from calibration import load_calibration
+        calibration = load_calibration()
+        if calibration:
+            result.meta["calibration"] = f"isotonic:{os.path.basename(calibration.get('domain', '?'))}"
+    result.meta["flagged"] = flag_tokens(result.tokens, conf_threshold,
+                                         devanagari=devanagari,
+                                         calibration=calibration)
     result.meta["conf_threshold"] = conf_threshold
     if recheck_digits:
         conflicts = apply_digit_repass(result.tokens, img_bgr, be.recognize_crop,
@@ -455,7 +461,6 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
         result.meta["repass_conf_below"] = repass_conf_below
     result.meta["flagged"] = sum(1 for t in result.tokens if t.flags)
     return result
-
 
 # ---------------------------------------------------------------------------
 # digit re-pass (recognition-only second look, never a silent replacement)
@@ -517,9 +522,38 @@ def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
 
 RISK_WEIGHTS: Dict[str, float] = {
     "digit_conflict": 3.0,   # two independent streams read different digits
+    "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
     "low_conf": 1.0,
 }
+
+_LATIN_RE = re.compile(r"[A-Za-z]")
+
+
+def flag_tokens(tokens: List["Token"], conf_threshold: float,
+                devanagari: bool = False,
+                calibration: Optional[Dict] = None,
+                deva_digit_conf: float = 90.0) -> int:
+    """Attach honesty flags (never changes text). Returns flagged count.
+
+    Devanagari-specific signals measured on the dev set (Appendix M):
+    * Latin letters on a Devanagari page are ~100% junk (watermarks, garbage
+      letter substitutions) -> `script_mismatch`;
+    * the mobile recognizer's digit confidence bar needs 90, not 80: at 80 it
+      caught only 23% of digit errors, at 90 it catches 69%.
+    """
+    for tok in tokens:
+        if tok.conf < conf_threshold:
+            tok.flags.append("low_conf")
+        digit_bar = deva_digit_conf if devanagari else 80.0
+        if tok.has_digits and tok.conf < digit_bar:
+            tok.flags.append("digit_uncertain")
+        if devanagari and _LATIN_RE.search(tok.text):
+            tok.flags.append("script_mismatch")
+        if calibration is not None:
+            from calibration import apply_isotonic
+            tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)
+    return sum(1 for t in tokens if t.flags)
 
 
 def token_risk(tok: "Token") -> float:
