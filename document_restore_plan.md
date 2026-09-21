@@ -985,3 +985,35 @@ hidden in a mean: per-document ranges, GT provenance, and the sets where no
 CER may be quoted are all recorded. Still unproven: real **phone photos** of
 Nepali documents (A5, needs a photographed field set) and GT-verified modern
 Nepali line crops.
+
+---
+
+## Appendix L — Devanagari OCR bake-off: reuse before building (2026-09-21)
+
+Goal: replace the weak mobile recognizer with an existing open-source model
+instead of training anything. All candidates scored on frozen sets only
+(`heidata_printed_v1`, first 150 digit-bearing lines + 69 pages), baseline
+RapidOCR PP-OCRv5 devanagari mobile (digit-exact 0.533, line CER 0.316, page
+CER 0.4335). Full table with CIs: `evals/bakeoff_results.md`.
+
+| candidate | license | result | verdict |
+|---|---|---|---|
+| Tesseract 5 + tessdata_best nep | Apache-2.0 | lines CER 0.741 / digit-exact 0.207; pages CER 0.353 but **5,080 invented tokens** (532 digit victim) and 3x slower | **no** — invented gate fails hard; page CER alone is misleading |
+| TrOCR-Devanagari-2 | MIT | lines CER 1.043 / digit-exact 0.020 | **no** — trained on handwritten words; hallucinates plausible unrelated Devanagari on print |
+| GLM-OCR base (zai-org) | Apache-2.0/MIT | fits 4 GB (2.26 GB peak) but line mode out of distribution; pages CER 0.581/0.954/0.889, degenerate repetition loops, **196-229 s/page**; repetition-penalty tuning worse (0.700) and leaked Latin garbage | **no** — fails quality and speed; the base's Devanagari is weak (consistent with the unlicensed community fine-tune existing) |
+| `himalaya-ai/glm-ocr-devanagari-finetuned` | none | not run | skipped: no root weights (6 x 3.57 GB checkpoints), unlicensed, shippable base already fails |
+| bodhan-ai/indic-ocr | custom, gated | not run | blocked on `hf auth login` (user-owned token) |
+
+Also measured as part of the same probes (recorded even though no candidate
+won): digit-crop upscaling +2.7pp; logits-masked digit decode catastrophic
+(0.553 -> 0.040, masked blank produced garbage runs); `script_mismatch`
+signal (Latin token on a Devanagari page) fires on 20.4% of real tokens and is
+~100% wrong/noise; conf<80 flags only 18.7% of in-script digit errors.
+
+**Conclusion.** No existing open model replaces the recognizer on this
+hardware/language pair today. The honest product path is not a new engine but
+*flags and calibration*: make the review queue catch what the engine cannot
+read (F-phase), keep the "never invent digits" promise, and record that
+Devanagari digit reading remains the headline gap. The bake-off harness stays
+in the repo (`eval_models.py --list`) so any future model can be scored on the
+same frozen sets in minutes.

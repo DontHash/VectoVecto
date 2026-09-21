@@ -63,6 +63,7 @@ Measured behaviour, not marketing (full tables in
 | Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations (and 0/19 on unlabeled Nepali scans); rotated 90/90 decided |
 | Devanagari (Nepali/Hindi) — rendered fixture | clean CER 0.030/0.028 (Latin engine 0.85 — the language model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
 | Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481]; modern gov PDFs (n=41): CER 0.338 [0.305–0.378] (bagCER 0.48); per-document 0.22–0.66; Devanagari digits essentially unread by the mobile model |
+| Devanagari — alternative models (bake-off, Appendix L) | Tesseract/TrOCR/GLM-OCR all scored on frozen sets and **rejected**: invented tokens, domain mismatch, or 200 s/page. The harness stays for future models (`python eval_models.py --list`) |
 | Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740] on a slice whose GT is machine-generated and partly misaligned — numbers provisional until human-verified |
 | Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
 | Single-column layout | identity — 60/60 real pages untouched |
