@@ -105,3 +105,8 @@ python eval_lines.py --data-dir data/doc_eval/nepali_lines --frozen \
 Rebuild instructions and dataset provenance are recorded per manifest and in
 plan Appendix K. Frozen sets are never used to tune thresholds; a dataset
 change is a new freeze version.
+
+Ground-truth integrity is checked before freezing: `doc_metrics.devanagari_validity()`
+reports the invalid-combining-sequence rate of Devanagari text (reordered
+matras, dangling viramas, orphan marks), and `harvest_nepali_pdfs.py` rejects
+PDFs whose text layer scores >2%.

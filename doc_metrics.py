@@ -14,6 +14,9 @@ Definitions:
   * false alarm   : fraction of flagged tokens that were actually correct.
                     Bounds how annoying flagging gets.
   * ECE           : expected calibration error of confidence vs exact-match.
+  * validity      : invalid-combining-sequence rate of Devanagari GT text
+                    (`devanagari_validity`) — the harvest/freeze gate that
+                    rejects text layers with extraction damage (>2%).
 """
 from __future__ import annotations
 
@@ -113,6 +116,77 @@ def digit_string(text: str) -> str:
 def digit_exact(gt: str, hyp: str) -> bool:
     """Exact whole-page digit-sequence match (the 'money is right' check)."""
     return digit_string(gt) == digit_string(hyp)
+
+
+_DEVA_RE = re.compile(r"[\u0900-\u097f]")
+_DEVA_CONSONANT = frozenset(
+    [chr(c) for c in range(0x0915, 0x093A)]
+    + [chr(c) for c in range(0x0958, 0x0960)]
+    + [chr(c) for c in range(0x0978, 0x0980)])
+_DEVA_VOWEL_SIGN = frozenset(
+    [chr(c) for c in range(0x093E, 0x094D)]
+    + [chr(c) for c in range(0x094E, 0x0950)]
+    + [chr(c) for c in range(0x0955, 0x0958)]
+    + [chr(c) for c in range(0x0962, 0x0964)])
+_DEVA_VIRAMA = "\u094d"
+_DEVA_NUKTA = "\u093c"
+_DEVA_MARKS = frozenset("\u0901\u0902\u0903")  # candrabindu, anusvara, visarga
+
+
+def _invalid_devanagari_token(tok: str) -> bool:
+    """True when `tok` contains a sequence no Unicode Devanagari word has.
+
+    Catches the failure modes of PDF text extraction: matras emitted before
+    their base consonant (reordering), viramas not followed by a consonant,
+    marks without a base, and U+FFFD replacement characters.
+    """
+    if "\ufffd" in tok:
+        return True
+    prev = "start"
+    for ch in tok.strip(_PUNCT):
+        if ch in _DEVA_VOWEL_SIGN:
+            if prev not in ("consonant", "nukta"):
+                return True
+            prev = "vowel_sign"
+        elif ch == _DEVA_VIRAMA:
+            if prev not in ("consonant", "nukta"):
+                return True
+            prev = "virama"
+        elif ch == _DEVA_NUKTA:
+            if prev not in ("consonant", "nukta"):
+                return True
+            prev = "nukta"
+        elif ch in _DEVA_MARKS:
+            if prev not in ("consonant", "vowel_sign", "nukta", "mark"):
+                return True
+            prev = "mark"
+        elif ch in _DEVA_CONSONANT:
+            prev = "consonant"
+        else:
+            prev = "other"
+    return False
+
+
+def devanagari_validity(text: str) -> Dict:
+    """Invalid-sequence rate of Devanagari text (ground-truth integrity gate).
+
+    A token is Devanagari-bearing when it contains any U+0900-U+097F char; it
+    is invalid when it contains an impossible combining sequence. Clean
+    Unicode text scores 0; text layers with extraction damage score >0.
+    Used by the harvest gate (`harvest_nepali_pdfs.py`) and the GT audit
+    (`eval_lines` slice). Denominator = Devanagari-bearing tokens only, so
+    Latin/digit-only documents report 0.0 rather than a false alarm.
+    """
+    toks = tokens_of(text)
+    deva = [t for t in toks if _DEVA_RE.search(t)]
+    bad = [t for t in deva if _invalid_devanagari_token(t)]
+    return {
+        "tokens": len(toks),
+        "devanagari_tokens": len(deva),
+        "invalid_tokens": len(bad),
+        "invalid_token_rate": round(len(bad) / len(deva), 4) if deva else 0.0,
+        "examples": bad[:5],
+    }
 
 
 def bag_stats(gt: str, hyp: str) -> Dict[str, float]:
