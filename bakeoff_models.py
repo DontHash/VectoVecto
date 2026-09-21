@@ -184,10 +184,26 @@ class TrOCRCandidate(Candidate):
 
     def load(self, lang=None):
         _shim_broken_torchaudio()
+        import json as _json
+
         import torch
-        from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+        from huggingface_hub import hf_hub_download
+        from transformers import (RobertaTokenizerFast, TrOCRProcessor,
+                                  ViTImageProcessor, VisionEncoderDecoderModel)
+        # transformers 5.x dropped the legacy "ViTFeatureExtractor" type key;
+        # rebuild the image processor from the raw params. The repo declares
+        # the slow RobertaTokenizer, so use the fast class directly.
+        cfg = _json.load(open(hf_hub_download(self.model_id,
+                                              "preprocessor_config.json"),
+                              encoding="utf-8"))
+        for legacy in ("image_processor_type", "processor_class",
+                       "feature_extractor_type"):
+            cfg.pop(legacy, None)
+        image_processor = ViTImageProcessor(**cfg)
+        tokenizer = RobertaTokenizerFast.from_pretrained(self.model_id)
+        processor = TrOCRProcessor(image_processor=image_processor,
+                                   tokenizer=tokenizer)
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        processor = TrOCRProcessor.from_pretrained(self.model_id)
         model = VisionEncoderDecoderModel.from_pretrained(self.model_id).to(device)
         model.eval()
         return {"processor": processor, "model": model, "device": device,

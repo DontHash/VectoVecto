@@ -18,6 +18,7 @@ Adoption gates (pre-registered):
 | rapidocr (baseline) | Apache-2.0 | pages 69 | 0.4335 [0.388-0.483] | 0.5529 | 8.98 (digBAG) | 0 | 0.84 | reference |
 | tesseract-nep | Apache-2.0 | lines 150 | 0.741 [0.656-0.832] | - | 0.207 | - | 0.16 | **loses** (psm 6/7/13 all >= 0.74 CER on 40-line probe) |
 | tesseract-nep | Apache-2.0 | pages 69 | **0.353 [0.277-0.446]** | 0.531 | 3.38 (digBAG) | **5,080 tokens / 532 digit** | 2.60 | page CER beats baseline but **fails the invented gate hard** (classic tesseract garbage; also 3x slower) |
+| trocr (MIT) | MIT | lines 150 | **1.043 [0.968-1.139]** | - | **0.020** | - | 0.17 | **loses decisively** — trained on handwritten Nepali words; on printed letterpress lines it hallucinates plausible but unrelated Devanagari |
 
 Notes:
 - Line mode = recognition-only on identical crops cut from the frozen pages
