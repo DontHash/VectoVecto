@@ -88,6 +88,99 @@ def digit_cer(gt: str, hyp: str, bag: bool = False) -> float:
     return float(jiwer.cer(gt_d, hyp_d))
 
 
+def _iou(a, b) -> float:
+    ax0, ay0, ax1, ay1 = a
+    bx0, by0, bx1, by1 = b
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
+    iw, ih = max(0, ix1 - ix0), max(0, iy1 - iy0)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    area_a = max(0, ax1 - ax0) * max(0, ay1 - ay0)
+    area_b = max(0, bx1 - bx0) * max(0, by1 - by0)
+    union = area_a + area_b - inter
+    return inter / union if union > 0 else 0.0
+
+
+def box_match_report(gt_boxes: Sequence, hyp_boxes: Sequence,
+                     iou_thresh: float = 0.5,
+                     image_size: Sequence = None) -> Dict:
+    """Greedy one-to-one IoU matching between GT and detected text boxes.
+
+    `gt_boxes` / `hyp_boxes`: sequences of (x0, y0, x1, y1) or dicts with a
+    "bbox" key. Returns GT coverage (share of annotated words/lines that got a
+    detection on them) and the extra rate (detections matching no GT box,
+    usually noise or split/merged annotations). This is the detection half of
+    the pipeline that CER alone cannot see.
+
+    When granularity differs (GT line boxes vs detected word boxes), IoU
+    coverage under-counts splits/merges. With `image_size=(w, h)` a rasterized
+    area view is added: a GT box counts as covered when >=50% of its area lies
+    under the union of hyp boxes, and a hyp box counts as extra when its
+    center lies outside every GT box. Both views are reported.
+    """
+    def _bbox(x):
+        return tuple(x["bbox"]) if isinstance(x, dict) else tuple(x)
+
+    gts = [_bbox(b) for b in gt_boxes]
+    hyps = [_bbox(b) for b in hyp_boxes]
+    pairs = []
+    for gi, g in enumerate(gts):
+        for hi, h in enumerate(hyps):
+            v = _iou(g, h)
+            if v >= iou_thresh:
+                pairs.append((v, gi, hi))
+    pairs.sort(key=lambda p: -p[0])
+    used_g, used_h = set(), set()
+    ious = []
+    for v, gi, hi in pairs:
+        if gi in used_g or hi in used_h:
+            continue
+        used_g.add(gi)
+        used_h.add(hi)
+        ious.append(v)
+    matched = len(used_g)
+    report = {
+        "gt_total": len(gts),
+        "hyp_total": len(hyps),
+        "matched": matched,
+        "coverage": matched / len(gts) if gts else None,
+        "extra": len(hyps) - len(used_h),
+        "extra_rate": (len(hyps) - len(used_h)) / len(hyps) if hyps else None,
+        "mean_iou": float(sum(ious) / len(ious)) if ious else None,
+        "iou_thresh": iou_thresh,
+    }
+    if image_size and gts and hyps:
+        import numpy as np
+        w, h = int(image_size[0]), int(image_size[1])
+        scale = min(1.0, 800.0 / max(1, w, h))
+        mw, mh = max(1, int(w * scale)), max(1, int(h * scale))
+        mask = np.zeros((mh, mw), dtype=np.uint8)
+        for x0, y0, x1, y1 in hyps:
+            mask[max(0, int(y0 * scale)):max(0, int(y1 * scale)),
+                 max(0, int(x0 * scale)):max(0, int(x1 * scale))] = 255
+        covered = 0
+        for x0, y0, x1, y1 in gts:
+            gx0, gy0 = max(0, int(x0 * scale)), max(0, int(y0 * scale))
+            gx1, gy1 = min(mw, int(x1 * scale)), min(mh, int(y1 * scale))
+            if gx1 <= gx0 or gy1 <= gy0:
+                continue
+            area = (gx1 - gx0) * (gy1 - gy0)
+            inside = int((mask[gy0:gy1, gx0:gx1] > 0).sum())
+            if inside / area >= 0.5:
+                covered += 1
+        outside = 0
+        for x0, y0, x1, y1 in hyps:
+            cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+            if not any(gx0 <= cx <= gx1 and gy0 <= cy <= gy1
+                       for gx0, gy0, gx1, gy1 in gts):
+                outside += 1
+        report["gt_area_coverage"] = covered / len(gts)
+        report["hyp_center_extra_rate"] = outside / len(hyps)
+    return report
+
+
 def bootstrap_ci(values: Sequence[float], n_boot: int = 2000, alpha: float = 0.05,
                  seed: int = 0) -> List[float]:
     """Percentile bootstrap CI of the mean. Deterministic for a given seed.

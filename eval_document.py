@@ -200,6 +200,14 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             stats = doc_metrics.token_stats(res.tokens, gt)
             hall = doc_metrics.hallucination_report(
                 gt, raw_text, res.text, extra_refs=others if peer_refs else ())
+            box = None
+            if entry.get("_boxes_path") and os.path.exists(entry["_boxes_path"]):
+                with open(entry["_boxes_path"], encoding="utf-8") as bf:
+                    gt_boxes = json.load(bf)
+                img = images.get(method, degraded)
+                box = doc_metrics.box_match_report(
+                    gt_boxes, [{"bbox": t.bbox} for t in res.tokens],
+                    image_size=(img.shape[1], img.shape[0]))
             row = {
                 "page": entry["id"], "method": method, "backend": backend,
                 "cer": doc_metrics.cer(gt, res.text),
@@ -222,12 +230,19 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                 "seconds": round(elapsed_by_key[key], 3),
                 "gt_chars": len(gt),
             }
+            if box:
+                row["box_coverage"] = box["coverage"]
+                row["box_extra_rate"] = box["extra_rate"]
+                row["box_area_coverage"] = box.get("gt_area_coverage")
+                row["box_center_extra"] = box.get("hyp_center_extra_rate")
             per_page.append(row)
             agg = results.setdefault(key, {"cer": [], "cer_bag": [],
                                            "digit_cer": [], "digit_cer_bag": [],
                                            "wer": [],
                                            "token_err": [],
                                            "coverage": [], "false_alarm": [],
+                                           "box_coverage": [], "box_extra_rate": [],
+                                           "box_area_coverage": [], "box_center_extra": [],
                                            "ece": [], "seconds": [], "invented": 0,
                                            "invented_digits": 0, "repass_conflicts": 0,
                                            "digit_errors": 0, "digit_flagged_errors": 0,
@@ -241,6 +256,12 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             agg["token_err"].append(row["token_err"])
             agg["coverage"].append(row["coverage"])
             agg["false_alarm"].append(row["false_alarm"])
+            if "box_coverage" in row:
+                agg["box_coverage"].append(row["box_coverage"])
+                agg["box_extra_rate"].append(row["box_extra_rate"])
+                if row.get("box_area_coverage") is not None:
+                    agg["box_area_coverage"].append(row["box_area_coverage"])
+                    agg["box_center_extra"].append(row["box_center_extra"])
             agg["ece"].append(row["ece"])
             agg["seconds"].append(row["seconds"])
             agg["invented"] += row["invented"]
@@ -265,6 +286,14 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             "token_err": float(np.mean(agg["token_err"])) if agg["token_err"] else None,
             "coverage": float(np.mean(agg["coverage"])) if agg["coverage"] else None,
             "false_alarm": float(np.mean(agg["false_alarm"])) if agg["false_alarm"] else None,
+            "box_coverage": (float(np.mean(agg["box_coverage"]))
+                             if agg["box_coverage"] else None),
+            "box_extra_rate": (float(np.mean(agg["box_extra_rate"]))
+                               if agg["box_extra_rate"] else None),
+            "box_area_coverage": (float(np.mean(agg["box_area_coverage"]))
+                                  if agg["box_area_coverage"] else None),
+            "box_center_extra": (float(np.mean(agg["box_center_extra"]))
+                                 if agg["box_center_extra"] else None),
             "ece": float(np.mean(agg["ece"])) if agg["ece"] else None,
             "seconds": float(np.mean(agg["seconds"])) if agg["seconds"] else None,
             "digit_coverage": (agg["digit_flagged_errors"] / agg["digit_errors"]
@@ -323,6 +352,17 @@ def print_summary(summary: Dict) -> None:
                     parts.append(f"{name} [{ci[0]:.3f}-{ci[1]:.3f}]")
             if parts:
                 print(f"  {key}: " + "  ".join(parts))
+    box_rows = [(k, m) for k, m in order if m.get("box_coverage") is not None]
+    if box_rows:
+        print("\n--- detection boxes vs GT (IoU>=0.5 greedy / area view) ---")
+        for k, m in box_rows:
+            extra = m.get("box_extra_rate")
+            line = (f"  {k}: IoU coverage {m['box_coverage']:.3f}"
+                    + (f"  IoU extra {extra:.3f}" if extra is not None else ""))
+            if m.get("box_area_coverage") is not None:
+                line += (f"  | area coverage {m['box_area_coverage']:.3f}"
+                         f"  center-extra {m['box_center_extra']:.3f}")
+            print(line)
 
 
 def main():

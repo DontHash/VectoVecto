@@ -25,6 +25,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -751,6 +752,126 @@ def load_line_dataset(data_dir: str) -> Dict:
 
 
 # ---------------------------------------------------------------------------
+# heiDATA printed Devanagari (ALTO ground truth, CC BY 4.0)
+# ---------------------------------------------------------------------------
+
+def parse_alto_page(xml_bytes: bytes) -> Dict:
+    """Parse one Transkribus-style ALTO v4 page.
+
+    Returns {"width", "height", "lines": [{"text", "bbox"}...]} in page image
+    pixel coordinates. Namespace-agnostic (v2/v3/v4 share the tag names).
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_bytes)
+
+    def tag(el):
+        return el.tag.split("}")[-1]
+
+    page = None
+    for el in root.iter():
+        if tag(el) == "Page":
+            page = el
+            break
+    if page is None:
+        return {"width": 0, "height": 0, "lines": []}
+    width = int(float(page.get("WIDTH", 0)))
+    height = int(float(page.get("HEIGHT", 0)))
+    lines = []
+    for el in root.iter():
+        if tag(el) != "TextLine":
+            continue
+        strings = [s.get("CONTENT", "") for s in el if tag(s) == "String"]
+        text = " ".join(s for s in strings if s).strip()
+        if not text:
+            continue
+        x, y = int(float(el.get("HPOS", 0))), int(float(el.get("VPOS", 0)))
+        w, h = int(float(el.get("WIDTH", 0))), int(float(el.get("HEIGHT", 0)))
+        lines.append({"text": text, "bbox": [x, y, x + w, y + h]})
+    return {"width": width, "height": height, "lines": lines}
+
+
+def build_heidata_dataset(zips_dir: str, out_dir: str,
+                          max_pages_per_book: int = 0) -> Dict:
+    """Real scanned Devanagari book pages + ALTO word/line ground truth.
+
+    Source: heiDATA "Ground Truth data for printed Devanagari" (Merkel-Hilf
+    2022, doi:10.11588/data/EGOKEI, CC BY 4.0) — Transkribus exports (jpg +
+    ALTO v4) of letterpress books printed in Devanagari (Hindi/Sanskrit/Braj).
+    Human-corrected transcription, unlike the gauravgiri line slice. This is
+    the first page-level real set with boxes: GT boxes enable detection
+    coverage, which CER alone cannot measure.
+    """
+    import zipfile
+
+    pages_dir = os.path.join(out_dir, "pages")
+    gt_dir = os.path.join(out_dir, "gt")
+    os.makedirs(pages_dir, exist_ok=True)
+    os.makedirs(gt_dir, exist_ok=True)
+    entries: List[Dict] = []
+    for zip_path in sorted(glob.glob(os.path.join(zips_dir, "*.zip"))):
+        book = os.path.splitext(os.path.basename(zip_path))[0]
+        with zipfile.ZipFile(zip_path) as z:
+            names = z.namelist()
+            jpgs = sorted(n for n in names if n.lower().endswith(".jpg"))
+            if max_pages_per_book:
+                jpgs = jpgs[:max_pages_per_book]
+            for img_name in jpgs:
+                stem = os.path.splitext(os.path.basename(img_name))[0]
+                alto_name = next((n for n in names
+                                  if "/alto/" in n and
+                                  os.path.basename(n) == stem + ".xml"), None)
+                if alto_name is None:
+                    continue
+                alto = parse_alto_page(z.read(alto_name))
+                if not alto["lines"]:
+                    continue
+                import io
+                from PIL import Image
+                pil = Image.open(io.BytesIO(z.read(img_name))).convert("RGB")
+                arr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+                ih, iw = arr.shape[:2]
+                sx = iw / alto["width"] if alto["width"] else 1.0
+                sy = ih / alto["height"] if alto["height"] else 1.0
+                boxes = []
+                for line in alto["lines"]:
+                    x0, y0, x1, y1 = line["bbox"]
+                    if abs(sx - 1.0) > 0.01 or abs(sy - 1.0) > 0.01:
+                        x0, x1 = int(x0 * sx), int(x1 * sx)
+                        y0, y1 = int(y0 * sy), int(y1 * sy)
+                    boxes.append({"text": line["text"],
+                                  "bbox": [x0, y0, x1, y1],
+                                  "granularity": "line"})
+                gt_text = "\n".join(b["text"] for b in boxes)
+                pid = f"{book}_p{stem}"
+                img_path = os.path.join(pages_dir, f"{pid}.png")
+                gt_path = os.path.join(gt_dir, f"{pid}.txt")
+                boxes_path = os.path.join(gt_dir, f"{pid}.boxes.json")
+                cv2.imwrite(img_path, arr)
+                with open(gt_path, "w", encoding="utf-8") as f:
+                    f.write(gt_text)
+                with open(boxes_path, "w", encoding="utf-8") as f:
+                    json.dump(boxes, f, ensure_ascii=False, indent=1)
+                entries.append({
+                    "id": pid, "source": "heidata:doi:10.11588/data/EGOKEI",
+                    "book": book, "page": stem, "level": "real", "real": True,
+                    "gt_chars": len(gt_text), "n_lines": len(boxes),
+                    "clean": os.path.relpath(img_path, out_dir),
+                    "degraded": os.path.relpath(img_path, out_dir),
+                    "gt": os.path.relpath(gt_path, out_dir),
+                    "boxes": os.path.relpath(boxes_path, out_dir),
+                })
+    manifest = {
+        "kind": "real_pages", "name": "heidata_printed_devanagari",
+        "source": "Merkel-Hilf 2022, doi:10.11588/data/EGOKEI (CC BY 4.0)",
+        "created": time.strftime("%Y-%m-%d %H:%M:%S"), "entries": entries,
+    }
+    with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
 # demo PDF (offline PDF-path exercise)
 # ---------------------------------------------------------------------------
 
@@ -778,6 +899,8 @@ def load_dataset(data_dir: str) -> Dict:
         e["_clean_path"] = os.path.join(data_dir, e["clean"])
         e["_degraded_path"] = os.path.join(data_dir, e["degraded"])
         e["_gt_path"] = os.path.join(data_dir, e["gt"])
+        if e.get("boxes"):
+            e["_boxes_path"] = os.path.join(data_dir, e["boxes"])
     return manifest
 
 
