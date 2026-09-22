@@ -64,8 +64,14 @@ def test_is_document_threshold_default():
 
 
 def test_pipeline_primary_stream_follows_recommended_table(monkeypatch):
+    import document_ocr
     import document_pipeline as dp
     from document_ocr import OCRResult
+
+    if "tesseract" not in document_ocr.available_backends():
+        import pytest
+
+        pytest.skip("tesseract binary not installed (external dependency)")
 
     calls = []
 

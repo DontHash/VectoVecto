@@ -84,6 +84,12 @@ def _declared(path: str) -> List[str]:
     return names
 
 
+def _known(dist_name: str) -> str:
+    """KNOWN_LICENSES lookup with PEP 503-style name normalization."""
+    key = dist_name.lower().replace("_", "-").replace(".", "-")
+    return KNOWN_LICENSES.get(key, "")
+
+
 def _license_of(dist_name: str) -> str:
     lic = ""
     try:
@@ -97,7 +103,7 @@ def _license_of(dist_name: str) -> str:
     except metadata.PackageNotFoundError:
         pass  # CI gate job runs without the full environment installed
     if not lic:
-        lic = KNOWN_LICENSES.get(dist_name.lower(), "")
+        lic = _known(dist_name)
     return lic or "UNKNOWN"
 
 

@@ -163,9 +163,9 @@ def test_label_page_montage_keeps_crops_and_filters():
 
 
 def test_frozen_pages_reads_the_v2_manifest(tmp_path):
-    m = {"entries": [{"source": r"D:\x\a.pdf", "page": 0},
-                     {"source": r"D:\x\a.pdf", "page": 1},
-                     {"source": r"D:\x\b.pdf", "page": 3}]}
+    m = {"entries": [{"source": os.path.join("x", "a.pdf"), "page": 0},
+                     {"source": os.path.join("x", "a.pdf"), "page": 1},
+                     {"source": os.path.join("x", "b.pdf"), "page": 3}]}
     p = tmp_path / "manifest.json"
     p.write_text(json.dumps(m), encoding="utf-8")
     used = lrl.frozen_pages(str(p))
