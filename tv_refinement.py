@@ -134,7 +134,7 @@ def tv_super_resolution_refine(lr_img, hr_estimate, scale=4, lambda_tv=0.03,
     return out
 
 if __name__ == "__main__":
-    print("VectorScaling Phase 6 — Total Variation (TV) Minimization initialized.")
+    print("VectoVecto Phase 6 — Total Variation (TV) Minimization initialized.")
     img = np.zeros((64, 64), dtype=np.float32)
     img[20:44, 20:44] = 1.0
     noisy = img + np.random.normal(0, 0.1, img.shape).astype(np.float32)

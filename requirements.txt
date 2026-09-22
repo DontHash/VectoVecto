@@ -9,7 +9,7 @@ onnx
 onnxruntime
 Pillow
 gradio
-rapidocr
+rapidocr==3.9.*
 reportlab
 pypdfium2
 transformers

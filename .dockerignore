@@ -1,0 +1,47 @@
+# Never ship data, weights, artifacts or research material in the image.
+.git
+.github
+.gitignore
+.pytest_cache
+.venv
+venv
+
+# Training data / model weights / outputs
+data
+weights
+artifacts
+out
+web_outputs
+graphify-out
+kaggle_*
+verify_clone
+upscayl-repo
+testIMg
+testImg
+calibration
+
+# Research, evaluation and tooling (not needed at runtime)
+legacy
+evals
+scripts
+tests
+deva_crnn
+packaging
+gcp
+
+# Docs and media (README is copied only if needed; app does not read docs)
+docs
+*.md
+!README.md
+*.mp4
+*.jpg
+*.svg
+*.png
+*.ipynb
+!app.py
+
+# Python noise
+__pycache__
+*.py[cod]
+*.egg-info
+.mypy_cache

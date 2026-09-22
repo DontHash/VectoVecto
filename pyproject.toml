@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vectovecto"
+version = "1.1.0"
+description = "Offline document restoration: photo/scan in, searchable PDF + honest review flags out"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "DontHash" }]
+keywords = ["ocr", "devanagari", "nepali", "document-restore", "searchable-pdf", "offline"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+  "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+  "numpy",
+  "opencv-python",
+  "scipy",
+  "scikit-image",
+  "torch",
+  "torchvision",
+  "onnx",
+  "onnxruntime",
+  "Pillow",
+  "gradio",
+  "rapidocr==3.9.*",
+  "reportlab",
+  "pypdfium2",
+  "transformers",
+  "huggingface_hub",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "matplotlib",
+  "tqdm",
+  "pyiqa",
+  "datasets",
+  "onnxconverter-common",
+]
+
+[project.urls]
+Homepage = "https://github.com/DontHash/VectoVecto"
+Issues = "https://github.com/DontHash/VectoVecto/issues"
+
+[project.scripts]
+vectovecto = "cli:main"
+vectovecto-studio = "app:main"
+
+[tool.setuptools]
+# Product modules only. The training package (`deva_crnn/`) and the evaluation
+# harness stay out of the distributed wheel — they are repo tooling.
+py-modules = [
+  "app",
+  "calibration",
+  "cli",
+  "degradation_document",
+  "doc_data",
+  "doc_metrics",
+  "document_export",
+  "document_layout",
+  "document_ocr",
+  "document_orientation",
+  "document_pipeline",
+  "document_restore",
+  "document_router",
+  "document_verifier",
+  "smart_upscaler",
+  "sr_engine",
+  "srvggnet",
+  "tv_refinement",
+  "vector_raster_hybrid",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

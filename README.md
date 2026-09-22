@@ -1,86 +1,136 @@
-# VectorScaling — Document Restore (+ photo upscaler)
+# VectoVecto
 
-Local, offline document restoration: a photo or scan goes in, a cleaned page
-with a **searchable PDF**, overlay, transcript and OCR JSON comes out — with
-honest flags for the numbers it is unsure about ("won't invent the numbers on
-your bill"). A photo upscaler (Real-ESRGAN x4plus) shares the same CLI/app.
+**Offline document restoration.** A photo or scan goes in; a cleaned page with
+a **searchable PDF**, overlay, transcript and OCR JSON comes out — with honest
+flags on the numbers it is not sure about. Devanagari (Nepali/Hindi) first,
+English supported by the same pipeline.
 
-Everything runs on your machine. No cloud calls, no telemetry.
+Everything runs on your machine. No cloud calls, no telemetry, no account.
+
+```
+photo/scan ──▶ orientation ──▶ layout ──▶ OCR ──▶ risk flags ──▶ searchable PDF
+                                                              ├─ overlay.png (review boxes)
+                                                              ├─ transcript.txt
+                                                              └─ ocr.json (tokens + queue)
+```
+
+## Why it exists
+
+- **It will not invent the numbers on your bill.** Digits are the highest-risk
+  tokens, so they are re-read, risk-ranked and put in a review queue instead of
+  being silently guessed. The queue is measured, not asserted
+  ([EVALUATION.md](docs/EVALUATION.md)).
+- **Devanagari is a first-class citizen, not a language pack.** Letterpress
+  books, modern government PDFs and phone photos each have frozen evaluation
+  sets with published numbers and confidence intervals.
+- **Offline by default.** Privacy is the reason to use this instead of a cloud
+  lens: the pipeline runs with networking disabled.
 
 ## Install
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt        # runtime
+pip install -r requirements-dev.txt    # + dev/eval tooling (optional)
 ```
 
-Optional:
+Optional: [Tesseract 5](https://github.com/UB-Mannheim/tesseract/wiki) as a
+second OCR backend (clean-scan fallback and the OSD rotation fallback).
 
-- [Tesseract 5](https://github.com/UB-Mannheim/tesseract/wiki) — second OCR
-  backend (demoted to clean-scan/synthetic fallback) and the OSD rotation
-  fallback.
-- Dev/eval tooling (SROIE/CORD/arXiv eval sets, metrics): `pip install -r requirements-dev.txt`
-
-## Usage
+## Use
 
 ### CLI
 
 ```bash
-# Document mode: photo/scan in, searchable PDF + overlay + txt + JSON out
+# Photo/scan in, searchable PDF + overlay + transcript + JSON out
 python cli.py --mode document --input page.jpg --output out/run1
 
-# Multi-page PDF (page 1 by default; --max-pages N to extend)
+# Multi-page PDF (first page by default; 0 = all pages + combined PDF)
 python cli.py --mode document --input scan.pdf --output out/run1 --max-pages 3
 
-# Knobs (all default to the measured best config)
-#   --ocr rapidocr|tesseract   --lang en|ne|hi     --deskew
-#   --no-reading-order         --rotate auto|off --repass-digits
-#   --digit-verifier off|bodhan  (optional second-model digit check)
-#   --no-pdf --no-overlay --no-txt
-```
-
-Outputs per page: `*_restored.png` (or `.jpg`/`.webp`), `*_searchable.pdf`,
-`*_overlay.png` (numbered review boxes), `*_transcript.txt`, `*_ocr.json`
-(tokens, flags, review queue, orientation/reading-order evidence).
-
-### App
-
-```bash
-python app.py            # Gradio studio, document tab first
-```
-
-### Photo mode
-
-```bash
+# Photo upscaling (shares the same CLI/app)
 python cli.py --mode photo --input photos/ --output out/upscaled --scale 4
 ```
 
-## What it does (and what it deliberately does not)
+Useful knobs (all default to the measured best configuration):
 
-Measured behaviour, not marketing (full tables in
-[`document_restore_plan.md`](document_restore_plan.md)):
+```
+--ocr rapidocr|tesseract     --lang en|ne|hi       --deskew
+--no-reading-order           --rotate auto|off     --repass-digits/--no-repass-digits
+--digit-verifier off|bodhan  (optional second-model digit check)
+--no-pdf --no-overlay --no-txt
+```
 
-| Capability | Status |
+### Web app
+
+```bash
+python app.py                 # http://127.0.0.1:7860
+```
+
+Hosted deployments (Docker, basic auth, HF Spaces/Render/Fly) are covered in
+[docs/DEPLOY.md](docs/DEPLOY.md). The app binds to localhost by default; the
+pipeline, models and any training artifacts stay server-side.
+
+### Outputs (per page)
+
+| File | Contents |
 |---|---|
-| Orientation (EXIF + 0/90/180/270 via OCR evidence) | syn 16/16; real upright 0/30 false rotations (and 0/19 on unlabeled Nepali scans); rotated 90/90 decided |
-| Devanagari (Nepali/Hindi) — rendered fixture | clean CER 0.030/0.028 (Latin engine 0.85 — the language model is essential); degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
-| Devanagari — real pages (**the honest bar**) | letterpress ALTO-verified (n=69): CER 0.434 [0.387–0.481], exact-token recall 0.647 [0.619–0.675]. Modern gov PDFs (n=41, **Gemini 2.5 Pro GT anchor**, bodhan-corroborated 0.881): CER **0.135 [0.097–0.186]** / bagCER 0.142, exact-token recall 0.877 [0.732–0.968]; per-doc bagCER 0.06–0.20. The older 0.338 was scored against a corrupt text layer (41/41 pages >2% invalid tokens) and is historical only |
-| Devanagari — alternative models (bake-off, Appendix L) | Tesseract/TrOCR/GLM-OCR all scored on frozen sets and **rejected**: invented tokens, domain mismatch, or 200 s/page. The harness stays for future models (`python eval_models.py --list`) |
-| Devanagari — real line crops (n=500) | CER 0.717 [0.693–0.740]; GT audit: 0.07% invalid tokens — the defect is *alignment* (machine-generated GT, partly misaligned), so numbers stay "behavior only" until a human pass |
-| Detection on real pages | covers 97.5% of ALTO line boxes (area view); not the bottleneck — recognition is |
-| Single-column layout | identity — 60/60 real pages untouched |
-| Two-column reading order | real arXiv set: WER 0.870→0.268 (−69%) on split pages, CER 0.607→0.241 end-to-end; all 4 unlabeled real splits verified by geometry; >2 columns unsupported |
-| Digit-number honesty | review queue ranked by risk; **2x digit re-pass is ON by default for Devanagari**: letterpress digit R@10 **0.88**, clean-PDF R@10 **0.38** (was 0.73 / 0.15), at ~+0.4 s/page; Latin photos keep it off (Appendix I gate). General token R@10 0.31 / 0.15. Documented and improving (Appendix Q) |
-| Devanagari flags + calibration (Appendix M, Q) | `script_mismatch` + `invalid_sequence` (impossible combining sequence = misread by construction) + 2x digit re-pass (default on) + conf-90 digit bar + isotonic `cal_conf`: letterpress digit R@10 **0.88**, token R@10 0.31; clean gov PDFs digit R@10 **0.38**, token R@10 0.15. Calibration is monotone (ranking unchanged); ECE 0.82→0.30 on scans |
-| Optional digit verifier (`--digit-verifier bodhan`, Appendix L/N/Q) | second model re-reads suspect digits; disagreement is flagged `cross_model_conflict` with the alt reading kept (text never changed). Frozen: flag recall 0.71 / precision 0.81; queue R@10 0.730→0.752 (`--digit-verifier-scope flagged`). Cost reality (W0.2): ~0.9 s/crop floor on this hardware, +8.3 s/page end-to-end, junk-crop filter + 64-token cap shipped; **stays opt-in** (cost gate failed). Needs a one-time `hf auth login` + license acceptance, ~1.9 GB. License: Indic Open Model License 1.0 (self-host OK, no third-party hosting, attribution) |
-| Multi-page PDF (P6) | `--max-pages 0` processes every page and writes `<stem>_combined.pdf` / `.txt` (per-page artifacts unchanged); GUI "All pages (PDF)" checkbox, default stays first page. Verified: 3-page demo → 3-page searchable PDF, text extractable on every page |
-| Phone-photo proxy (W0.5, **not real photos**) | modern Nepali pages under synthetic camera artifacts: CER 0.370 [0.266–0.474] medium / 0.757 [0.660–0.851] heavy (clean 0.135); queue coverage 0.63/0.88 — recognition, not honesty, is what breaks. Real A5 field set still open |
-| Mixed-page router (P5, opt-in `--mixed-router`) | restored text regions + untouched logos/photos/signatures (non-text PSNR 60–67 dB vs 18–23 dB after a naive full-page restore). Pre-registered gates: text CER +0%, cost 0.31 s/page, non-text PASS, but 1 invented token on a photo texture → **not auto-enabled** (Appendix O) |
-| Tesseract backend | fails on real photos (CORD CER 0.90 raw / 1.57 restored) — clean-scan fallback only |
-| Numeric flags bar (coverage ≥0.55) | **not met** on real photos; replaced by the ranked review queue |
-| Frozen eval + CIs | every real-set number above comes from a hash-frozen manifest (`evals/manifests/`) with bootstrap 95% CIs; see plan Appendix K |
-| 180° via soft evidence only | refused, flagged `orientation?` instead of a blind flip |
-| High-Fidelity photo model | rejected (perceptual metrics) and gated behind `artifacts/tier_c/ACCEPTED` |
-| License | RapidOCR/PP-OCR Apache-2.0; reportlab/pypdfium2 permissive; PyMuPDF (AGPL) unused; UltraSharp weights CC-BY-NC-SA (not for commercial builds); eval sets internal-only unless stated |
+| `*_restored.png` | cleaned page (`.jpg`/`.webp` also supported) |
+| `*_searchable.pdf` | image + invisible text layer, selectable/copyable |
+| `*_overlay.png` | numbered review boxes for the flagged tokens |
+| `*_transcript.txt` | reading-order plain text |
+| `*_ocr.json` | tokens, risk flags, review queue, orientation/reading-order evidence |
+
+## Measured behaviour
+
+Numbers below come from hash-frozen evaluation sets with bootstrap 95% CIs
+(full tables, provenance and rebuild commands: [docs/EVALUATION.md](docs/EVALUATION.md)).
+No number in this repo is marketing.
+
+| Capability | Measured |
+|---|---|
+| Orientation (EXIF + 0/90/180/270 via OCR evidence) | 16/16 synthetic; 0/30 false rotations on upright real scans; 90/90 rotated pages decided |
+| Devanagari — modern government PDFs | CER **0.135 [0.097–0.186]**, exact-token recall 0.877 (n=41, Gemini-2.5-Pro anchor GT, engine-corroborated) |
+| Devanagari — letterpress books (the honest bar) | CER 0.434 [0.387–0.481], exact-token recall 0.647 (n=69, human-corrected ALTO GT) |
+| Devanagari — rendered fixtures | clean CER 0.030/0.028; degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
+| Digit honesty — 2× re-pass (default ON for Devanagari) | review-queue digit recall@10 **0.88** letterpress / **0.38** PDFs (was 0.73 / 0.15), ≈ +0.4 s/page |
+| Flags + calibration | `script_mismatch`, `invalid_sequence` (impossible combining sequence), isotonic `cal_conf`; ECE 0.82 → 0.30 on scans |
+| Optional digit verifier (`--digit-verifier bodhan`) | flags 0.71 recall / 0.81 precision; **opt-in** (cost gate failed: +8.3 s/page) |
+| Multi-page PDF | `--max-pages 0` → every page + `<stem>_combined.pdf`/`.txt`; GUI "All pages" checkbox |
+| Two-column reading order | arXiv set WER 0.870 → 0.268 (−69%) on split pages; >2 columns unsupported |
+| Phone-photo proxy (not real photos) | CER 0.370 medium / 0.757 heavy (clean 0.135) — recognition, not honesty, is what breaks |
+| Mixed-page router (opt-in) | restored text + untouched logos/photos (non-text PSNR 60–67 dB vs 18–23 dB naive); 1 invented token on photo texture → not auto-enabled |
+| Detection on real pages | covers 97.5% of ALTO line boxes (area view) — recognition, not detection, is the bottleneck |
+
+Known limitations are listed with their evidence in
+[docs/EVALUATION.md](docs/EVALUATION.md) and the full research log in
+[docs/PLAN.md](docs/PLAN.md).
+
+## Project layout
+
+```
+app.py, cli.py            product entry points (studio / command line)
+document_*.py, doc_*.py   pipeline: OCR, layout, orientation, restore, export, router, verifier
+calibration.py            isotonic confidence calibration
+smart_upscaler.py, sr_engine.py, ...   photo/vector restore stack
+deva_crnn/                Devanagari line recognizer (CRNN+CTC) — research, not shipped
+evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
+evals/manifests/          content-hash frozen evaluation sets
+scripts/                  data acquisition, training export, gates, release tooling
+tests/                    231 tests
+docs/                     architecture, evaluation, deployment, licensing, roadmap
+legacy/                   archived pre-pivot research (not part of the product)
+```
+
+## Docs
+
+| Document | Contents |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module map, data flow, extension points |
+| [docs/EVALUATION.md](docs/EVALUATION.md) | frozen sets, metrics, how to reproduce every number |
+| [docs/DEPLOY.md](docs/DEPLOY.md) | hosted web app (Docker, auth, spaces) |
+| [docs/LICENSES.md](docs/LICENSES.md) | dependency + model license gate |
+| [docs/RELEASE.md](docs/RELEASE.md) | release checklist, versioning, desktop packaging path |
+| [docs/PLAN.md](docs/PLAN.md) | the full research log and decision record |
 
 ## Tests
 
@@ -88,35 +138,21 @@ Measured behaviour, not marketing (full tables in
 python -m pytest tests/ -q
 ```
 
-232 tests: OCR/export/routing/CLI/app (incl. multi-page combined PDF and the
-mixed-page router), layout (14), orientation (13), language plumbing,
-engine-state regressions, frozen-manifest + bootstrap-CI guards, GT-validity
-audits, error taxonomy, anchor harness (engine worksheet + Gemini
-transcription), queue metrics (digit + all-token), Unicode-path IO, line eval,
-box metrics, sanity audit, Devanagari line synthesis (multi-font), CRNN
-plumbing (overfit proof, heavy augmentation) and the real-line mining gate.
-`legacy/` holds archived photo-training scripts and is not part of the product.
+231 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
+harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
+plumbing and the real-line mining gate.
 
-## Real-data evaluation (frozen)
+## Data, models and licensing
 
-Real Devanagari evidence lives under `evals/manifests/` (content-hash frozen):
+This repository contains **code and evaluation evidence only**: no training
+datasets, no model checkpoints and no redistributed third-party corpora.
+Evaluation manifests record hashes and provenance; the data itself stays local
+(`data/`, `weights/` and `artifacts/` are git-ignored). Third-party license
+obligations and the air-gap story are tracked in
+[docs/LICENSES.md](docs/LICENSES.md).
 
-```bash
-python eval_freeze.py --check evals/manifests/heidata_printed_v1.json
-python eval_document.py --data-dir data/doc_eval/heidata_printed --frozen \
-    evals/manifests/heidata_printed_v1.json --lang ne --methods raw --bootstrap 2000
-python eval_lines.py --data-dir data/doc_eval/nepali_lines --frozen \
-    evals/manifests/nepali_lines_v1.json --lang ne --bootstrap 2000
-```
-
-Rebuild instructions and dataset provenance are recorded per manifest and in
-plan Appendix K. Frozen sets are never used to tune thresholds; a dataset
-change is a new freeze version.
-
-Ground-truth integrity is checked before freezing: `doc_metrics.devanagari_validity()`
-reports the invalid-combining-sequence rate of Devanagari text (reordered
-matras, dangling viramas, orphan marks), and `harvest_nepali_pdfs.py` rejects
-PDFs whose text layer scores >2%. Where no clean reference exists, the anchor
-is model-produced and labeled: `anchor_gemini.py` (Vertex AI) transcribes the
-pages, the local engines corroborate (`eval_anchor.py --score`), and the
-disagreement list is the human review artifact (`out/anchor_gemini/audit.html`).
+MIT licensed — see [LICENSE](LICENSE). Third-party components keep their own
+licenses (RapidOCR/PP-OCR Apache-2.0, reportlab/pypdfium2 permissive, PySide6
+LGPL, UltraSharp weights CC-BY-NC-SA and therefore excluded from commercial
+builds).

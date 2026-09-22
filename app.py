@@ -1,5 +1,5 @@
 """
-app.py — VectorScaling Studio: Document Restore (default) + Photo upscaling.
+app.py — VectoVecto Studio: Document Restore (default) + Photo upscaling.
 
 Document tab (the product): drop a scan / phone photo / PDF page, get a cleaned
 page, a searchable PDF, an overlay of low-confidence tokens and digit conflicts,
@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import gradio as gr
 
-# Ensure local VectorScaling workspace is in python path
+# Ensure the local VectoVecto workspace is in python path
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
@@ -36,7 +36,7 @@ _ENGINE_CACHE: dict = {}
 
 def _get_upscaler(model_spec: str) -> SmartUpscaler:
     if model_spec not in _ENGINE_CACHE:
-        print(f"Initializing VectorScaling engine: {model_spec}")
+        print(f"Initializing VectoVecto engine: {model_spec}")
         _ENGINE_CACHE[model_spec] = SmartUpscaler(model_spec=model_spec)
     return _ENGINE_CACHE[model_spec]
 
@@ -323,11 +323,14 @@ CUSTOM_CSS = """
 
 
 def create_app():
-    with gr.Blocks(title="VectorScaling — Document Restore Studio") as demo:
+    # Hosted deployments can hide the photo tab (its upscale weights are
+    # non-commercial and stay out of the image): VECTOVECTO_DOCUMENT_ONLY=1.
+    document_only = os.environ.get("VECTOVECTO_DOCUMENT_ONLY", "") == "1"
+    with gr.Blocks(title="VectoVecto — Document Restore Studio") as demo:
         with gr.Column(elem_classes=["header-box"]):
             gr.Markdown(
                 """
-                # VectorScaling — Document Restore
+                # VectoVecto — Document Restore
                 ### Local. Searchable. Won't invent the numbers on your bill.
                 """
             )
@@ -399,103 +402,125 @@ def create_app():
                              doc_pdf_file, doc_txt_file, doc_status],
                 )
 
-            # ------------------------------------------------------------------
-            # Photo tab (previously the whole studio)
-            # ------------------------------------------------------------------
-            with gr.Tab("Photo (Advanced)"):
-                with gr.Row():
-                    with gr.Column(scale=4):
-                        gr.Markdown("#### Input Image")
-                        input_image = gr.Image(
-                            label="Upload Image (or click example below)",
-                            type="numpy",
-                            sources=["upload", "clipboard"],
-                            height=280,
-                        )
+            if not document_only:
+                # ------------------------------------------------------------------
+                # Photo tab (previously the whole studio)
+                # ------------------------------------------------------------------
+                with gr.Tab("Photo (Advanced)"):
+                    with gr.Row():
+                        with gr.Column(scale=4):
+                            gr.Markdown("#### Input Image")
+                            input_image = gr.Image(
+                                label="Upload Image (or click example below)",
+                                type="numpy",
+                                sources=["upload", "clipboard"],
+                                height=280,
+                            )
 
-                        gr.Markdown("#### Upscaling Settings")
-                        with gr.Row():
-                            scale_radio = gr.Radio(choices=[2, 4], value=4,
-                                                   label="Scale Factor",
-                                                   info="2x or 4x resolution expansion")
-                            mode_dropdown = gr.Dropdown(
-                                choices=[("Auto (Smart Router - Recommended)", "auto"),
-                                         ("Natural Photo (pure neural)", "photo"),
-                                         ("Fidelity (TV-free unfolding, no hallucination)", "fidelity"),
-                                         ("Vector Hybrid (High-Contrast Graphics)", "vector")],
-                                value="auto", label="Routing Mode")
+                            gr.Markdown("#### Upscaling Settings")
+                            with gr.Row():
+                                scale_radio = gr.Radio(choices=[2, 4], value=4,
+                                                       label="Scale Factor",
+                                                       info="2x or 4x resolution expansion")
+                                mode_dropdown = gr.Dropdown(
+                                    choices=[("Auto (Smart Router - Recommended)", "auto"),
+                                             ("Natural Photo (pure neural)", "photo"),
+                                             ("Fidelity (TV-free unfolding, no hallucination)", "fidelity"),
+                                             ("Vector Hybrid (High-Contrast Graphics)", "vector")],
+                                    value="auto", label="Routing Mode")
 
-                        model_dropdown = gr.Dropdown(
-                            choices=MODEL_CHOICES, value="auto", label="Upscaling Engine",
-                            info="Auto uses the fine-tuned model when available, else x4plus")
+                            model_dropdown = gr.Dropdown(
+                                choices=MODEL_CHOICES, value="auto", label="Upscaling Engine",
+                                info="Auto uses the fine-tuned model when available, else x4plus")
 
-                        with gr.Row():
-                            fast_toggle = gr.Checkbox(value=True, label="Fast Mode",
-                                                      info="Uncheck for 8-way TTA (slower)")
-                            grain_slider = gr.Slider(
-                                minimum=0.0, maximum=0.05, value=0.0, step=0.002,
-                                label="Organic Film Micro-Grain (opt-in)",
-                                info="0 = off (recommended)")
+                            with gr.Row():
+                                fast_toggle = gr.Checkbox(value=True, label="Fast Mode",
+                                                          info="Uncheck for 8-way TTA (slower)")
+                                grain_slider = gr.Slider(
+                                    minimum=0.0, maximum=0.05, value=0.0, step=0.002,
+                                    label="Organic Film Micro-Grain (opt-in)",
+                                    info="0 = off (recommended)")
 
-                        with gr.Row():
-                            svg_checkbox = gr.Checkbox(value=True, label="Export Vector SVG",
-                                                       info="Infinite mathematical Bézier curves")
-                            mask_checkbox = gr.Checkbox(value=True, label="Show Semantic Map",
-                                                        info="Green=Vector, Cyan=Skin, Magenta=Texture")
+                            with gr.Row():
+                                svg_checkbox = gr.Checkbox(value=True, label="Export Vector SVG",
+                                                           info="Infinite mathematical Bézier curves")
+                                mask_checkbox = gr.Checkbox(value=True, label="Show Semantic Map",
+                                                            info="Green=Vector, Cyan=Skin, Magenta=Texture")
 
-                        submit_btn = gr.Button("Upscale Image", variant="primary", size="lg")
+                            submit_btn = gr.Button("Upscale Image", variant="primary", size="lg")
 
-                        example_files = []
-                        for sample_name in ["De1.jpg", "PrakashJI.jpg"]:
-                            sample_p = os.path.join(WORKSPACE_DIR, sample_name)
-                            if os.path.exists(sample_p):
-                                example_files.append(sample_p)
-                        if example_files:
-                            gr.Examples(examples=example_files, inputs=input_image,
-                                        label="Photo examples:")
+                            example_files = []
+                            for sample_name in ["De1.jpg", "PrakashJI.jpg"]:
+                                sample_p = os.path.join(WORKSPACE_DIR, sample_name)
+                                if os.path.exists(sample_p):
+                                    example_files.append(sample_p)
+                            if example_files:
+                                gr.Examples(examples=example_files, inputs=input_image,
+                                            label="Photo examples:")
 
-                    with gr.Column(scale=6):
-                        result_slider = gr.ImageSlider(
-                            label="Drag divider: Bicubic (left) vs upscaled (right)",
-                            type="numpy", height=520, slider_position=50)
-                        status_output = gr.Markdown(
-                            "Upload an image and click **Upscale Image**.")
-                        with gr.Row():
-                            diag_map_display = gr.Image(
-                                label="Semantic Diagnostic Map", type="numpy",
-                                visible=True, height=240)
-                            with gr.Column():
-                                download_png = gr.File(label="Download High-Res PNG")
-                                download_svg = gr.File(label="Download SVG")
+                        with gr.Column(scale=6):
+                            result_slider = gr.ImageSlider(
+                                label="Drag divider: Bicubic (left) vs upscaled (right)",
+                                type="numpy", height=520, slider_position=50)
+                            status_output = gr.Markdown(
+                                "Upload an image and click **Upscale Image**.")
+                            with gr.Row():
+                                diag_map_display = gr.Image(
+                                    label="Semantic Diagnostic Map", type="numpy",
+                                    visible=True, height=240)
+                                with gr.Column():
+                                    download_png = gr.File(label="Download High-Res PNG")
+                                    download_svg = gr.File(label="Download SVG")
 
-                submit_btn.click(
-                    fn=process_image,
-                    inputs=[input_image, scale_radio, mode_dropdown, model_dropdown,
-                            fast_toggle, grain_slider, svg_checkbox, mask_checkbox],
-                    outputs=[result_slider, diag_map_display, download_png,
-                             download_svg, status_output],
-                )
+                    submit_btn.click(
+                        fn=process_image,
+                        inputs=[input_image, scale_radio, mode_dropdown, model_dropdown,
+                                fast_toggle, grain_slider, svg_checkbox, mask_checkbox],
+                        outputs=[result_slider, diag_map_display, download_png,
+                                 download_svg, status_output],
+                    )
 
     return demo
 
 
-if __name__ == "__main__":
+def main():
     import argparse
-    parser = argparse.ArgumentParser(description="Launch VectorScaling Studio")
-    parser.add_argument("--port", type=int, default=7860, help="Port to bind (default: 7860)")
-    parser.add_argument("--share", action="store_true", help="Create public Gradio tunnel share link")
+    import os
+
+    parser = argparse.ArgumentParser(description="Launch VectoVecto Studio")
+    parser.add_argument("--host", default=os.environ.get("VECTOVECTO_HOST",
+                                                         "127.0.0.1"),
+                        help="Bind address (default 127.0.0.1; use 0.0.0.0 in "
+                             "containers)")
+    parser.add_argument("--port", type=int,
+                        default=int(os.environ.get("VECTOVECTO_PORT", "7860")),
+                        help="Port to bind (default: 7860)")
+    parser.add_argument("--share", action="store_true",
+                        help="Create public Gradio tunnel share link")
     args = parser.parse_args()
+
+    # Optional basic auth for hosted deployments: set both env vars and the
+    # app refuses anonymous traffic (the model and pipeline stay server-side).
+    user = os.environ.get("VECTOVECTO_USER")
+    password = os.environ.get("VECTOVECTO_PASSWORD")
+    auth = (user, password) if user and password else None
 
     app = create_app()
     print(f"\n=======================================================")
-    print(f"  VectorScaling — Document Restore Studio running on:")
-    print(f"  Local URL: http://127.0.0.1:{args.port}")
+    print(f"  VectoVecto — Document Restore Studio running on:")
+    print(f"  http://{args.host}:{args.port}"
+          f"{'  (auth required)' if auth else ''}")
     print(f"=======================================================\n")
     app.launch(
-        server_name="127.0.0.1",
+        server_name=args.host,
         server_port=args.port,
         share=args.share,
+        auth=auth,
         inbrowser=False,
         theme=gr.themes.Soft(primary_hue="blue"),
         css=CUSTOM_CSS
     )
+
+
+if __name__ == "__main__":
+    main()
