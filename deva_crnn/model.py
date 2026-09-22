@@ -20,12 +20,15 @@ class CRNN(nn.Module):
             return [nn.Conv2d(cin, cout, 3, padding=1),
                     nn.GroupNorm(8, cout), nn.ReLU()]
 
+        # The stack must collapse the input height to exactly 1: 32 and 48 need
+        # a final (2,1) pool, 64 needs (4,1) (64 -> 32 -> 16 -> 8 -> 4 -> 1).
+        last_pool = (4, 1) if in_h >= 64 else (2, 1)
         self.cnn = nn.Sequential(
             *block(1, 32), nn.MaxPool2d(2),        # 16 x W/2
             *block(32, 64), nn.MaxPool2d(2),       # 8 x W/4
             *block(64, 128), nn.MaxPool2d((2, 1)),  # 4 x W/4
             *block(128, 128), nn.MaxPool2d((2, 1)),  # 2 x W/4
-            *block(128, 256), nn.MaxPool2d((2, 1)),  # 1 x W/4
+            *block(128, 256), nn.MaxPool2d(last_pool),  # 1 x W/4
         )
         self.rnn = nn.LSTM(256, hidden, num_layers=2, bidirectional=True,
                            batch_first=True)

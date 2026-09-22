@@ -103,7 +103,8 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
           max_hours: float = 3.0, init: Optional[str] = None,
           workers: int = -1, in_h: int = IN_H, in_w: int = IN_W,
-          lr_schedule: str = "none", save_best: bool = False) -> Dict:
+          hidden: int = 256, lr_schedule: str = "none",
+          save_best: bool = False) -> Dict:
     images, texts = load_npz(resolve_data_path(data_path))
     if images.shape[1] != in_h or images.shape[2] != in_w:
         raise SystemExit(
@@ -129,7 +130,8 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
                        collate_fn=_collate)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CRNN(n_classes=len(charset), in_h=in_h).to(device)
+    model = CRNN(n_classes=len(charset), hidden=hidden,
+                 in_h=in_h).to(device)
     if init:
         ck = torch.load(init, map_location=device, weights_only=False)
         if list(ck["charset"]) != list(charset):
@@ -213,6 +215,8 @@ def main():
                     help="input height the npz was exported at (32 or 48)")
     ap.add_argument("--in-w", type=int, default=IN_W,
                     help="input width the npz was exported at (256 or 512)")
+    ap.add_argument("--hidden", type=int, default=256,
+                    help="BiLSTM hidden size (256 or 384)")
     ap.add_argument("--lr-schedule", choices=("none", "cosine"), default="none",
                     help="cosine decays lr to ~0 over the run (fine-tunes)")
     ap.add_argument("--save-best", action="store_true",
@@ -221,7 +225,7 @@ def main():
     train(args.data, args.out, epochs=args.epochs, batch=args.batch,
           lr=args.lr, seed=args.seed, max_hours=args.max_hours,
           init=args.init, workers=args.workers, in_h=args.in_h,
-          in_w=args.in_w,
+          in_w=args.in_w, hidden=args.hidden,
           lr_schedule=args.lr_schedule, save_best=args.save_best)
 
 

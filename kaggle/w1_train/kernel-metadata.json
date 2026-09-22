@@ -10,6 +10,7 @@
   "enable_internet": false,
   "dataset_sources": [
     "bhishmbhandari/vectovecto-w1-training-data",
+    "bhishmbhandari/vectovecto-w1-data-w512",
     "bhishmbhandari/vectovecto-w1-code"
   ],
   "competition_sources": [],

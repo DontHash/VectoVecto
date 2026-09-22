@@ -28,7 +28,8 @@ from pathlib import Path
 PKG = "deva_crnn"
 INPUT = Path("/kaggle/input")
 CONFIG_NAME = "w1_config.json"
-DEFAULTS = {"npz": None, "in_h": 48, "in_w": 256, "epochs": 26, "batch": 64,
+DEFAULTS = {"npz": None, "in_h": 48, "in_w": 256, "hidden": 256,
+            "epochs": 26, "batch": 64,
             "lr": 1e-3, "init": None, "out_dir": "w1_run",
             "lr_schedule": "none", "save_best": True, "seed": 1,
             "val_split": 0.05, "max_hours": 3.0, "workers": 2}
@@ -114,7 +115,8 @@ def main() -> None:
     result = train(data, out_dir, epochs=cfg["epochs"], batch=cfg["batch"],
                    lr=cfg["lr"], val_split=cfg["val_split"], seed=cfg["seed"],
                    max_hours=cfg["max_hours"], workers=cfg["workers"],
-                   in_h=cfg["in_h"], in_w=cfg["in_w"], init=init,
+                   in_h=cfg["in_h"], in_w=cfg["in_w"],
+                   hidden=cfg["hidden"], init=init,
                    lr_schedule=cfg["lr_schedule"], save_best=cfg["save_best"])
 
     history = result["history"]

@@ -107,6 +107,16 @@ def test_model_accepts_48px_input():
     assert out.shape[1] == 2 and out.shape[2] == 17
 
 
+def test_model_accepts_64px_input_and_wider_hidden():
+    m = CRNN(n_classes=17, hidden=32, in_h=64)
+    out = m(torch.zeros(2, 1, 64, 256))
+    assert out.shape[1] == 2 and out.shape[2] == 17
+    assert out.shape[0] == 64  # T = W/4 timesteps
+    m2 = CRNN(n_classes=17, hidden=64, in_h=48)
+    out2 = m2(torch.zeros(1, 1, 48, 512))
+    assert out2.shape[0] == 128
+
+
 def test_48px_round_trip_through_trainer(tmp_path):
     """A 48-px npz trains, checkpoints in_h=48, and predicts via that height."""
     from deva_crnn.predict import load_model, recognize_lines
