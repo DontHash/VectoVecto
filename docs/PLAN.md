@@ -1679,10 +1679,33 @@ like these letterpress marks; this is a style gap, not a data-format gap.
 Targeted population: paren/bracket lines 51/64 (v7) vs 41/64 (v8) - within
 noise, no fix.
 
-### Stage 2 - input width 512 (in progress)
+### Stage 2 - input width 512: GATE PASSED
 
-74% of frozen digit lines are long (median 1,432 px) and normalization squeezes
-them 5.6x horizontally into W=256; >40-char lines also crowd CTC (T=64
-timesteps). Stage 2 keeps the Stage 1 data and raises the input width to 512
-(squeeze 2.8x, T=128), trained from scratch on the same 26-epoch schedule.
+74% of frozen digit lines are long (median 1,432 px) and normalization squeezed
+them 5.6x horizontally into W=256; >40-char lines also crowded CTC (T=64
+timesteps). Stage 2 kept the Stage 1 data and raised the input width to 512
+(squeeze 2.8x, T=128), trained from scratch on the same 26-epoch schedule
+(82,727 lines, 26 epochs, 72 min on a Kaggle T4; synthetic val_exact 0.994 vs
+0.943 at W=256).
+
+| model | width | digit-exact (frozen) | 95% CI | CER | bagCER | holdout |
+|---|---|---|---|---|---|---|
+| v7 | 256 | 0.710 | - | 0.282 | 0.384 | 0.691 |
+| v8/s1 | 256 | 0.689 | [0.641, 0.732] | 0.281 | 0.374 | - |
+| **v9/s2** | **512** | **0.810** | **[0.769, 0.847]** | **0.177** | **0.235** | **0.754** |
+
+**The gate passes with margin**: the CI lower bound (0.769) is above the
+original 0.75 bar, not just the lowered 0.72. Width was the structural
+bottleneck (horizontal squeeze + CTC timesteps), worth +12pp digit-exact and
+-10pp CER over the best W=256 model.
+
+Per-book (frozen): pyarelala1914 **0.964**, sivaramasukla1900 0.935,
+sankaracarya1925 0.917, jacobi1897 **0.761** (was 0.370), jagannatha1955 0.660,
+jayadeva1926 0.628, diksita1895 0.667 (n=3); mean 0.790. Holdout: simha1914
+**0.764** (was 0.300 at h=32), saktidharasukla1930 0.718; mean 0.741. v2 anchor
+bagCER 0.481 (was 0.566).
+
+Adoption (server-side line reader) proceeds under the integration gate:
+page CER/bagCER not worse, digit line-exact >= 0.72, queue metrics not worse,
+<= +1 s/page, no new invented tokens.
 
