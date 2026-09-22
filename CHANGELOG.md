@@ -4,6 +4,34 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are
 [semantic](https://semver.org/).
 
+## [1.2.0] - 2026-09-22
+
+### Added
+
+- **Devanagari line reader (opt-in)**: `--deva-lines on` runs the trained
+  CRNN+CTC recognizer on RapidOCR's line boxes. Frozen-gate digit-exact
+  **0.810 [0.769, 0.847]** (bar 0.72); inside the pipeline on frozen letterpress
+  pages: page CER **0.434 -> 0.253**, bagCER 0.553 -> 0.434, +0.8 s/page,
+  review queue 350 flags smaller, no silent invented digits. It is off by
+  default because it measurably hurts modern table pages (+18pp CER); PDF
+  inputs never use it. Weights stay server-side (`VECTOVECTO_DEVA_CKPT` or
+  `weights/deva_crnn_h48w512.pt`); the recipe is in `docs/TRAINING.md`.
+- `digit_added` flag: any number the reader saw that the engine did not is
+  flagged for review ? never silent.
+- Kaggle GPU training toolchain (`kaggle/w1_train/`, config-driven private
+  kernel) and GCS-aware trainer options (`--in-h/--in-w`, cosine schedule,
+  `--save-best`).
+
+### Changed
+
+- Gate reporting now includes bootstrap 95% CIs.
+
+### Fixed
+
+- Line-box merging for the reader: adjacent detector fragments merge into one
+  line (the recognizer is line-level) while a drawn table rule blocks the
+  merge; born-digital PDFs keep the engine reading.
+
 ## [1.1.0] - 2026-09-22
 
 The "ship it honestly" release: measured queue wins, multi-page PDF, and a

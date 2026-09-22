@@ -127,7 +127,8 @@ def run_document_mode(args) -> int:
     print(f"[cli] document mode | {len(files)} inputs | ocr={backend} "
           f"deskew={args.deskew} pdf={not args.no_pdf}")
 
-    def process(img: np.ndarray, name: str, src: str):
+    def process(img: np.ndarray, name: str, src: str,
+            deva_lines: str = None):
         nonlocal ok, failed
         pdf_path = os.path.join(args.output, f"{name}.pdf")
         if args.skip_existing and os.path.exists(pdf_path):
@@ -146,6 +147,9 @@ def run_document_mode(args) -> int:
                 digit_verifier=verifier,
                 verifier_scope=getattr(args, "digit_verifier_scope", "flagged"),
                 mixed_router=getattr(args, "mixed_router", False),
+                deva_lines=(deva_lines if deva_lines is not None
+                            else getattr(args, "deva_lines", "off")),
+                deva_ckpt=getattr(args, "deva_ckpt", None),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -181,9 +185,18 @@ def run_document_mode(args) -> int:
                     pages = pages[:args.max_pages]
                 stem = os.path.splitext(os.path.basename(src))[0]
                 page_results = []
+                # Born-digital PDF pages keep the engine reading: the
+                # recognizer measurably hurts clean renders (measured:
+                # letterpress scans -42% CER, modern PDFs +18pp without this
+                # gate) and PDFs already carry a text layer. Explicit
+                # --deva-lines on/off still wins.
+                pdf_deva_lines = getattr(args, "deva_lines", "off")
+                if pdf_deva_lines == "auto":
+                    pdf_deva_lines = "off"
                 for idx, page_img, _gt in pages:
                     status, res = process(page_img, f"{stem}_p{idx:03d}",
-                                          f"{src}#p{idx}")
+                                          f"{src}#p{idx}",
+                                          deva_lines=pdf_deva_lines)
                     if status == "ok" and res is not None:
                         page_results.append(res)
                 if args.max_pages == 0 and page_results:
@@ -297,6 +310,16 @@ def main():
     doc.add_argument("--mixed-router", action="store_true", dest="mixed_router",
                      help="composite the exported page: restored text regions, "
                           "untouched non-text (logos/photos/signatures)")
+    doc.add_argument("--deva-lines", choices=("off", "auto", "on"),
+                     default="off",
+                     help="Devanagari line reader (opt-in): on = use the "
+                          "trained recognizer for line crops (measured -42% "
+                          "page CER on letterpress scans; it hurts on modern "
+                          "table pages); auto = engage only on running-text "
+                          "pages; off = backend reading only (default)")
+    doc.add_argument("--deva-ckpt", default=None,
+                     help="path to the line-reader checkpoint (defaults "
+                          "to $VECTOVECTO_DEVA_CKPT or weights/)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")

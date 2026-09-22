@@ -31,6 +31,11 @@ MODELS = [
     ("Indic Open Model (bodhan digit verifier)", "Indic Open Model License 1.0",
      "opt-in second model; self-host allowed, no third-party hosting, "
      "attribution required; ~1.9 GB, one-time `hf auth login`"),
+    ("VectoVecto Devanagari line reader (weights, server-side)",
+     "CC BY 4.0 (inherited) + MIT (code)",
+     "CRNN+CTC trained on heiDATA CC BY 4.0 data (doi:10.11588/data/EGOKEI); "
+     "weights are not distributed in this repository - attribution required "
+     "when deployed"),
     ("heiDATA printed Devanagari (evaluation)", "CC BY 4.0",
      "Merkel-Hilf 2022, doi:10.11588/data/EGOKEI - manifests only, pages not "
      "redistributed"),

@@ -57,6 +57,22 @@ carries a healthcheck on the Gradio root URL.
 | Cold start | ~40–90 s (torch + ONNX warm-up) |
 | Throughput | ~1 s/page for clean scans; letterpress ~2–4 s/page with the digit re-pass |
 
+## Devanagari line reader (optional, server-side)
+
+The trained recognizer weights are **not in this repository**. To enable the
+opt-in reader in a hosted instance:
+
+```bash
+docker run --rm -p 7860:7860 \
+  -v /srv/vectovecto/weights:/app/weights:ro \
+  -e VECTOVECTO_DEVA_CKPT=/app/weights/deva_crnn_h48w512.pt \
+  vectovecto
+```
+
+Without the mount the app runs exactly as before (the reader is off by
+default; `--deva-lines on` is the opt-in). Training recipe and measured
+scope: [TRAINING.md](TRAINING.md).
+
 ## What is deliberately not hosted
 
 - The optional bodhan digit verifier (~1.9 GB, Indic Open Model License — no

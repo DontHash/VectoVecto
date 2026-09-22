@@ -1709,3 +1709,48 @@ Adoption (server-side line reader) proceeds under the integration gate:
 page CER/bagCER not worse, digit line-exact >= 0.72, queue metrics not worse,
 <= +1 s/page, no new invented tokens.
 
+### Stage 3 - integration: the reader inside the pipeline (opt-in)
+
+The recognizer replaces the *recognition* of Devanagari line boxes; RapidOCR
+keeps doing detection. Two integration findings were measured, not assumed:
+
+1. **Fragment merging is required.** RapidOCR splits some letterpress lines
+   into 2-3 fragments (33 tokens for 21 ALTO lines); the line model then
+   invents line endings. Adjacent boxes are merged into line boxes first, with
+   a drawn vertical rule in the gap blocking the merge (table cells).
+2. **Scope is narrow and measured.** The reader was trained on letterpress and
+   synthetic lines; on modern table pages (born-digital court registers and
+   their degraded photo proxies) it *hurts*: page CER +18pp and +22pp
+   respectively. It is therefore **opt-in** (`--deva-lines on`, default `off`);
+   the CLI keeps it off for PDF inputs even when `auto` is requested.
+
+Integration gate (frozen letterpress, 69 pages, RapidOCR detection + reader):
+
+| metric | off (shipped) | on (reader) | delta |
+|---|---|---|---|
+| page CER | 0.4335 | **0.2531** | **-0.180** (-42% rel) |
+| page bagCER | 0.5529 | **0.4339** | -0.119 |
+| seconds/page | 1.08 | 1.85 | +0.77 (budget +1.0) |
+| review queue (flagged) | - | - | **-350** |
+| silent invented digits | - | - | **-1** (none new) |
+| pages worse | - | 6 / 69 | documented |
+
+Honesty machinery: every digit the reader adds that the backend did not see is
+flagged `digit_added` (weight 1.5) - measured: 96% of the reader's invented
+digits are already flagged by `invalid_sequence`/`digit_conflict`, and the new
+flag closes the remaining silent cases. A "never add a number the backend
+missed" rule was measured and rejected: it would block 43 *correct* digit reads
+(the reader fixes parenthesized numbers the backend drops).
+
+Verification: `python scripts/eval_deva_lines_integration.py --data-dir
+data/doc_eval/heidata_printed --frozen evals/manifests/heidata_printed_v1.json
+--lang ne`.
+
+### Adoption summary (v1.2.0)
+
+* Weights stay **server-side** (`weights/deva_crnn_h48w512.pt`, git-ignored;
+  `VECTOVECTO_DEVA_CKPT` overrides). The repo documents reproducible training
+  (`docs/TRAINING.md`), not the model.
+* Default behaviour is unchanged (reader off) - no silent regressions.
+* `--deva-lines on` is the measured win for letterpress/running-text scans.
+

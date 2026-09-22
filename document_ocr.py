@@ -80,6 +80,7 @@ class Token:
     repass_text: Optional[str] = None  # recognition-only re-read on a 2x crop
     repass_conf: Optional[float] = None
     cal_conf: Optional[float] = None  # calibrated confidence (0-100), when fitted
+    text_source: str = "backend"  # "backend" | "deva_crnn" (line reader)
 
     @property
     def has_digits(self) -> bool:
@@ -432,7 +433,9 @@ def get_backend(name: str) -> OCRBackend:
 def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
              lang: Optional[str] = None, conf_threshold: float = 60.0,
              recheck_digits: bool = False,
-             repass_conf_below: float = 95.0) -> OCRResult:
+             repass_conf_below: float = 95.0,
+             deva_lines: str = "off",
+             deva_ckpt: Optional[str] = None) -> OCRResult:
     """Run OCR, attach flags, optionally re-read digit tokens on 2x crops.
 
     The re-pass never replaces text; it records `repass_text`/`repass_conf` and
@@ -440,10 +443,21 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
 
     `repass_conf_below=100` re-reads every digit token (PP-OCR confidences are
     overconfident: ECE ~0.33 on the frozen set), at a small latency cost.
+
+    `deva_lines` selects the Devanagari line reader: "off" (default, the
+    measured-safe shipped behaviour), "on" (force it: -42% page CER on frozen
+    letterpress scans, but measured to hurt on modern table pages), "auto"
+    (engage when a checkpoint exists and the page looks like running text).
+    Line texts are replaced only when the model output is plausible; otherwise
+    the backend reading stays. Provenance lands in `meta["deva_line_reader"]`
+    and `Token.text_source`.
     """
     be = get_backend(backend)
     result = be.run(img_bgr, lang=lang)
     devanagari = normalize_lang(lang) == "devanagari"
+    if devanagari and deva_lines != "off":
+        apply_deva_line_reader(result, img_bgr, deva_ckpt,
+                               force=(deva_lines == "on"))
     calibration = None
     if devanagari:
         from calibration import load_calibration
@@ -474,6 +488,89 @@ def _crop_with_pad(img: np.ndarray, bbox: Tuple[int, int, int, int],
     xa, ya = max(0, x0 - px), max(0, y0 - py)
     xb, yb = min(img.shape[1], x1 + px), min(img.shape[0], y1 + py)
     return img[ya:yb, xa:xb].copy()
+
+
+def apply_deva_line_reader(result: OCRResult, img_bgr: np.ndarray,
+                           deva_ckpt: Optional[str] = None,
+                           force: bool = False) -> Dict:
+    """Re-recognize Devanagari line crops with the trained recognizer.
+
+    Detection stays with the backend; adjacent fragments are merged into line
+    boxes first (the recognizer is line-level), and the token list is rebuilt
+    at line granularity. Every line falls back to the backend reading when the
+    model output is implausible. Never raises.
+    """
+    from deva_reader import (DevaLineReader, get_reader,  # noqa: WPS433
+                             merge_line_boxes, page_is_line_like)
+    from doc_metrics import digit_tokens  # noqa: WPS433
+    reader = get_reader(deva_ckpt)
+    if reader is None:
+        result.meta["deva_line_reader"] = {"active": False,
+                                           "reason": "no checkpoint"}
+        return result.meta["deva_line_reader"]
+    if not force and not page_is_line_like(result.tokens, img_bgr.shape[1]):
+        result.meta["deva_line_reader"] = {
+            "active": False, "reason": "page layout is cell-like (auto)"}
+        return result.meta["deva_line_reader"]
+    old_tokens = result.tokens
+    groups = merge_line_boxes(old_tokens, img_bgr)
+    crops = []
+    for bbox, _idx in groups:
+        crop = _crop_with_pad(img_bgr, bbox, pad_ratio=0.02)
+        crops.append(crop if crop.size else None)
+    texts: List[str] = []
+    try:
+        keep = [i for i, c in enumerate(crops) if c is not None]
+        if keep:
+            read = reader.read([crops[i] for i in keep])
+        else:
+            read = []
+        texts = [""] * len(groups)
+        for i, text in zip(keep, read):
+            texts[i] = text
+    except Exception as e:  # noqa: BLE001 - OCR must not fail over the reader
+        result.meta["deva_line_reader"] = {"active": True, "error": str(e)[:200],
+                                           "replaced": 0}
+        return result.meta["deva_line_reader"]
+
+    new_tokens: List[Token] = []
+    replaced = fallback = added_digits = 0
+    for (bbox, idx), text in zip(groups, texts):
+        group = [old_tokens[i] for i in idx]
+        backend_text = " ".join(t.text for t in group).strip()
+        if DevaLineReader.plausible(text):
+            merged_text = text.strip()
+            source = "deva_crnn"
+            replaced += 1
+        else:
+            merged_text = backend_text
+            source = "backend"
+            fallback += 1
+        tok = Token(
+            text=merged_text,
+            conf=min(t.conf for t in group),
+            bbox=bbox,
+            granularity="line",
+            backend=group[0].backend,
+            text_source=source)
+        # Honesty rule: a number only the reader saw is never silent. The
+        # recognizer's known failure mode is punctuation read as the digit 1
+        # (measured), so every added digit is flagged for review; the
+        # pipeline's other flags (digit_conflict, invalid_sequence) still run.
+        if (source == "deva_crnn"
+                and not digit_tokens(backend_text)
+                and digit_tokens(merged_text)):
+            tok.flags.append("digit_added")
+            added_digits += 1
+        new_tokens.append(tok)
+    result.tokens = new_tokens
+    result.text = "\n".join(t.text for t in new_tokens)
+    info = {"active": True, "ckpt": os.path.basename(reader.ckpt_path),
+            "replaced": replaced, "fallback": fallback,
+            "digit_added_flagged": added_digits,
+            "tokens_in": len(old_tokens), "tokens_out": len(new_tokens)}
+    result.meta["deva_line_reader"] = info
+    return info
 
 
 def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
@@ -527,6 +624,7 @@ RISK_WEIGHTS: Dict[str, float] = {
     "invalid_sequence": 1.0,  # impossible Devanagari sequence; dev-tuned to
                               # not displace digit signals in the top-10
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
+    "digit_added": 1.5,      # a number only the line reader saw (never silent)
     "low_conf": 1.0,
 }
 

@@ -111,6 +111,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           digit_verifier=None,
                           verifier_scope: str = "flagged",
                           mixed_router: bool = False,
+                          deva_lines: str = "off",
+                          deva_ckpt: Optional[str] = None,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -156,12 +158,14 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
 
         result = ocr_page(primary_img, backend=backend, lang=lang,
                           conf_threshold=conf_threshold,
-                          recheck_digits=repass_effective)
+                          recheck_digits=repass_effective,
+                          deva_lines=deva_lines, deva_ckpt=deva_ckpt)
         conflicts = 0
         audit_error = None
         try:
             audit = ocr_page(audit_img, backend=backend, lang=lang,
-                             conf_threshold=conf_threshold)
+                             conf_threshold=conf_threshold,
+                             deva_lines=deva_lines, deva_ckpt=deva_ckpt)
             conflicts = compare_digit_streams(result, audit)
         except Exception as e:  # noqa: BLE001
             audit_error = str(e)
