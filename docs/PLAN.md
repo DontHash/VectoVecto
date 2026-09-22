@@ -1457,3 +1457,51 @@ page. `run_document_pipeline` now fits the page once at entry, so display,
 boxes and exported page share one coordinate space; `meta["resized"]` is now
 real and the GUI's "downscaled" warning fires. Regression test:
 `test_pipeline_boxes_stay_inside_downscaled_display`.
+
+---
+
+## Appendix S - v1.1.0 product surface + repository structure (2026-09-22)
+
+**Brand decided.** Repository, package metadata, studio title and docs all use
+**VectoVecto** (VectorScaling was the working name). The plan's open naming
+question is closed.
+
+**Shipped (P7).** Multi-page combined PDF and the digit re-pass default were
+already in the tree; this release adds the packaging surface:
+
+* pyproject.toml (name ectovecto 1.1.0, entry points ectovecto and
+  ectovecto-studio, product modules only - the training package and eval
+  harness stay out of the wheel).
+* License gate: scripts/license_report.py -> docs/LICENSES.md
+  (--check fails on unresolved licenses; CI enforces it).
+* Hosted web app: Dockerfile (CPU torch, non-root, healthcheck), optional
+  basic auth (VECTOVECTO_USER/PASSWORD), VECTOVECTO_DOCUMENT_ONLY=1 to
+  hide the non-commercial photo tab; docs/DEPLOY.md covers Docker, HF
+  Spaces, Render/Fly and a VPS.
+* Desktop Pro path stays prepared but is not built: packaging/vectovecto.spec
+  + scripts/build_release.ps1 + docs/RELEASE.md (commercial builds must
+  drop the CC-BY-NC-SA photo weights).
+* CI (.github/workflows/ci.yml): test suite on Linux, license gate, and a
+  Docker build + HTTP smoke test of the studio.
+
+**Structure.**
+
+`
+docs/            PLAN, ARCHITECTURE, EVALUATION, DEPLOY, LICENSES, RELEASE
+evals/harness/   evaluation harnesses (frozen sets, metrics, gates, anchor)
+evals/manifests/ content-hash frozen evaluation sets
+scripts/         data acquisition, training export, real-line labeling, gates, release
+deva_crnn/       Devanagari line recognizer research (not shipped)
+legacy/          archived pre-pivot research, incl. cloud VM training scripts
+`
+
+Removed from the public tree: the pre-pivot Kaggle training notebook, demo
+media, the superseded upscaling roadmap, and (moved) cloud-VM training
+scripts. The repository contains code and evaluation evidence only - no
+training datasets, checkpoints or redistributed corpora; data/, weights/
+and rtifacts/ are git-ignored and excluded from the web image.
+
+**Dependencies found undeclared during the audit and fixed.** jiwer (runtime,
+used by doc_metrics), PySide6 (fixture rendering, dev), google-genai
+(Gemini anchor, dev).
+

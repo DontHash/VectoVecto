@@ -6,3 +6,7 @@ pyiqa
 datasets
 huggingface_hub
 onnxconverter-common
+# Qt is used to render shaped Devanagari fixtures for training/evaluation
+PySide6
+# Gemini anchor transcription (Vertex AI) for frozen-set ground truth
+google-genai

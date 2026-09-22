@@ -16,7 +16,7 @@ import os
 import re
 import sys
 from importlib import metadata
-from typing import Dict, List, Optional
+from typing import List
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -65,6 +65,8 @@ KNOWN_LICENSES = {
     "onnxconverter-common": "MIT",
     "pyiqa": "NTU S-Lab License 1.0 (research use)",
     "pyside6": "LGPL-3.0 (Qt for Python)",
+    "jiwer": "Apache-2.0",
+    "google-genai": "Apache-2.0",
 }
 
 _COPYRIGHT_RE = re.compile(r"^\s*Copyright", re.IGNORECASE)
@@ -82,17 +84,18 @@ def _declared(path: str) -> List[str]:
     return names
 
 
-def _license_of(dist_name: str) -> Optional[str]:
+def _license_of(dist_name: str) -> str:
+    lic = ""
     try:
         meta = metadata.metadata(dist_name)
+        lic = (meta.get("License") or "").strip()
+        if not lic or len(lic) > 120 or _COPYRIGHT_RE.match(lic):
+            for classifier in meta.get_all("Classifier") or []:
+                if classifier.startswith("License ::"):
+                    lic = classifier.split("::")[-1].strip()
+                    break
     except metadata.PackageNotFoundError:
-        return None
-    lic = (meta.get("License") or "").strip()
-    if not lic or len(lic) > 120 or _COPYRIGHT_RE.match(lic):
-        for classifier in meta.get_all("Classifier") or []:
-            if classifier.startswith("License ::"):
-                lic = classifier.split("::")[-1].strip()
-                break
+        pass  # CI gate job runs without the full environment installed
     if not lic:
         lic = KNOWN_LICENSES.get(dist_name.lower(), "")
     return lic or "UNKNOWN"

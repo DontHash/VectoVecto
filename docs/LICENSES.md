@@ -18,6 +18,7 @@ component below keeps its own terms.
 | `onnxruntime` | 1.20.1 | MIT License |
 | `Pillow` | 12.2.0 | MIT-CMU |
 | `gradio` | 6.20.0 | Apache-2.0 |
+| `jiwer` | 4.0.0 | Apache-2.0 |
 | `rapidocr` | 3.9.2 | Apache-2.0 |
 | `reportlab` | 4.5.1 | BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc. |
 | `pypdfium2` | 5.10.1 | BSD-3-Clause, Apache-2.0, dependency licenses |
@@ -35,6 +36,8 @@ component below keeps its own terms.
 | `datasets` | 3.6.0 | Apache 2.0 |
 | `huggingface_hub` | 1.32.0 | Apache-2.0 |
 | `onnxconverter-common` | 1.16.0 | MIT License |
+| `PySide6` | 6.11.1 | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only |
+| `google-genai` | 1.56.0 | Apache-2.0 |
 
 ## Models and evaluation data
 

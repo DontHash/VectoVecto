@@ -9,6 +9,7 @@ onnx
 onnxruntime
 Pillow
 gradio
+jiwer
 rapidocr==3.9.*
 reportlab
 pypdfium2
