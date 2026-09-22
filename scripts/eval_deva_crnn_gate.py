@@ -98,7 +98,8 @@ def main():
     result["gate"]["pass"] = bool(result["gate"]["heidata_pass"])
 
     print("\n=== W1 GATE (deva_crnn) ===")
-    print("heiDATA lines :", {k: v for k, v in heid.items()})    print("v2 anchor     :", {k: v for k, v in result["v2_anchor_pages"].items()
+    print("heiDATA lines :", {k: v for k, v in heid.items()})
+    print("v2 anchor     :", {k: v for k, v in result["v2_anchor_pages"].items()
                               if k != "rows"})
     print("gate          :", result["gate"])
     if args.json:

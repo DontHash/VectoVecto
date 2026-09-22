@@ -1634,3 +1634,55 @@ RapidOCR remains the shipped engine.
   current pooling stack only reaches 48), larger hidden width, or a new
   human-GT letterpress corpus.
 
+---
+
+## Appendix R5 - W1 attempt 4: data-format parity, then input width (2026-09-22)
+
+**Product decision (user, 2026-09-22):** adoption bar lowered from 0.75 to
+**digit-exact >= 0.72** on frozen heiDATA digit lines, with the original
+co-conditions (line bagCER not worse than the shipped engine, <= +1 s/page).
+Caveat recorded: n=373 digit lines gives a 95% CI of about +/-4.5pp, so 0.69,
+0.71 and 0.72 are not statistically distinguishable on this set. Model stays
+server-side; the repo documents training, not weights.
+
+### Stage 1 - punctuation and long-line parity (v8 data, Kaggle T4)
+
+Diagnosis that drove it: the mid-aspect (3-10) digit bucket scored 0.531, and
+inspection showed parenthesized page numbers failing (`(3)` -> `(31)`, the
+closing paren decoded as the digit 1). Measured against the frozen GT, `(`/`)`
+appeared 1 line in 23 but 1 in 300 in training; `[` `]` `"` `=` `+` `nukta`
+`ZWNJ` `abbreviation-sign` were absent entirely. Long lines (>40 chars) also
+scored 9pp below short ones while being 74% of the metric.
+
+Changes: parenthesized/bracketed-number and letterpress-format patterns
+(`san YYYY i`, `num-0`, danda variants, comma lists), rare GT characters, a
+40-60 character long-line generator (25% of synthetic), digit-line
+oversampling (x2), gate bootstrap CIs, `--in-w` plumbing, and a config-driven
+Kaggle kernel (`w1_config.json` selects npz/height/width/epochs/init).
+
+Data: 82,727 lines (charset 134), trained 26 epochs from scratch (40 min).
+
+| model | data | digit-exact (frozen) | 95% CI | CER | bagCER |
+|---|---|---|---|---|---|
+| v7 | 51,656 lines, charset 103 | 0.710 | - | 0.282 | 0.384 |
+| v8/s1 | 82,727 lines, charset 134 | **0.689** | [0.641, 0.732] | 0.281 | 0.374 |
+
+Bucket breakdown: cell 0.833 -> 0.729 (n=48), mid 0.531 -> 0.490 (n=49), long
+0.721 -> 0.717 (n=276). All deltas are inside the per-bucket noise; CER/bagCER
+improved slightly. **Stage 1 is a wash on the gate metric.**
+
+**New finding (crops inspected visually):** the failing parenthesized-number
+crops are *clipped or merged with the page-edge rule* - the closing paren is
+often cut off or fused with an ornament, so both v7 and v8 read the resulting
+vertical stroke as the digit 1. Synthetic parens in modern fonts do not look
+like these letterpress marks; this is a style gap, not a data-format gap.
+Targeted population: paren/bracket lines 51/64 (v7) vs 41/64 (v8) - within
+noise, no fix.
+
+### Stage 2 - input width 512 (in progress)
+
+74% of frozen digit lines are long (median 1,432 px) and normalization squeezes
+them 5.6x horizontally into W=256; >40-char lines also crowd CTC (T=64
+timesteps). Stage 2 keeps the Stage 1 data and raises the input width to 512
+(squeeze 2.8x, T=128), trained from scratch on the same 26-epoch schedule.
+
