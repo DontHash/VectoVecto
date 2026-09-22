@@ -856,7 +856,35 @@ _DEVA_LINE_PATTERNS = (
     "कर दर {n}.{m} प्रतिशत",
     "फोन: ०१-{n}",
     "प.सं. {n}/{m}",
+    # Formats measured in the real letterpress corpus but absent from the
+    # synthetic pool (W1 attempt 3b diagnosis): the recognizer read `)` as a
+    # digit because it had never seen a parenthesized number.
+    "({d})",
+    "[ {d} ]",
+    "({d}",
+    "सन् {y} ई०",
+    "मई सन् {y} ई० ॥",
+    "नं० {n}, पृष्ठ {d},",
+    "पृष्ठ {d}",
+    "{d}. {n}",
+    '"{n}" {m}',
+    "{n} = {m}",
+    "क़र्ज वा आलस्यका बयान {n}",
+    "नं॰ {n}",
+    "बॉम्बे {n}, {m}",
 )
+_DEVA_DIGITS = "०१२३४५६७८९"
+
+
+def _fmt_pattern(pat: str, rng: np.random.Generator) -> str:
+    """Fill a line pattern with fresh numbers/dates."""
+    return pat.format(
+        n=int(rng.integers(1, 99999)),
+        m=int(rng.integers(1, 99)),
+        d="".join(_DEVA_DIGITS[int(rng.integers(0, 10))]
+                  for _ in range(int(rng.integers(1, 4)))),
+        y="".join(_DEVA_DIGITS[int(rng.integers(0, 10))] for _ in range(4)),
+        amount=f"{int(rng.integers(100, 99999)):,}.{int(rng.integers(0, 99)):02d}")
 
 
 _DEVA_CELL_WORDS = ("कुल", "जम्मा", "मिति", "संख्या", "दर", "रकम", "रु.", "नेपाल",
@@ -869,31 +897,67 @@ def sample_deva_cell_text(rng: np.random.Generator) -> str:
     Real letterpress tables give the detector square-ish cell crops
     (aspect ~1) that height-normalization squashes into tiny glyphs; the
     recognizer only sees that distribution if training data contains it.
+    Parenthesized/bracketed numbers are frequent in the real corpus
+    (1 line in 23) and were the top failure mode before this.
     """
     r = rng.random()
-    if r < 0.45:  # bare digit runs (Devanagari numerals, as printed)
+    if r < 0.12:  # parenthesized / bracketed page or paragraph numbers
+        d = "".join(_DEVA_DIGITS[int(rng.integers(0, 10))]
+                    for _ in range(int(rng.integers(1, 3))))
+        style = int(rng.integers(0, 3))
+        return f"({d})" if style == 0 else (f"[ {d} ]" if style == 1 else f"({d}")
+    if r < 0.5:  # bare digit runs (Devanagari numerals, as printed)
         k = int(rng.integers(1, 4))
-        return "".join("०१२३४५६७८९"[int(rng.integers(0, 10))] for _ in range(k))
-    if r < 0.6:  # ASCII digit runs (page numbers, registry numbers)
+        return "".join(_DEVA_DIGITS[int(rng.integers(0, 10))] for _ in range(k))
+    if r < 0.65:  # ASCII digit runs (page numbers, registry numbers)
         k = int(rng.integers(1, 4))
         return "".join(str(int(rng.integers(0, 10))) for _ in range(k))
-    if r < 0.75:  # numbered list markers / section refs
+    if r < 0.78:  # numbered list markers / section refs
         return f"{int(rng.integers(1, 99))}."
-    if r < 0.9:  # single short word
+    if r < 0.92:  # single short word
         return _DEVA_CELL_WORDS[int(rng.integers(0, len(_DEVA_CELL_WORDS)))]
     # short word + digits, e.g. "क १२"
     return ("%s %s" % (_DEVA_CELL_WORDS[int(rng.integers(0, len(_DEVA_CELL_WORDS)))],
-                       "".join("०१२३४५६७८९"[int(rng.integers(0, 10))]
+                       "".join(_DEVA_DIGITS[int(rng.integers(0, 10))]
                                for _ in range(int(rng.integers(1, 3))))))
 
 
+def _deva_long_line_text(rng: np.random.Generator) -> str:
+    """A 40-60 character line, digit-bearing.
+
+    Real letterpress lines are wide (median 1,432 px) and normalization
+    squeezes them ~5.6x horizontally; short synthetic lines never taught the
+    recognizer that regime, and >40-char lines score 9pp lower than short ones.
+    """
+    text, has_digit = "", False
+    for _ in range(12):
+        if rng.random() < 0.5:
+            part = _fmt_pattern(
+                _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))],
+                rng)
+        else:
+            k = int(rng.integers(2, 5))
+            idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
+            part = " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)
+        text = f"{text} {part}".strip()
+        has_digit = has_digit or any(c.isdigit() for c in part)
+        if len(text) > 60:
+            while len(text) > 60 and " " in text:
+                text = text.rsplit(" ", 1)[0]
+            break
+    if not has_digit:
+        text = (text[:52] + " १९५५").strip()
+    return text
+
+
 def sample_deva_line_text(rng: np.random.Generator) -> str:
-    """One training line text: 60% digit-rich patterns, else word sequences."""
-    if rng.random() < 0.6:
+    """One training line text: 25% long, 45% digit-rich, else word sequences."""
+    r = rng.random()
+    if r < 0.25:
+        return _deva_long_line_text(rng)
+    if r < 0.70:
         pat = _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))]
-        return pat.format(
-            n=int(rng.integers(1, 99999)), m=int(rng.integers(1, 99)),
-            amount=f"{int(rng.integers(100, 99999)):,}.{int(rng.integers(0, 99)):02d}")
+        return _fmt_pattern(pat, rng)
     k = int(rng.integers(2, 6))
     idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
     return " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)

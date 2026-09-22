@@ -102,12 +102,14 @@ def _upload_if_gcs(local_path: str, out_dir: str) -> None:
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
           max_hours: float = 3.0, init: Optional[str] = None,
-          workers: int = -1, in_h: int = IN_H,
+          workers: int = -1, in_h: int = IN_H, in_w: int = IN_W,
           lr_schedule: str = "none", save_best: bool = False) -> Dict:
     images, texts = load_npz(resolve_data_path(data_path))
-    if images.shape[1] != in_h:
-        raise SystemExit(f"data height {images.shape[1]} != --in-h {in_h}; "
-                         f"re-export the npz with --height {in_h}")
+    if images.shape[1] != in_h or images.shape[2] != in_w:
+        raise SystemExit(
+            f"data shape {images.shape[1]}x{images.shape[2]} != --in-h "
+            f"{in_h} x --in-w {in_w}; re-export the npz with --height "
+            f"{in_h} --width {in_w}")
     charset = build_charset(texts)
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(texts))
@@ -175,7 +177,7 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
               flush=True)
         ckpt_path = os.path.join(out_dir, "ckpt.pt")
         payload = {"model": model.state_dict(), "charset": charset,
-                   "in_h": in_h, "in_w": IN_W, "epoch": epoch + 1}
+                   "in_h": in_h, "in_w": in_w, "epoch": epoch + 1}
         torch.save(payload, ckpt_path)
         if save_best and (best is None or val["exact_match"] > best):
             best = val["exact_match"]
@@ -209,6 +211,8 @@ def main():
                     help="DataLoader workers (-1 auto; 0 avoids shared memory)")
     ap.add_argument("--in-h", type=int, default=IN_H,
                     help="input height the npz was exported at (32 or 48)")
+    ap.add_argument("--in-w", type=int, default=IN_W,
+                    help="input width the npz was exported at (256 or 512)")
     ap.add_argument("--lr-schedule", choices=("none", "cosine"), default="none",
                     help="cosine decays lr to ~0 over the run (fine-tunes)")
     ap.add_argument("--save-best", action="store_true",
@@ -217,6 +221,7 @@ def main():
     train(args.data, args.out, epochs=args.epochs, batch=args.batch,
           lr=args.lr, seed=args.seed, max_hours=args.max_hours,
           init=args.init, workers=args.workers, in_h=args.in_h,
+          in_w=args.in_w,
           lr_schedule=args.lr_schedule, save_best=args.save_best)
 
 

@@ -128,7 +128,7 @@ def test_48px_round_trip_through_trainer(tmp_path):
     pr.CRNN.__init__ = small_init
     try:
         tr.train(data, str(tmp_path / "out48"), epochs=2, batch=4, lr=1e-3,
-                 val_split=0.25, seed=2, max_hours=0.1, in_h=48)
+                 val_split=0.25, seed=2, max_hours=0.1, in_h=48, in_w=128)
         ckpt = torch.load(str(tmp_path / "out48" / "ckpt.pt"),
                           weights_only=False)
         assert ckpt["in_h"] == 48
@@ -158,12 +158,48 @@ def test_cosine_schedule_and_save_best(tmp_path):
     try:
         res = tr.train(data, str(tmp_path / "cs_out"), epochs=3, batch=3,
                        lr=1e-3, val_split=0.33, seed=5, max_hours=0.1,
-                       lr_schedule="cosine", save_best=True)
+                       lr_schedule="cosine", save_best=True, in_w=64)
     finally:
         tr.CRNN.__init__ = orig_init
     assert len(res["history"]) == 3
     assert (tmp_path / "cs_out" / "ckpt_best.pt").exists()
     assert (tmp_path / "cs_out" / "ckpt.pt").exists()
+
+
+def test_width_round_trip_through_trainer(tmp_path):
+    """A wide (h=48, w=320) npz trains, stores in_w, and predicts at it."""
+    from deva_crnn.predict import load_model, recognize_lines
+
+    texts = ["कख", "ग१", "ख२३", "१२"]
+    imgs = [render_devanagari_line(t, px=48) for t in texts]
+    data = str(tmp_path / "wide.npz")
+    export_npz(imgs, texts, data, h=48, w=320)
+
+    import deva_crnn.predict as pr
+    import deva_crnn.train as tr
+    orig = tr.CRNN.__init__
+    orig_pr = pr.CRNN.__init__
+
+    def small(self, n_classes, hidden=256, in_h=32):
+        orig(self, n_classes, hidden=32, in_h=in_h)
+
+    tr.CRNN.__init__ = small
+    pr.CRNN.__init__ = small
+    try:
+        tr.train(data, str(tmp_path / "wide_out"), epochs=2, batch=4,
+                 lr=1e-3, val_split=0.25, seed=6, max_hours=0.1, in_h=48,
+                 in_w=320)
+        ckpt = torch.load(str(tmp_path / "wide_out" / "ckpt.pt"),
+                          weights_only=False)
+        assert ckpt["in_w"] == 320
+        model, charset = load_model(str(tmp_path / "wide_out" / "ckpt.pt"),
+                                    "cpu")
+        assert getattr(model, "in_w") == 320
+        out = recognize_lines(model, charset, imgs[:2])
+    finally:
+        tr.CRNN.__init__ = orig
+        pr.CRNN.__init__ = orig_pr
+    assert len(out) == 2
 
 
 def test_trainer_rejects_height_mismatch(tmp_path):
@@ -198,7 +234,8 @@ def test_overfit_tiny_set(tmp_path):
     tr.CRNN.__init__ = small_init
     try:
         result = train(data, str(tmp_path / "out"), epochs=900, batch=8,
-                       lr=1e-3, val_split=0.125, seed=3, max_hours=0.2)
+                       lr=1e-3, val_split=0.125, seed=3, max_hours=0.2,
+                       in_w=128)
     finally:
         tr.CRNN.__init__ = orig_init
 

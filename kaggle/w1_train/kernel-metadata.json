@@ -1,7 +1,7 @@
 {
   "id": "bhishmbhandari/vectovecto-w1-h48-training",
   "title": "VectoVecto W1 h48 training",
-  "code_file": "train_w1_h48.py",
+  "code_file": "train_w1.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,

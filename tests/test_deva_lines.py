@@ -88,3 +88,33 @@ def test_cell_pool_is_short_and_digit_rich():
     assert with_digits >= 45, "cell pool must be digit-heavy"
     # short cells must still render as ink-bearing crops
     assert all(int((im.min(axis=2) < 128).sum()) > 10 for im in imgs)
+
+
+def test_punctuation_parity_with_the_real_corpus():
+    """Parenthesized numbers and letterpress formats must be in the pool.
+
+    Measured gap (W1 attempt 3b): `(`/`)` occur 1 line in 23 in the real
+    letterpress GT but 1 in 300 in training; the recognizer read `)` as `१`.
+    """
+    from doc_data import synthesize_deva_lines
+    _imgs, texts = synthesize_deva_lines(600, seed=13)
+    joined = "\n".join(texts)
+    assert "(" in joined and ")" in joined, "parenthesized numbers missing"
+    assert "[" in joined and "]" in joined, "bracketed numbers missing"
+    assert "सन्" in joined, "letterpress date format missing"
+    assert "।।" in joined or "॥" in joined, "danda variants missing"
+    assert "नं०" in joined or "नं॰" in joined
+    # rare characters present in the real GT must appear at all
+    for ch in ("़", "ॉ", "॰", '"', "="):
+        assert ch in joined, f"rare GT char {ch!r} missing from the pool"
+
+
+def test_pool_contains_long_lines_matching_real_widths():
+    """Real letterpress lines are wide; the pool must cover 40-60 chars."""
+    from doc_data import synthesize_deva_lines
+    _imgs, texts = synthesize_deva_lines(400, seed=17)
+    long_lines = [t for t in texts if len(t) >= 40]
+    assert len(long_lines) >= 60, "at least ~15% of lines must be long"
+    assert all(len(t) <= 60 for t in long_lines)
+    assert any(any(c.isdigit() for c in t) for t in long_lines), \
+        "long lines must carry digits too"

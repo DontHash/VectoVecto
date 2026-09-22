@@ -77,6 +77,8 @@ def main():
                     help="heiDATA dataset dir with human-GT letterpress lines "
                          "(repeatable: train books + dev set)")
     ap.add_argument("--real-repeat", type=int, default=1)
+    ap.add_argument("--digit-repeat", type=int, default=1,
+                    help="duplicate digit-bearing lines N-1 extra times")
     ap.add_argument("--match-charset", default=None,
                     help="npz whose charset every label must fit (warm-start)")
     args = ap.parse_args()
@@ -104,6 +106,14 @@ def main():
         images.extend(real_images)
         texts.extend(real_texts)
     counts["real_total"] = len(real_images) * max(1, args.real_repeat)
+    if args.digit_repeat > 1:
+        # The gate metric is digit-exact on digit-bearing lines; give them
+        # extra weight without touching the text-CER balance of the pool.
+        dig_idx = [i for i, t in enumerate(texts) if any(c.isdigit() for c in t)]
+        for _ in range(args.digit_repeat - 1):
+            images.extend(images[i] for i in dig_idx)
+            texts.extend(texts[i] for i in dig_idx)
+        counts["digit_extra"] = len(dig_idx) * (args.digit_repeat - 1)
     counts["total"] = len(texts)
 
     rng = np.random.default_rng(args.seed + 1)

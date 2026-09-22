@@ -17,8 +17,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from deva_crnn.gate import (DIGIT_EXACT_BAR, heidata_line_crops,  # noqa: E402
-                            line_stats, v2_anchor_pages)
+                            line_stats, line_values, v2_anchor_pages)
 from deva_crnn.predict import load_model, recognize_lines  # noqa: E402
+from doc_metrics import bootstrap_ci  # noqa: E402
 
 
 def _run_lines(model, charset, crops, batch=32, decode_mode="greedy",
@@ -57,7 +58,11 @@ def main():
     gts, crops = heidata_line_crops(args.data_dir, limit=args.limit)
     hyps = _run_lines(model, charset, crops, decode_mode=args.decode,
                       beam_width=args.beam_width)
+    values = line_values(gts, hyps)
     result["heidata_lines"] = {**line_stats(gts, hyps),
+                               "digit_exact_ci": bootstrap_ci(
+                                   values["digit_exact"]),
+                               "cer_ci": bootstrap_ci(values["cer"]),
                                "seconds": round(time.time() - t0, 1)}
 
     t0 = time.time()
@@ -93,8 +98,7 @@ def main():
     result["gate"]["pass"] = bool(result["gate"]["heidata_pass"])
 
     print("\n=== W1 GATE (deva_crnn) ===")
-    print("heiDATA lines :", {k: v for k, v in heid.items()})
-    print("v2 anchor     :", {k: v for k, v in result["v2_anchor_pages"].items()
+    print("heiDATA lines :", {k: v for k, v in heid.items()})    print("v2 anchor     :", {k: v for k, v in result["v2_anchor_pages"].items()
                               if k != "rows"})
     print("gate          :", result["gate"])
     if args.json:

@@ -36,6 +36,18 @@ def line_stats(gts: List[str], hyps: List[str]) -> Dict:
     }
 
 
+def line_values(gts: List[str], hyps: List[str]) -> Dict[str, List[float]]:
+    """Per-line values for bootstrap CIs (digit-exact 0/1 + CER)."""
+    pairs = [(g, h) for g, h in zip(gts, hyps) if g.strip()]
+    digit_pairs = [(g, h) for g, h in pairs if digit_tokens(g)]
+    return {
+        "digit_exact": [1.0 if digit_string(g) == digit_string(h) else 0.0
+                        for g, h in digit_pairs],
+        "cer": [cer(g, h) for g, h in pairs],
+        "bagcer": [cer_bag(g, h) for g, h in pairs],
+    }
+
+
 def heidata_line_crops(data_dir: str, limit: int = 0) -> Tuple[List[str], List[np.ndarray]]:
     """(texts, crops) from frozen heiDATA pages + ALTO line boxes."""
     import doc_data
