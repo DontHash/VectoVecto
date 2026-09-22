@@ -21,10 +21,13 @@ from deva_crnn.gate import (DIGIT_EXACT_BAR, heidata_line_crops,  # noqa: E402
 from deva_crnn.predict import load_model, recognize_lines  # noqa: E402
 
 
-def _run_lines(model, charset, crops, batch=32):
+def _run_lines(model, charset, crops, batch=32, decode_mode="greedy",
+               beam_width=8):
     hyps = []
     for i in range(0, len(crops), batch):
-        hyps.extend(recognize_lines(model, charset, crops[i:i + batch]))
+        hyps.extend(recognize_lines(model, charset, crops[i:i + batch],
+                                    decode_mode=decode_mode,
+                                    beam_width=beam_width))
     return hyps
 
 
@@ -41,15 +44,19 @@ def main():
                                                        "anchor_gemini",
                                                        "gemini_readings.json"))
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--decode", choices=("greedy", "beam"), default="greedy")
+    ap.add_argument("--beam-width", type=int, default=8)
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
     model, charset = load_model(args.ckpt, "cpu")
-    result = {}
+    result = {"decode": args.decode,
+              "beam_width": args.beam_width if args.decode == "beam" else None}
 
     t0 = time.time()
     gts, crops = heidata_line_crops(args.data_dir, limit=args.limit)
-    hyps = _run_lines(model, charset, crops)
+    hyps = _run_lines(model, charset, crops, decode_mode=args.decode,
+                      beam_width=args.beam_width)
     result["heidata_lines"] = {**line_stats(gts, hyps),
                                "seconds": round(time.time() - t0, 1)}
 
@@ -57,7 +64,9 @@ def main():
     pages = v2_anchor_pages(args.v2_dir, args.readings, limit=args.limit)
     page_rows = []
     for p in pages:
-        line_hyps = _run_lines(model, charset, p["crops"])
+        line_hyps = _run_lines(model, charset, p["crops"],
+                               decode_mode=args.decode,
+                               beam_width=args.beam_width)
         hyp_page = "\n".join(line_hyps)
         stats = line_stats([p["gt"]], [hyp_page])
         stats["page"] = p["page"]

@@ -60,6 +60,14 @@ def _heavy(img_bgr: np.ndarray, rng: np.random.Generator) -> np.ndarray:
                            interpolation=cv2.INTER_AREA)
         out = cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
 
+    # Anisotropic squeeze/stretch: detector boxes are tight around cells and
+    # long lines alike, so the recognizer must not assume a fixed aspect.
+    if rng.random() < 0.4:
+        fx = float(rng.uniform(0.65, 1.45))
+        out = cv2.resize(out, (max(4, int(w * fx)), h),
+                         interpolation=cv2.INTER_LINEAR)
+        h, w = out.shape[:2]
+
     # Uneven illumination (page curvature / phone shadow).
     if rng.random() < 0.4:
         ramp = np.linspace(float(rng.uniform(0.72, 0.88)),

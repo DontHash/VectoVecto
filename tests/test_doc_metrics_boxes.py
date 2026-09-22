@@ -10,7 +10,8 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import build_heidata_dataset, parse_alto_page  # noqa: E402
+from doc_data import (build_heidata_dataset, parse_alto_page,  # noqa: E402
+                      parse_page_xml)
 from doc_metrics import box_match_report  # noqa: E402
 
 ALTO_V4 = """<?xml version="1.0" encoding="UTF-8"?>
@@ -34,6 +35,37 @@ ALTO_V4 = """<?xml version="1.0" encoding="UTF-8"?>
   </Layout>
 </alto>
 """
+
+PAGE_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15">
+  <Metadata/>
+  <Page imageFilename="00.jpg" imageWidth="800" imageHeight="1000">
+    <TextRegion id="r1">
+      <Coords points="50,100 750,100 750,600 50,600"/>
+      <TextLine id="l1">
+        <Coords points="10,20 210,20 210,60 10,60"/>
+        <TextEquiv><Unicode>प्रथम पंक्ति</Unicode></TextEquiv>
+      </TextLine>
+      <TextLine id="l2">
+        <Coords points="10,80 160,80 160,120 10,120"/>
+        <TextEquiv><Unicode>द्वितीय</Unicode></TextEquiv>
+      </TextLine>
+      <TextLine id="l3">
+        <Coords points="10,140 160,140 160,180 10,180"/>
+      </TextLine>
+    </TextRegion>
+  </Page>
+</PcGts>
+"""
+
+
+def test_parse_page_xml_extracts_text_and_polygon_bbox():
+    parsed = parse_page_xml(PAGE_XML.encode("utf-8"))
+    assert parsed["width"] == 800 and parsed["height"] == 1000
+    assert len(parsed["lines"]) == 2, "empty text lines must be skipped"
+    assert parsed["lines"][0]["text"] == "प्रथम पंक्ति"
+    assert parsed["lines"][0]["bbox"] == [10, 20, 210, 60]
+    assert parsed["lines"][1]["bbox"] == [10, 80, 160, 120]
 
 
 def test_parse_alto_page_extracts_lines_and_skips_empty():
@@ -117,3 +149,29 @@ def test_build_heidata_dataset_end_to_end(tmp_path):
     from doc_data import load_dataset
     loaded = load_dataset(str(out))
     assert "_boxes_path" in loaded["entries"][0]
+
+
+def test_build_heidata_dataset_accepts_page_xml_layout(tmp_path):
+    """Some Transkribus exports use page/<stem>.xml instead of alto/<stem>.xml."""
+    import zipfile
+
+    import cv2
+    import numpy as np
+
+    zips = tmp_path / "zips"
+    zips.mkdir()
+    with zipfile.ZipFile(zips / "bookY.zip", "w") as z:
+        z.writestr("bookY/bookY/page/00.xml", PAGE_XML)
+        img = np.full((1000, 800, 3), 240, dtype=np.uint8)
+        ok, buf = cv2.imencode(".jpg", img)
+        assert ok
+        z.writestr("bookY/bookY/00.jpg", buf.tobytes())
+
+    out = tmp_path / "heidata_out_page_layout"
+    m = build_heidata_dataset(str(zips), str(out))
+    assert len(m["entries"]) == 1
+    assert m["entries"][0]["n_lines"] == 2
+    boxes = json.load(open(os.path.join(out, m["entries"][0]["boxes"]),
+                           encoding="utf-8"))
+    assert boxes[0]["text"] == "प्रथम पंक्ति"
+    assert boxes[0]["bbox"] == [10, 20, 210, 60]

@@ -1505,3 +1505,76 @@ and rtifacts/ are git-ignored and excluded from the web image.
 used by doc_metrics), PySide6 (fixture rendering, dev), google-genai
 (Gemini anchor, dev).
 
+---
+
+## Appendix R3 - W1 attempt 3: the unused heiDATA books (2026-09-22)
+
+**Hypothesis from R2:** real letterpress GT volume is the binding constraint.
+R2 had exhausted the 11 locally available books; the published dataset
+(doi:10.11588/data/EGOKEI, CC BY 4.0) actually contains **19**.
+
+### Data
+
+* scripts/harvest_heidata_books.py fetched the 8 unused books (255 MB,
+  resumable, validated, sha256 recorded in data/doc_eval/heidata/harvest.json).
+* scripts/build_heidata_training_sets.py split them by book:
+  * heidata_train - 6 books / 91 pages / **1,898 lines** (training only)
+  * heidata_holdout - 2 books / 26 pages / 458 lines - **new frozen secondary
+    set** (evals/manifests/heidata_holdout_v1.json), never trained or tuned on
+* Ingestion fixes found on the way: yasa1906 exports **PAGE-XML** under
+  page/<stem>.xml (not ALTO under lto/); parse_page_xml plus a layout
+  fallback were added (with tests).
+
+### Results (frozen gate bar: digit-exact >= 0.75)
+
+| model | change | heiDATA digit-exact | heiDATA CER | heiDATA bagCER | v2 bagCER |
+|---|---|---|---|---|---|
+| attempt 2b (v3) | 1,322 dev lines x3 | 0.424 | 0.390 | 0.506 | 0.643 |
+| attempt 3 (v4) | + 1,898 new-book lines x3 (47,742 total) | 0.584 | 0.351 | 0.462 | 0.637 |
+| attempt 4 (v5) | + 30% short-cell synthesis + anisotropic aug + real x4 (51,656 total) | **0.603** | **0.341** | **0.451** | 0.632 |
+
+Holdout (unseen books) mean digit-exact: 0.411 (v4) -> **0.483** (v5).
+
+**Verdict: still FAILED, not adopted** (0.603 vs 0.75). Trajectory across
+attempts: 0.011 -> 0.367 -> 0.424 -> 0.584 -> 0.603; more real letterpress GT
+moves the number, and it is now ~2.2x RapidOCR on the same crops.
+
+### Per-book diagnostic (v5, same ALTO crops)
+
+| set | book | digit lines | deva_crnn | RapidOCR |
+|---|---|---|---|---|
+| frozen | diksita1895 | 3 | 0.333 | 0.000 |
+| frozen | jacobi1897 | 46 | 0.283 | 0.239 |
+| frozen | jagannatha1955 | 50 | 0.380 | 0.180 |
+| frozen | jayadeva1926 | 86 | 0.512 | 0.337 |
+| frozen | pyarelala1914 | 84 | **0.857** | 0.524 |
+| frozen | sankaracarya1925 | 12 | 0.667 | 0.250 |
+| frozen | sivaramasukla1900 | 92 | **0.739** | 0.413 |
+| frozen | **mean** | 373 | **0.539** | **0.278** |
+| holdout | saktidharasukla1930 | 39 | 0.667 | 0.333 |
+| holdout | simha1914 | 140 | 0.300 | 0.321 |
+| holdout | **mean** | 179 | **0.483** | **0.327** |
+
+Failure-mode inspection (crop contact sheets + per-book RapidOCR agreement)
+rules out label misalignment: RapidOCR reads the same crops at 0.28 mean, and
+the crops are legible. The gap is recognition: heavy-ink letterpress glyphs,
+some books at 0.28-0.38 digit-exact (jacobi1897, diksita1895, jagannatha1955,
+simha1914).
+
+### Rejected levers (measured, not guessed)
+
+* **CTC prefix beam search** (deva_crnn.predict.beam_search_decode, width 8,
+  brute-force-verified): digit-exact unchanged (0.6032 -> 0.6032), CER
+  -0.0008, 20x slower (324 s vs 16 s on 1,451 lines). The errors are visual
+  confusions, not decode-path artifacts. Not shipped.
+* **Short-cell synthesis** (sample_deva_cell_text, 30% of the synthetic
+  pool) plus anisotropic squeeze augmentation helped mostly the holdout books
+  (mean 0.411 -> 0.483); bundled with real x4, so attribution between the two
+  is not isolated.
+
+### Next: attempt 3b - input resolution
+
+Letterpress type is small; the recognizer reads 32-px-tall normalized lines.
+The next attempt raises the input height to 48 px (full retrain from scratch,
+since the conv stack changes), keeping the same gate and frozen sets.
+

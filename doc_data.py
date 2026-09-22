@@ -859,6 +859,34 @@ _DEVA_LINE_PATTERNS = (
 )
 
 
+_DEVA_CELL_WORDS = ("कुल", "जम्मा", "मिति", "संख्या", "दर", "रकम", "रु.", "नेपाल",
+                    "श्री", "धारा", "पृष्ठ", "क", "ख", "ग", "ङ")
+
+
+def sample_deva_cell_text(rng: np.random.Generator) -> str:
+    """One short table-cell text: 1-4 characters, digit-heavy.
+
+    Real letterpress tables give the detector square-ish cell crops
+    (aspect ~1) that height-normalization squashes into tiny glyphs; the
+    recognizer only sees that distribution if training data contains it.
+    """
+    r = rng.random()
+    if r < 0.45:  # bare digit runs (Devanagari numerals, as printed)
+        k = int(rng.integers(1, 4))
+        return "".join("०१२३४५६७८९"[int(rng.integers(0, 10))] for _ in range(k))
+    if r < 0.6:  # ASCII digit runs (page numbers, registry numbers)
+        k = int(rng.integers(1, 4))
+        return "".join(str(int(rng.integers(0, 10))) for _ in range(k))
+    if r < 0.75:  # numbered list markers / section refs
+        return f"{int(rng.integers(1, 99))}."
+    if r < 0.9:  # single short word
+        return _DEVA_CELL_WORDS[int(rng.integers(0, len(_DEVA_CELL_WORDS)))]
+    # short word + digits, e.g. "क १२"
+    return ("%s %s" % (_DEVA_CELL_WORDS[int(rng.integers(0, len(_DEVA_CELL_WORDS)))],
+                       "".join("०१२३४५६७८९"[int(rng.integers(0, 10))]
+                               for _ in range(int(rng.integers(1, 3))))))
+
+
 def sample_deva_line_text(rng: np.random.Generator) -> str:
     """One training line text: 60% digit-rich patterns, else word sequences."""
     if rng.random() < 0.6:
@@ -873,18 +901,22 @@ def sample_deva_line_text(rng: np.random.Generator) -> str:
 
 def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
                           max_px: int = 64, fonts: Optional[List[Dict]] = None,
-                          jitter: bool = False):
+                          jitter: bool = False, cell_frac: float = 0.0):
     """In-memory synthetic Devanagari lines: (images_bgr, texts).
 
     `fonts` = specs from `available_deva_font_specs()`; when given, each line
     picks one at random. `jitter` adds letter-spacing / stretch variation.
+    `cell_frac` mixes in short table cells (see `sample_deva_cell_text`).
     Defaults preserve the single-font, unjittered pool of attempt 1.
     """
     rng = np.random.default_rng(seed)
     images: List[np.ndarray] = []
     texts: List[str] = []
     for _ in range(n):
-        text = sample_deva_line_text(rng)
+        if cell_frac and rng.random() < cell_frac:
+            text = sample_deva_cell_text(rng)
+        else:
+            text = sample_deva_line_text(rng)
         px = int(rng.integers(min_px, max_px + 1))
         spec = None
         if fonts:
@@ -1211,6 +1243,73 @@ def parse_alto_page(xml_bytes: bytes) -> Dict:
     return {"width": width, "height": height, "lines": lines}
 
 
+def parse_page_xml(xml_bytes: bytes) -> Dict:
+    """Parse one Transkribus PAGE-XML (2013-07-15) page.
+
+    Some heiDATA books export PAGE instead of ALTO; the payload is equivalent
+    (human-corrected text + line polygons). Same return shape as
+    `parse_alto_page`, bbox from the line polygon's min/max.
+    """
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_bytes)
+
+    def tag(el):
+        return el.tag.split("}")[-1]
+
+    page = None
+    for el in root.iter():
+        if tag(el) == "Page":
+            page = el
+            break
+    if page is None:
+        return {"width": 0, "height": 0, "lines": []}
+    width = int(float(page.get("imageWidth") or 0))
+    height = int(float(page.get("imageHeight") or 0))
+    lines = []
+    for el in root.iter():
+        if tag(el) != "TextLine":
+            continue
+        text = ""
+        for child in el.iter():
+            if tag(child) == "Unicode" and (child.text or "").strip():
+                text = child.text.strip()
+                break
+        if not text:
+            continue
+        x0 = y0 = 10 ** 9
+        x1 = y1 = -1
+        for child in el.iter():
+            if tag(child) != "Coords" or not child.get("points"):
+                continue
+            for pair in child.get("points").split():
+                xs, ys = (pair.split(",") + ["0", "0"])[:2]
+                x, y = float(xs), float(ys)
+                x0, y0 = min(x0, x), min(y0, y)
+                x1, y1 = max(x1, x), max(y1, y)
+            break
+        if x1 < 0:
+            continue
+        lines.append({"text": text,
+                      "bbox": [int(x0), int(y0), int(x1), int(y1)]})
+    return {"width": width, "height": height, "lines": lines}
+
+
+def _find_transcription(names: List[str], stem: str) -> str | None:
+    """Locate a page's transcription XML across Transkribus export layouts.
+
+    Most heiDATA books export ALTO under `alto/<stem>.xml`; some (e.g.
+    vyasa1906) use `page/<stem>.xml`. Both carry the same ALTO payload.
+    """
+    for n in names:
+        if "/alto/" in n and os.path.basename(n) == stem + ".xml":
+            return n
+    for n in names:
+        if os.path.basename(n) == stem + ".xml" and "/page/" in n:
+            return n
+    return None
+
+
 def build_heidata_dataset(zips_dir: str, out_dir: str,
                           max_pages_per_book: int = 0,
                           books: List[str] | None = None) -> Dict:
@@ -1241,12 +1340,14 @@ def build_heidata_dataset(zips_dir: str, out_dir: str,
                 jpgs = jpgs[:max_pages_per_book]
             for img_name in jpgs:
                 stem = os.path.splitext(os.path.basename(img_name))[0]
-                alto_name = next((n for n in names
-                                  if "/alto/" in n and
-                                  os.path.basename(n) == stem + ".xml"), None)
+                alto_name = _find_transcription(names, stem)
                 if alto_name is None:
                     continue
-                alto = parse_alto_page(z.read(alto_name))
+                payload = z.read(alto_name)
+                alto = parse_alto_page(payload)
+                if not alto["lines"]:
+                    # PAGE-XML export variant carries the same annotation
+                    alto = parse_page_xml(payload)
                 if not alto["lines"]:
                     continue
                 import io

@@ -77,3 +77,14 @@ def test_letter_spacing_and_stretch_change_the_line():
     b = render_devanagari_line("मिति २०८१-०४-२७", px=40, letter_spacing=1.5,
                                stretch=110)
     assert a.shape != b.shape or not np.array_equal(a, b)
+
+
+def test_cell_pool_is_short_and_digit_rich():
+    from doc_data import synthesize_deva_lines
+    imgs, texts = synthesize_deva_lines(60, seed=11, cell_frac=1.0)
+    assert len(imgs) == 60
+    assert all(len(t) <= 8 for t in texts), "cells must stay short"
+    with_digits = sum(1 for t in texts if any(c.isdigit() for c in t))
+    assert with_digits >= 45, "cell pool must be digit-heavy"
+    # short cells must still render as ink-bearing crops
+    assert all(int((im.min(axis=2) < 128).sum()) > 10 for im in imgs)

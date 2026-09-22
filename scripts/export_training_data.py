@@ -66,10 +66,14 @@ def main():
     ap.add_argument("--fonts", choices=("default", "all"), default="default",
                     help="'all' = every installed Devanagari font + jitter")
     ap.add_argument("--aug-level", choices=("light", "heavy"), default="light")
+    ap.add_argument("--cell-frac", type=float, default=0.0,
+                    help="fraction of synthetic samples that are short table "
+                         "cells (digits-heavy, square crops)")
     ap.add_argument("--real-dir", default=None,
                     help="dir produced by scripts/label_real_lines.py")
-    ap.add_argument("--real-heidata", default=None,
-                    help="heiDATA dev dataset dir (human-GT letterpress lines)")
+    ap.add_argument("--real-heidata", action="append", default=None,
+                    help="heiDATA dataset dir with human-GT letterpress lines "
+                         "(repeatable: train books + dev set)")
     ap.add_argument("--real-repeat", type=int, default=1)
     ap.add_argument("--match-charset", default=None,
                     help="npz whose charset every label must fit (warm-start)")
@@ -78,15 +82,16 @@ def main():
     t0 = time.time()
     fonts = doc_data.available_deva_font_specs() if args.fonts == "all" else None
     images, texts = synthesize_deva_lines(
-        args.n, seed=args.seed, fonts=fonts, jitter=args.fonts == "all")
+        args.n, seed=args.seed, fonts=fonts, jitter=args.fonts == "all",
+        cell_frac=args.cell_frac)
     counts = {"synthetic": len(texts)}
 
     real_images, real_texts = [], []
-    if args.real_heidata:
-        hgts, hcrops = heidata_line_crops(args.real_heidata)
+    for dir_ in (args.real_heidata or []):
+        hgts, hcrops = heidata_line_crops(dir_)
         real_images.extend(hcrops)
         real_texts.extend(hgts)
-        counts["heidata_dev"] = len(hgts)
+        counts[os.path.basename(dir_)] = len(hgts)
     if args.real_dir:
         r_imgs, r_txts = load_real_lines(args.real_dir)
         real_images.extend(r_imgs)

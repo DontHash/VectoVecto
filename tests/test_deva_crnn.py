@@ -20,8 +20,48 @@ from deva_crnn.charset import build_charset, decode, encode  # noqa: E402
 from deva_crnn.augment import augment_line  # noqa: F401
 from deva_crnn.data import export_npz, load_npz, normalize_line  # noqa: E402
 from deva_crnn.model import CRNN  # noqa: E402
+from deva_crnn.predict import beam_search_decode  # noqa: E402
 from deva_crnn.train import train  # noqa: E402
 from doc_data import render_devanagari_line  # noqa: E402
+
+
+def _collapse(path, charset):
+    out, prev = [], None
+    for i in path:
+        if i != prev and i != 0:
+            out.append(charset[i])
+        prev = i
+    return "".join(out)
+
+
+def test_beam_search_matches_greedy_on_confident_paths():
+    charset = ["\u0000", "क", "ख", "ग"]
+    # T=5, C=4; confidently alternating classes with blanks between repeats
+    log_probs = np.full((5, 4), -20.0)
+    log_probs[0, 1] = -0.01   # क
+    log_probs[1, 0] = -0.01   # blank
+    log_probs[2, 1] = -0.01   # क (repeat needs the blank)
+    log_probs[3, 0] = -0.01
+    log_probs[4, 2] = -0.01   # ख
+    assert beam_search_decode(log_probs, charset, beam_width=4) == "ककख"
+
+
+def test_beam_search_never_loses_to_greedy_brute_force():
+    """Brute-force all alignments: beam's prefix must be at least as likely."""
+    charset = ["\u0000", "क", "ख"]
+    rng = np.random.default_rng(4)
+    log_probs = np.log(rng.dirichlet([1.0, 1.0, 1.0], size=4))
+    # exact prefix probabilities over all 3^4 paths
+    from itertools import product
+    probs = {}
+    for path in product(range(3), repeat=4):
+        p = float(np.exp(sum(log_probs[t, c] for t, c in enumerate(path))))
+        probs[_collapse(path, charset)] = probs.get(_collapse(path, charset),
+                                                    0.0) + p
+    greedy_path = log_probs.argmax(axis=1).tolist()
+    greedy_text = _collapse(greedy_path, charset)
+    beam_text = beam_search_decode(log_probs, charset, beam_width=8)
+    assert probs[beam_text] >= probs[greedy_text] - 1e-12
 
 
 def test_heavy_augment_is_deterministic_and_keeps_ink():
