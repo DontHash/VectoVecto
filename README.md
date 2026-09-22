@@ -14,6 +14,16 @@ photo/scan ──▶ orientation ──▶ layout ──▶ OCR ──▶ risk f
                                                               └─ ocr.json (tokens + queue)
 ```
 
+## Before / after
+
+![VectoVecto before and after: an aged letterpress page and a shadowed invoice photo, restored with the numbered review queue](docs/assets/before_after.png)
+
+Real pipeline output. **Green** = accepted, **amber** = uncertain, **red** =
+digit conflict with the alternative reading kept. The letterpress page is from
+heiDATA (doi:10.11588/data/EGOKEI, CC BY 4.0); the photo row is this
+repository's own synthetic fixture under a simulated phone shadow. Regenerate
+with `python scripts/make_demo_image.py`.
+
 ## Why it exists
 
 - **It will not invent the numbers on your bill.** Digits are the highest-risk

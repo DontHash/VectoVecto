@@ -36,6 +36,11 @@ MODELS = [
      "CRNN+CTC trained on heiDATA CC BY 4.0 data (doi:10.11588/data/EGOKEI); "
      "weights are not distributed in this repository - attribution required "
      "when deployed"),
+    ("Demo figure (docs/assets/before_after.png)",
+     "CC BY 4.0 (page) + MIT (figure)",
+     "letterpress page from heiDATA doi:10.11588/data/EGOKEI; photo row is "
+     "this repository's synthetic fixture; regenerate with "
+     "scripts/make_demo_image.py"),
     ("heiDATA printed Devanagari (evaluation)", "CC BY 4.0",
      "Merkel-Hilf 2022, doi:10.11588/data/EGOKEI - manifests only, pages not "
      "redistributed"),
