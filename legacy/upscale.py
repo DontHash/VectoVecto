@@ -21,6 +21,12 @@ import os as _os, sys as _sys
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
+# archived research modules live under legacy/research; harness under evals/harness
+for _extra in (_os.path.join(_ROOT, "legacy", "research"),
+               _os.path.join(_ROOT, "evals", "harness")):
+    if _extra not in _sys.path:
+        _sys.path.insert(0, _extra)
+
 import os
 import sys
 import argparse
@@ -31,7 +37,7 @@ from smart_upscaler import SmartUpscaler, smart_upscale
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="VectorScaling Phase 7: Unified Autonomous Smart Super-Resolution"
+        description="VectoVecto Phase 7: Unified Autonomous Smart Super-Resolution"
     )
     parser.add_argument("input", help="Path to input image (JPG, PNG, WebP)")
     parser.add_argument("output", nargs="?", default=None,
@@ -68,7 +74,7 @@ def main():
         args.output = f"{base}_upscaled.png"
 
     print("=" * 65)
-    print("  VectorScaling — Phase 7 Unified Autonomous Smart Router")
+    print("  VectoVecto — Phase 7 Unified Autonomous Smart Router")
     print("=" * 65)
     print(f"  Input       : {args.input}")
     print(f"  Output      : {args.output}")

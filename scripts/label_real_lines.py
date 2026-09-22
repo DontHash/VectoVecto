@@ -29,6 +29,7 @@ import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
+sys.path.insert(0, os.path.join(BASE_DIR, "evals", "harness"))
 
 import doc_data  # noqa: E402
 import doc_metrics  # noqa: E402

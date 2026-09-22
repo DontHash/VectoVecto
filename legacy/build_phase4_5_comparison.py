@@ -9,6 +9,12 @@ import os as _os, sys as _sys
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
+# archived research modules live under legacy/research; harness under evals/harness
+for _extra in (_os.path.join(_ROOT, "legacy", "research"),
+               _os.path.join(_ROOT, "evals", "harness")):
+    if _extra not in _sys.path:
+        _sys.path.insert(0, _extra)
+
 import os
 import cv2
 import numpy as np
@@ -128,7 +134,7 @@ def build_de1_comparison():
         title_font = ImageFont.load_default()
         subtitle_font = ImageFont.load_default()
 
-    draw.text((margin, 12), "VectorScaling — Eliminating the 'Clay-ish' / Plastic Artifact", fill=(255, 255, 255), font=title_font)
+    draw.text((margin, 12), "VectoVecto — Eliminating the 'Clay-ish' / Plastic Artifact", fill=(255, 255, 255), font=title_font)
     draw.text((margin, 42), "Root Cause Fix: Bypassed hardcoded bilateral filter & unsharp haloing | Injected organic film micro-grain", fill=(180, 180, 180), font=subtitle_font)
 
     # Paste Row 1

@@ -11,6 +11,12 @@ import os as _os, sys as _sys
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
+# archived research modules live under legacy/research; harness under evals/harness
+for _extra in (_os.path.join(_ROOT, "legacy", "research"),
+               _os.path.join(_ROOT, "evals", "harness")):
+    if _extra not in _sys.path:
+        _sys.path.insert(0, _extra)
+
 import os
 import math
 import numpy as np

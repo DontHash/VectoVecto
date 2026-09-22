@@ -60,12 +60,30 @@ def test_semantic_content_analyzer(upscaler):
     print(f"  -> Detected {len(analysis.vector_shapes)} vector shapes, texture_pct={analysis.summary['texture_pct']:.1f}%")
 
 
-def test_portrait_skin_protection(upscaler):
-    print("Testing photographic skin protection on PrakashJI portrait...")
-    if not os.path.exists("PrakashJI.jpg"):
-        pytest.skip("PrakashJI.jpg not found in workspace")
+def make_synthetic_portrait(w=240, h=320):
+    """Photo-like portrait fixture: skin-toned face on a textured background.
 
-    img = cv2.imread("PrakashJI.jpg")
+    Replaces the removed PrakashJI.jpg demo asset so the skin-protection path
+    keeps test coverage without shipping a personal photo.
+    """
+    rng = np.random.default_rng(7)
+    bg = rng.normal(120, 18, (h, w, 3)).clip(0, 255)
+    img = bg.astype(np.uint8)
+    cv2.rectangle(img, (0, int(h * 0.65)), (w, h),
+                  (70, 90, 60), -1, lineType=cv2.LINE_AA)
+    cv2.ellipse(img, (w // 2, int(h * 0.32)),
+                (int(w * 0.26), int(h * 0.24)), 0, 0, 360,
+                (150, 185, 215), -1, lineType=cv2.LINE_AA)
+    cv2.ellipse(img, (w // 2, int(h * 0.55)),
+                (int(w * 0.3), int(h * 0.25)), 0, 0, 360,
+                (140, 175, 205), -1, lineType=cv2.LINE_AA)
+    noise = rng.normal(0, 6, (h, w, 3))
+    return (img.astype(np.float32) + noise).clip(0, 255).astype(np.uint8)
+
+
+def test_portrait_skin_protection(upscaler):
+    print("Testing photographic skin protection on a synthetic portrait...")
+    img = make_synthetic_portrait()
     analysis = upscaler.analyze_content(img)
 
     # Assert skin percentage is detected
