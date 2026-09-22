@@ -102,7 +102,8 @@ def _upload_if_gcs(local_path: str, out_dir: str) -> None:
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
           max_hours: float = 3.0, init: Optional[str] = None,
-          workers: int = -1, in_h: int = IN_H) -> Dict:
+          workers: int = -1, in_h: int = IN_H,
+          lr_schedule: str = "none", save_best: bool = False) -> Dict:
     images, texts = load_npz(resolve_data_path(data_path))
     if images.shape[1] != in_h:
         raise SystemExit(f"data height {images.shape[1]} != --in-h {in_h}; "
@@ -136,10 +137,15 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
         model.load_state_dict(ck["model"])
         print(f"initialized from {init} (epoch {ck.get('epoch')})", flush=True)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
+    if lr_schedule == "cosine":
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max(1, epochs))
+    else:
+        sched = None
     ctc = nn.CTCLoss(blank=0, zero_infinity=True)
 
     os.makedirs(out_dir, exist_ok=True)
     history: List[Dict] = []
+    best: Optional[float] = None
     t0 = time.time()
     step = 0
     for epoch in range(epochs):
@@ -168,9 +174,15 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
               f"val_exact {val['exact_match']:.3f} ({rec['seconds']}s)",
               flush=True)
         ckpt_path = os.path.join(out_dir, "ckpt.pt")
-        torch.save({"model": model.state_dict(), "charset": charset,
-                    "in_h": in_h, "in_w": IN_W, "epoch": epoch + 1},
-                   ckpt_path)
+        payload = {"model": model.state_dict(), "charset": charset,
+                   "in_h": in_h, "in_w": IN_W, "epoch": epoch + 1}
+        torch.save(payload, ckpt_path)
+        if save_best and (best is None or val["exact_match"] > best):
+            best = val["exact_match"]
+            torch.save(payload, os.path.join(out_dir, "ckpt_best.pt"))
+            print(f"  new best val_exact {best:.3f} -> ckpt_best.pt", flush=True)
+        if sched is not None:
+            sched.step()
         with open(os.path.join(out_dir, "metrics.json"), "w") as f:
             json.dump({"history": history, "charset_size": len(charset),
                        "lines": len(texts), "device": str(device)}, f, indent=2)
@@ -197,10 +209,15 @@ def main():
                     help="DataLoader workers (-1 auto; 0 avoids shared memory)")
     ap.add_argument("--in-h", type=int, default=IN_H,
                     help="input height the npz was exported at (32 or 48)")
+    ap.add_argument("--lr-schedule", choices=("none", "cosine"), default="none",
+                    help="cosine decays lr to ~0 over the run (fine-tunes)")
+    ap.add_argument("--save-best", action="store_true",
+                    help="also write ckpt_best.pt on val_exact improvements")
     args = ap.parse_args()
     train(args.data, args.out, epochs=args.epochs, batch=args.batch,
           lr=args.lr, seed=args.seed, max_hours=args.max_hours,
-          init=args.init, workers=args.workers, in_h=args.in_h)
+          init=args.init, workers=args.workers, in_h=args.in_h,
+          lr_schedule=args.lr_schedule, save_best=args.save_best)
 
 
 if __name__ == "__main__":

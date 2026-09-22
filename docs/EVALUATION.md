@@ -80,7 +80,7 @@ No set is trusted without an audit:
 | Digit verifier (bodhan) auto-enable | queue R@10 +≥3pp and ≤ +1 s/page | FAIL on cost (+8.3 s/page) → stays opt-in |
 | Mixed-page router (P5) | text CER +0%, non-text PSNR pass, no invented tokens | 1 invented token on photo texture → stays opt-in |
 | Letterpress preprocessing (W2.1) | CER −≥5% relative | FAIL — sauvola invents 1754 tokens; raw stays |
-| Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | FAIL so far — best **0.603** (attempt 3, 19-book real-line mix); RapidOCR remains the engine. Trajectory and per-book diagnostics: [PLAN.md](PLAN.md) Appendix R2/R3 |
+| Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | FAIL so far — best **0.719** (h=48 Kaggle run + ensemble), single model 0.710; RapidOCR remains the engine but the recognizer is now 2.6× RapidOCR on digit-exact (0.719 vs 0.278) and better on line CER. Trajectory: [PLAN.md](PLAN.md) Appendix R2–R4 |
 
 ## Known limitations (with evidence)
 

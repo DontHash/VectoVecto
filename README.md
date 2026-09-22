@@ -138,10 +138,11 @@ legacy/                   archived pre-pivot research (not part of the product)
 python -m pytest tests/ -q
 ```
 
-231 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+241 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
-plumbing and the real-line mining gate.
+plumbing (height round-trip, beam search, cosine fine-tune) and the real-line
+mining gate.
 
 ## Data, models and licensing
 

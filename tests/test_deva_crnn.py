@@ -141,6 +141,31 @@ def test_48px_round_trip_through_trainer(tmp_path):
     assert len(out) == 2 and all(isinstance(t, str) for t in out)
 
 
+def test_cosine_schedule_and_save_best(tmp_path):
+    """Fine-tune path: cosine LR decay runs and ckpt_best.pt is written."""
+    texts = ["कख", "ग१", "ख२३", "१२", "क१२", "गख"]
+    imgs = [render_devanagari_line(t, px=36) for t in texts]
+    data = str(tmp_path / "cs.npz")
+    export_npz(imgs, texts, data, w=64)
+
+    import deva_crnn.train as tr
+    orig_init = tr.CRNN.__init__
+
+    def small_init(self, n_classes, hidden=256, in_h=32):
+        orig_init(self, n_classes, hidden=32, in_h=in_h)
+
+    tr.CRNN.__init__ = small_init
+    try:
+        res = tr.train(data, str(tmp_path / "cs_out"), epochs=3, batch=3,
+                       lr=1e-3, val_split=0.33, seed=5, max_hours=0.1,
+                       lr_schedule="cosine", save_best=True)
+    finally:
+        tr.CRNN.__init__ = orig_init
+    assert len(res["history"]) == 3
+    assert (tmp_path / "cs_out" / "ckpt_best.pt").exists()
+    assert (tmp_path / "cs_out" / "ckpt.pt").exists()
+
+
 def test_trainer_rejects_height_mismatch(tmp_path):
     texts = ["कख", "ग१"]
     imgs = [render_devanagari_line(t, px=36) for t in texts]

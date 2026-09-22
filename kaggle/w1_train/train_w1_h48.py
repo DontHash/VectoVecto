@@ -82,21 +82,35 @@ def main() -> None:
     data = find_npz()
     sys.path.insert(0, assemble_package(code_dir))
 
+    # A checkpoint in the inputs turns this into a fine-tune run (cosine decay,
+    # best-checkpoint saving); otherwise it trains from scratch.
+    ckpts = [p for p in sorted(INPUT.rglob("*.pt"))]
+    init = str(max(ckpts, key=lambda p: p.stat().st_size)) if ckpts else None
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[kaggle] data={data} ({os.path.getsize(data) / 1e6:.0f} MB) "
-          f"device={device} torch={torch.__version__}", flush=True)
+          f"device={device} torch={torch.__version__} init={init}", flush=True)
     if device == "cuda":
         print(f"[kaggle] gpu={torch.cuda.get_device_name(0)}", flush=True)
 
     from deva_crnn.train import train
 
-    out_dir = "/kaggle/working/w1_h48"
-    result = train(data, out_dir, epochs=26, batch=64, lr=1e-3, val_split=0.05,
-                   seed=1, max_hours=3.0, workers=2, in_h=48)
+    if init:
+        out_dir = "/kaggle/working/w1_h48_ft"
+        result = train(data, out_dir, epochs=18, batch=64, lr=3e-4,
+                       val_split=0.05, seed=1, max_hours=3.0, workers=2,
+                       in_h=48, init=init, lr_schedule="cosine",
+                       save_best=True)
+    else:
+        out_dir = "/kaggle/working/w1_h48"
+        result = train(data, out_dir, epochs=26, batch=64, lr=1e-3,
+                       val_split=0.05, seed=1, max_hours=3.0, workers=2,
+                       in_h=48, save_best=True)
 
     history = result["history"]
     best = max(history, key=lambda r: r.get("exact_match") or 0.0)
-    summary = {"epochs_done": len(history), "final": history[-1],
+    summary = {"mode": "finetune" if init else "scratch",
+               "epochs_done": len(history), "final": history[-1],
                "best_val": best, "out_dir": out_dir,
                "artifacts": sorted(os.listdir(out_dir))}
     print("[kaggle] SUMMARY " + json.dumps(summary, ensure_ascii=False),

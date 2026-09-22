@@ -1578,3 +1578,59 @@ Letterpress type is small; the recognizer reads 32-px-tall normalized lines.
 The next attempt raises the input height to 48 px (full retrain from scratch,
 since the conv stack changes), keeping the same gate and frozen sets.
 
+---
+
+## Appendix R4 - W1 attempt 3b on Kaggle: input height 48 (2026-09-22)
+
+**Why Kaggle.** Local training at h=48 was slowing the workstation (155 s/epoch
+on the RTX 2050); the same run takes **55-57 s/epoch on a Kaggle T4** and costs
+nothing but the weekly GPU quota. The machine stays free for product work.
+
+**Infrastructure (committed).**
+* kaggle/w1_train/ - private script kernel + metadata; trains from scratch or
+  fine-tunes when a checkpoint is present in the inputs.
+* Two private datasets: hishmbhandari/vectovecto-w1-training-data (npz) and
+  hishmbhandari/vectovecto-w1-code (flat deva_crnn sources + checkpoint).
+* **Gotcha found:** the Kaggle CLI dataset uploader **skips subdirectories** by
+  default (--dir-mode=skip), silently dropping deva_crnn/. Workaround: ship
+  flat sources and assemble the package in-kernel; npz discovery is recursive.
+* Trainer additions for this attempt: --lr-schedule cosine, --save-best
+  (ckpt_best.pt), --in-h (32/48) with a data/height mismatch guard.
+
+### Results (frozen gate bar: digit-exact >= 0.75)
+
+| model | config | heiDATA digit-exact | heiDATA CER | heiDATA bagCER | v2 bagCER |
+|---|---|---|---|---|---|
+| v5 (attempt 4) | h=32, 16 epochs fine-tune | 0.603 | 0.341 | 0.451 | 0.632 |
+| **v7 (attempt 3b)** | **h=48, 26 epochs scratch (Kaggle)** | **0.710** | 0.282 | 0.384 | 0.592 |
+| v8 | v7 + 18 epochs cosine fine-tune | 0.700 | **0.272** | **0.369** | **0.583** |
+| ensemble v7+v8 | log-prob average | **0.719** | 0.272 | 0.368 | - |
+
+Trajectory across all attempts: 0.011 -> 0.367 -> 0.424 -> 0.584 -> 0.603 ->
+**0.719** (65x the first attempt). Input resolution was the single largest
+lever (+10.7pp), larger than all data work after attempt 3.
+
+Per-book (v7, h=48): frozen mean digit-exact 0.633 (pyarelala1914 **0.905**,
+sivaramasukla1900 **0.848**, sankaracarya1925 0.750, jayadeva1926 0.628,
+jagannatha1955 0.600, jacobi1897 0.370, diksita1895 0.333 n=3);
+holdout mean **0.691** (saktidharasukla1930 0.718, simha1914 **0.664**, was
+0.300 at h=32). RapidOCR on the same crops: frozen mean 0.278, holdout 0.327.
+
+**Verdict: gate still FAILED (0.719 vs 0.75), not adopted.** The recognizer is
+now **2.6x RapidOCR** on frozen digit-exact (0.719 ensemble vs 0.278 per-book
+mean) and better on line CER (0.272 vs 0.316). The pre-registered bar stands;
+RapidOCR remains the shipped engine.
+
+**Findings worth keeping.**
+* The cosine fine-tune traded digit-exact for overall CER (-0.8pp digit-exact,
+  -1.0pp CER); the best single model for digits is the plain 26-epoch run.
+* Ensembling the two checkpoints recovers the loss and adds a little
+  (0.710 -> 0.719) at 2x inference cost - not enough to justify shipping two
+  models against the bar.
+* Remaining gap is recognition on the hardest letterpress books (jacobi1897
+  0.370, jagannatha1955 0.600); the local heiDATA collection is now fully used
+  (19/19 books: 11 eval/tuning, 6 training, 2 holdout).
+* Next levers if the bar is to be met: architecture for 64-px input (the
+  current pooling stack only reaches 48), larger hidden width, or a new
+  human-GT letterpress corpus.
+
