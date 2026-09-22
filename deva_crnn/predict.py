@@ -27,10 +27,12 @@ from deva_crnn.model import CRNN
 
 def load_model(ckpt_path: str, device: str = "cpu"):
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-    model = CRNN(n_classes=len(ckpt["charset"]))
+    in_h = int(ckpt.get("in_h", 32))
+    model = CRNN(n_classes=len(ckpt["charset"]), in_h=in_h)
     model.load_state_dict(ckpt["model"])
     model.eval()
     model.to(device)
+    model.in_h = in_h  # recognized by recognize_lines for normalization
     return model, ckpt["charset"]
 
 
@@ -79,7 +81,9 @@ def recognize_lines(model, charset: List[str], images_bgr: List[np.ndarray],
                     beam_width: int = 8) -> List[str]:
     if not images_bgr:
         return []
-    batch = np.stack([normalize_line(im) for im in images_bgr]).astype(np.float32)
+    in_h = int(getattr(model, "in_h", 32))
+    batch = np.stack([normalize_line(im, h=in_h)
+                      for im in images_bgr]).astype(np.float32)
     x = torch.from_numpy(batch / 255.0).unsqueeze(1)
     x = ((x - 0.5) / 0.5).to(device)
     with torch.no_grad():

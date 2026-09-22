@@ -101,6 +101,61 @@ def test_model_output_shape():
     assert torch.allclose(probs, torch.ones_like(probs), atol=1e-4)
 
 
+def test_model_accepts_48px_input():
+    m = CRNN(n_classes=17, hidden=32, in_h=48)
+    out = m(torch.zeros(2, 1, 48, 256))
+    assert out.shape[1] == 2 and out.shape[2] == 17
+
+
+def test_48px_round_trip_through_trainer(tmp_path):
+    """A 48-px npz trains, checkpoints in_h=48, and predicts via that height."""
+    from deva_crnn.predict import load_model, recognize_lines
+
+    texts = ["कख", "ग१", "ख२३", "१२"]
+    imgs = [render_devanagari_line(t, px=48) for t in texts]
+    data = str(tmp_path / "tiny48.npz")
+    export_npz(imgs, texts, data, h=48, w=128)
+
+    import deva_crnn.predict as pr
+    import deva_crnn.train as tr
+    orig_train_init = tr.CRNN.__init__
+    orig_pred_init = pr.CRNN.__init__
+
+    def small_init(self, n_classes, hidden=256, in_h=32):
+        orig_train_init(self, n_classes, hidden=32, in_h=in_h)
+
+    tr.CRNN.__init__ = small_init
+    pr.CRNN.__init__ = small_init
+    try:
+        tr.train(data, str(tmp_path / "out48"), epochs=2, batch=4, lr=1e-3,
+                 val_split=0.25, seed=2, max_hours=0.1, in_h=48)
+        ckpt = torch.load(str(tmp_path / "out48" / "ckpt.pt"),
+                          weights_only=False)
+        assert ckpt["in_h"] == 48
+        model, charset = load_model(str(tmp_path / "out48" / "ckpt.pt"), "cpu")
+        assert getattr(model, "in_h") == 48
+        out = recognize_lines(model, charset, imgs[:2])
+    finally:
+        tr.CRNN.__init__ = orig_train_init
+        pr.CRNN.__init__ = orig_pred_init
+    assert len(out) == 2 and all(isinstance(t, str) for t in out)
+
+
+def test_trainer_rejects_height_mismatch(tmp_path):
+    texts = ["कख", "ग१"]
+    imgs = [render_devanagari_line(t, px=36) for t in texts]
+    data = str(tmp_path / "h32.npz")
+    export_npz(imgs, texts, data, h=32, w=64)
+    import deva_crnn.train as tr
+    try:
+        tr.train(data, str(tmp_path / "out_mismatch"), epochs=1, batch=2,
+                 in_h=48)
+    except SystemExit as e:
+        assert "re-export" in str(e)
+    else:
+        raise AssertionError("height mismatch must abort before training")
+
+
 def test_overfit_tiny_set(tmp_path):
     """Tiny alphabet + short lines: the pipeline must memorize them."""
     texts = ["कख", "ग१", "ख२३", "१२", "क१२", "गख", "खग", "क३"]

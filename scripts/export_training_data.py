@@ -63,6 +63,8 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--clean-frac", type=float, default=0.5)
     ap.add_argument("--width", type=int, default=256)
+    ap.add_argument("--height", type=int, default=32,
+                    help="normalized line height (32 or 48; train --in-h must match)")
     ap.add_argument("--fonts", choices=("default", "all"), default="default",
                     help="'all' = every installed Devanagari font + jitter")
     ap.add_argument("--aug-level", choices=("light", "heavy"), default="light")
@@ -116,9 +118,10 @@ def main():
         images = [mixed[i] for i in keep]
         texts = [texts[i] for i in keep]
     counts["total"] = len(texts)
-    export_npz(images, texts, args.out, w=args.width)
+    export_npz(images, texts, args.out, h=args.height, w=args.width)
     card = {
-        "n": len(texts), "seed": args.seed, "clean_frac": args.clean_frac,
+        "n": len(texts), "seed": args.seed, "height": args.height,
+        "clean_frac": args.clean_frac,
         "aug_level": args.aug_level, "fonts": args.fonts,
         "match_charset": args.match_charset,
         "font_files": sorted({s["path"] for s in (fonts or [])}),
