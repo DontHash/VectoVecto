@@ -4,6 +4,9 @@ document_export.py — document outputs: searchable PDF, overlay, transcript, JS
 Permissive stack only:
   * reportlab (BSD-3) writes the searchable PDF: page image + invisible text
     (render mode 3) positioned at OCR bounding boxes. No PyMuPDF (AGPL).
+  * the invisible layer and the overlay annotations use the bundled
+    Mukta (OFL-1.1, `fonts/`) so Devanagari stays searchable; Helvetica is
+    only a logged fallback when no font is found.
   * pypdfium2 is used by tests/callers to read PDFs back; not needed here.
 
 API:
@@ -19,8 +22,10 @@ API:
 from __future__ import annotations
 
 import json
+import logging
 import os
-from typing import Dict, List, Optional
+import sys
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -35,6 +40,63 @@ FLAG_COLORS = {  # BGR
     "unknown_word": (0, 191, 255),      # amber: out-of-lexicon Devanagari word
 }
 OK_COLOR = (0, 180, 0)                  # green
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_UNICODE_FONT_NAME = "VectoDevaUnicode"
+_FONT_STATE: Dict[str, Optional[object]] = {"path": None, "tried": False}
+_LOG = logging.getLogger("vectovecto.document_export")
+
+_FONT_CANDIDATES = (
+    os.path.join(_BASE_DIR, "fonts", "Mukta-Regular.ttf"),
+    os.path.join(sys.prefix, "fonts", "Mukta-Regular.ttf"),
+    r"C:\Windows\Fonts\mangal.ttf",
+    "/usr/share/fonts/truetype/lohit-devanagari/Lohit-Devanagari.ttf",
+    # Noto Sans Devanagari last: reportlab's subsetter drops ASCII letters
+    # from it (measured), so it is only a last resort.
+    "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf",
+)
+
+
+def _reset_font_cache() -> None:
+    """Test hook: forget the resolved font so candidates can be re-probed."""
+    _FONT_STATE.update({"path": None, "tried": False})
+
+
+def unicode_font_path() -> Optional[str]:
+    """Path of a Devanagari-capable TTF, or None (logged once).
+
+    Search order: the bundled OFL font (`fonts/`), the wheel data-files
+    location (`sys.prefix/fonts`), then OS fallbacks (Windows Mangal, Linux
+    Noto/Lohit — the same families `doc_data` renders fixtures with).
+    """
+    if not _FONT_STATE["tried"]:
+        _FONT_STATE["tried"] = True
+        for path in _FONT_CANDIDATES:
+            if os.path.exists(path):
+                _FONT_STATE["path"] = path
+                break
+        if not _FONT_STATE["path"]:
+            _LOG.warning(
+                "no Devanagari font found; the PDF text layer falls back to "
+                "Helvetica and Devanagari will not be searchable")
+    return _FONT_STATE["path"]  # type: ignore[return-value]
+
+
+def unicode_pdf_font() -> Optional[str]:
+    """Registered reportlab font name for the text layer, or None."""
+    path = unicode_font_path()
+    if not path:
+        return None
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    try:
+        if _UNICODE_FONT_NAME not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(_UNICODE_FONT_NAME, path))
+        return _UNICODE_FONT_NAME
+    except Exception as e:  # noqa: BLE001 - a font problem must not break export
+        _LOG.warning("could not register %s: %s", path, e)
+        return None
 
 
 def _estimate_dpi(img: np.ndarray, dpi: Optional[int] = None) -> int:
@@ -57,6 +119,7 @@ def write_searchable_pdf_pages(path: str, pages, title: Optional[str] = None) ->
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     c = canvas.Canvas(path)
     c.setTitle(title or os.path.splitext(os.path.basename(path))[0])
+    font = unicode_pdf_font() or "Helvetica"
     for image_bgr, tokens, dpi in pages:
         dpi = _estimate_dpi(image_bgr, dpi)
         h, w = image_bgr.shape[:2]
@@ -73,7 +136,7 @@ def write_searchable_pdf_pages(path: str, pages, title: Optional[str] = None) ->
             size = max(4.0, (y1 - y0) * px2pt * 0.85)
             t = c.beginText()
             t.setTextRenderMode(3)  # invisible but selectable/extractable
-            t.setFont("Helvetica", size)
+            t.setFont(font, size)
             t.setTextOrigin(x0 * px2pt, ph - y1 * px2pt)
             t.textOut(text)
             c.drawText(t)
@@ -95,6 +158,34 @@ def _tok_color(tok: Token):
     return OK_COLOR
 
 
+def _draw_annotations(canvas: np.ndarray,
+                      anns: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]]
+                      ) -> np.ndarray:
+    """Draw `[(text, (x, y), color_bgr)]` above the boxes.
+
+    PIL + the Devanagari font renders `alt_text` glyphs (cv2's Hershey fonts
+    cannot); cv2 remains the fallback when no font is available.
+    """
+    path = unicode_font_path()
+    if path:
+        try:
+            from PIL import ImageDraw, ImageFont
+            font = ImageFont.truetype(path, 14)
+            img = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(img)
+            for text, (x, y), color in anns:
+                draw.text((x, y), text, font=font,
+                          fill=(int(color[2]), int(color[1]), int(color[0])))
+            return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        except Exception as e:  # noqa: BLE001 - annotations are best-effort
+            _LOG.warning("PIL annotation failed (%s); falling back to cv2", e)
+    out = canvas.copy()
+    for text, (x, y), color in anns:
+        cv2.putText(out, text, (x, y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                    color, 1, cv2.LINE_AA)
+    return out
+
+
 def write_overlay_png(path: str, image_bgr: np.ndarray, tokens: List[Token]) -> str:
     """Boxes: green ok, amber uncertain, red conflict (with the alt reading)."""
     canvas = image_bgr.copy()
@@ -104,13 +195,15 @@ def write_overlay_png(path: str, image_bgr: np.ndarray, tokens: List[Token]) -> 
         color = _tok_color(tok)
         cv2.rectangle(overlay, (x0, y0), (x1, y1), color, -1)
     canvas = cv2.addWeighted(overlay, 0.18, canvas, 0.82, 0)
+    anns: List[Tuple[str, Tuple[int, int], Tuple[int, int, int]]] = []
     for tok in tokens:
         x0, y0, x1, y1 = tok.bbox
         color = _tok_color(tok)
         cv2.rectangle(canvas, (x0, y0), (x1, y1), color, 2)
         if "digit_conflict" in tok.flags and tok.alt_text:
-            cv2.putText(canvas, f"! {tok.alt_text}", (x0, max(12, y0 - 4)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1, cv2.LINE_AA)
+            anns.append((f"! {tok.alt_text}", (x0, max(0, y0 - 18)), color))
+    if anns:
+        canvas = _draw_annotations(canvas, anns)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     cv2.imwrite(path, canvas)
     return path

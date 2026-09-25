@@ -90,3 +90,6 @@ py-modules = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.setuptools.data-files]
+"fonts" = ["fonts/Mukta-Regular.ttf", "fonts/OFL.txt"]

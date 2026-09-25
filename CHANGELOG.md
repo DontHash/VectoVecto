@@ -39,6 +39,13 @@ All notable changes to this project are documented here. The format follows
   `deva_crnn.train` (checkpoints were written to a literal `gs:/...` dir and
   never uploaded) and adds `scripts/gcp_w1_vm_startup.sh` with the DLVM
   proprietary-driver guard for GCP training.
+- **W1: Devanagari searchable PDF fixed**: the invisible text layer and the
+  overlay annotations now use the bundled Mukta (OFL-1.1, `fonts/`) instead of
+  Helvetica/Hershey, so Nepali/Hindi pages extract as real searchable text and
+  Devanagari `alt_text` renders in the review overlay. Fallback chain: bundled
+  font → system fonts (Mangal/Lohit/Noto) → Helvetica with a logged warning.
+  Noto Sans Devanagari was measured to lose ASCII letters in reportlab's
+  subsetter, hence Mukta; extraction round-trips are pinned by tests.
 
 ## [1.2.0] - 2026-09-22
 

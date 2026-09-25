@@ -55,6 +55,7 @@ component below keeps its own terms.
 | MOEST eLibrary reading materials (evaluation attempt) | internal-only | elibrary.moest.gov.np (Government of Nepal); text-layer gate rejected the sampled documents (legacy non-Unicode fonts); never redistributed |
 | Cornell eCommons Nepali textbooks (unlabeled probe) | rights not verified per item | ecommons.cornell.edu collection 1813/24179; scanned books used for behaviour profiling only - internal evaluation, never redistributed |
 | CC-100 Nepali corpus (W-C training text) | no claims of IP on the preparation (statmt.org) | web-crawled 2018 Common Crawl; rendered into synthetic training lines by scripts/fetch_deva_corpus.py - not redistributed |
+| Mukta Regular (bundled PDF/overlay font) | OFL-1.1 | google/fonts ofl/mukta; renders the invisible PDF text layer and overlay annotations (Devanagari + Latin); license text in fonts/OFL.txt |
 | himalaya-ai/nepali-deva-ocr-eval line crops (evaluation) | unknown - unverified provenance | provisional, behavior-only numbers until a human GT pass |
 
 ## Gate notes

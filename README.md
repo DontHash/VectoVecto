@@ -85,7 +85,7 @@ pipeline, models and any training artifacts stay server-side.
 | File | Contents |
 |---|---|
 | `*_restored.png` | cleaned page (`.jpg`/`.webp` also supported) |
-| `*_searchable.pdf` | image + invisible text layer, selectable/copyable |
+| `*_searchable.pdf` | image + invisible Unicode text layer (Devanagari included; bundled Mukta font), selectable/copyable |
 | `*_overlay.png` | numbered review boxes for the flagged tokens |
 | `*_transcript.txt` | reading-order plain text |
 | `*_ocr.json` | tokens, risk flags, review queue, orientation/reading-order evidence |
@@ -126,7 +126,7 @@ deva_crnn/                Devanagari line recognizer (CRNN+CTC) — research, no
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    302 tests
+tests/                    308 tests
 docs/                     architecture, evaluation, deployment, licensing, roadmap
 legacy/                   archived pre-pivot research (not part of the product)
 ```
@@ -148,7 +148,7 @@ legacy/                   archived pre-pivot research (not part of the product)
 python -m pytest tests/ -q
 ```
 
-302 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+308 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
 plumbing (height/width round-trip, beam search, cosine fine-tune), the
@@ -156,7 +156,8 @@ real-line mining gate, the opt-in line reader (merge geometry, table-rule
 blocking, auto policy, graceful degradation, provenance), the lexicon
 fetch/build + `unknown_word` flag mechanics, the textbook harvest parsers +
 real-print scan probe, the CC-100 corpus builder + controlled sampler, the
-Vertex wheel builder and the trainer GCS output path.
+Vertex wheel builder and the trainer GCS output path, and the Devanagari
+PDF text-layer extraction round-trips.
 
 ## Data, models and licensing
 

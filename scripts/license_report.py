@@ -62,6 +62,9 @@ MODELS = [
      "no claims of IP on the preparation (statmt.org)",
      "web-crawled 2018 Common Crawl; rendered into synthetic training lines "
      "by scripts/fetch_deva_corpus.py - not redistributed"),
+    ("Mukta Regular (bundled PDF/overlay font)", "OFL-1.1",
+     "google/fonts ofl/mukta; renders the invisible PDF text layer and overlay "
+     "annotations (Devanagari + Latin); license text in fonts/OFL.txt"),
     ("himalaya-ai/nepali-deva-ocr-eval line crops (evaluation)",
      "unknown - unverified provenance",
      "provisional, behavior-only numbers until a human GT pass"),
