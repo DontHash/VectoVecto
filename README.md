@@ -126,7 +126,7 @@ deva_crnn/                Devanagari line recognizer (CRNN+CTC) — research, no
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    279 tests
+tests/                    289 tests
 docs/                     architecture, evaluation, deployment, licensing, roadmap
 legacy/                   archived pre-pivot research (not part of the product)
 ```
@@ -148,13 +148,14 @@ legacy/                   archived pre-pivot research (not part of the product)
 python -m pytest tests/ -q
 ```
 
-279 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+289 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
 plumbing (height/width round-trip, beam search, cosine fine-tune), the
 real-line mining gate, the opt-in line reader (merge geometry, table-rule
-blocking, auto policy, graceful degradation, provenance) and the lexicon
-fetch/build + `unknown_word` flag mechanics.
+blocking, auto policy, graceful degradation, provenance), the lexicon
+fetch/build + `unknown_word` flag mechanics, and the textbook harvest parsers
++ real-print scan probe.
 
 ## Data, models and licensing
 

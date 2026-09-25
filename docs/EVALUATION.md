@@ -83,6 +83,21 @@ No set is trusted without an audit:
 | Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | FAIL so far — best **0.719** (h=48 Kaggle run + ensemble), single model 0.710; RapidOCR remains the engine but the recognizer is now 2.6× RapidOCR on digit-exact (0.719 vs 0.278) and better on line CER. Trajectory: [PLAN.md](PLAN.md) Appendix R2–R4 |
 | Lexicon flag `unknown_word` (W-B) | queue R@10 +≥3pp, no digit regression | **PARTIAL — opt-in.** Frozen modern PDFs: token R@10 0.1477 → **0.1754** (+2.8pp), token P@10 +0.4pp, digit R@10 unchanged; frozen letterpress: neutral (token +0.1pp, digit R@10 0.8832 unchanged). Active only when the optional lexicon is built (`scripts/fetch_nepali_lexicon.py`); the looser `frac=0.5` config reaches +4.5pp on PDFs but costs 1.5pp letterpress digit R@10. Details: [PLAN.md](PLAN.md) Appendix T |
 
+## Real textbook probe (W-D, unlabeled)
+
+No accessible born-digital textbook corpus was found (2026-09-25): the CDC
+catalogue's ResourceSpace download endpoints return 404 with and without a
+session, and the MOEST eLibrary text layers are legacy-font mojibake (20/20
+gated out: 16 mojibake, 4 scan-only). Cornell eCommons hosts 458 Nepali
+textbook scans (collection 1813/24179) with no text layers, so 4 books are
+profiled as a behaviour-only probe (32 content pages, `--start-page 2`):
+**26.3 tokens/page, 24.8% flagged, 0.36% `script_mismatch`, 4.0%
+`unknown_word`, 0 orientation suspects, median 1.46 s/page**. Reproduce:
+`python scripts/harvest_nepali_textbooks.py --source cornell --limit 4` then
+`python scripts/profile_textbook_scans.py --start-page 2 --max-pages-per-pdf 8`.
+No CER is claimed; a human-corrected slice remains the open path to real
+textbook ground truth.
+
 ## Known limitations (with evidence)
 
 - **Digit reading on real scans** is the weakest link: Devanagari digits are

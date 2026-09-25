@@ -8,7 +8,7 @@ Tags are `vX.Y.Z` on `main`. The changelog is [../CHANGELOG.md](../CHANGELOG.md)
 ## Checklist
 
 ```bash
-# 1. Green suite (279 tests) and license gate
+# 1. Green suite (289 tests) and license gate
 python -m pytest tests/ -q
 python scripts/license_report.py --check
 

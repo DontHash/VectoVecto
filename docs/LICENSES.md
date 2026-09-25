@@ -52,6 +52,8 @@ component below keeps its own terms.
 | heiDATA printed Devanagari (evaluation) | CC BY 4.0 | Merkel-Hilf 2022, doi:10.11588/data/EGOKEI - manifests only, pages not redistributed |
 | Nepali lexicon for the unknown_word flag (optional runtime data) | Apache-2.0 + MIT | tesseract-ocr/langdata nep/nep.wordlist (Apache-2.0) + bikashpadhikari/nepali-brihat-sabdakosh-json (MIT); built locally by scripts/fetch_nepali_lexicon.py - not redistributed in this repository |
 | Nepali government PDFs (evaluation) | internal-only | supremecourt.gov.np / lawcommission.gov.np; never redistributed |
+| MOEST eLibrary reading materials (evaluation attempt) | internal-only | elibrary.moest.gov.np (Government of Nepal); text-layer gate rejected the sampled documents (legacy non-Unicode fonts); never redistributed |
+| Cornell eCommons Nepali textbooks (unlabeled probe) | rights not verified per item | ecommons.cornell.edu collection 1813/24179; scanned books used for behaviour profiling only - internal evaluation, never redistributed |
 | himalaya-ai/nepali-deva-ocr-eval line crops (evaluation) | unknown - unverified provenance | provisional, behavior-only numbers until a human GT pass |
 
 ## Gate notes

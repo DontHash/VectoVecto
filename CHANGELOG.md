@@ -21,6 +21,14 @@ All notable changes to this project are documented here. The format follows
   Dev-tuning tool: `scripts/tune_lexicon_flag.py`; decision record:
   [docs/PLAN.md](docs/PLAN.md) Appendix T; gate row in
   [docs/EVALUATION.md](docs/EVALUATION.md).
+- **W-D: real-print textbook probe** (`scripts/harvest_nepali_textbooks.py`,
+  `scripts/profile_textbook_scans.py`): CDC catalogue downloads are dead
+  (404 with and without session) and the MOEST eLibrary text layers are
+  legacy-font mojibake (20/20 gated out), so no born-digital textbook GT set
+  exists; 4 Cornell textbook scans (collection 1813/24179, no text layers)
+  are profiled as an unlabeled probe — 26.3 tokens/page, 24.8% flagged, 4.0%
+  `unknown_word`, 1.46 s/page median, no CER claims. Negative results and
+  sources recorded in [docs/PLAN.md](docs/PLAN.md) Appendix U.
 
 ## [1.2.0] - 2026-09-22
 

@@ -1823,3 +1823,40 @@ Frozen confirmation (`evals/harness/eval_flags.py --repass-digits`; baseline =
   `python scripts/tune_lexicon_flag.py --json out/lexicon_tune_dev.json`,
   then the two `eval_flags.py` commands above.
 
+## Appendix U - W-D: real textbook probe (2026-09-25)
+
+Goal: real modern-print evidence beyond the model-anchor PDF set. Sources
+were attempted in order; the negative results are the finding.
+
+| Source | Result |
+|---|---|
+| CDC catalogue (`lib.moecdc.gov.np/elibrary`, ~90 e-copies) | ResourceSpace download endpoints return 404 with and without the browser-check cookie/session - not harvestable |
+| MOEST eLibrary (DSpace 6, `elibrary.moest.gov.np:8080`) | 20/20 candidates gated out: 16 legacy non-Unicode fonts (Deva ratio <= 0.02, invalid sequences 7-8%), 4 scan-only (1 char/page) |
+| Cornell eCommons (DSpace 7, collection 1813/24179) | 458 Nepali textbook items; DSpace TEXT derivatives are 112-276 B, i.e. pure scans; 4 books harvested (15.9-45.3 MB) |
+
+Outcome: **no born-digital textbook set with a clean text layer exists in the
+accessible sources**; no frozen GT set was created. The gate did its job and
+the rejection reasons are recorded in `out/textbook_harvest_moest.json`.
+
+The Cornell scans become the first *unlabeled real-print* probe - behaviour
+only, no CER claims. Profile (4 books x 8 content pages, start page 2;
+RapidOCR, re-pass ON, lexicon installed, `scripts/profile_textbook_scans.py`):
+
+| metric | value |
+|---|---|
+| tokens/page | 26.3 (842 tokens / 32 pages) |
+| flagged / queue share | 24.8% |
+| script_mismatch share | 0.36% |
+| unknown_word share | 4.0% |
+| digit-token share | 27.6% |
+| orientation-suspect pages | 0 |
+| seconds/page (median) | 1.46 |
+
+Reproduce: `python scripts/harvest_nepali_textbooks.py --source cornell
+--limit 4` then `python scripts/profile_textbook_scans.py --start-page 2
+--max-pages-per-pdf 8 --json out/textbook_probe.json`.
+
+Next lever for real textbook GT: a human-corrected slice over a handful of
+Cornell pages using the existing Gemini-anchor + worksheet workflow (A5-style
+field evidence remains open).
+
