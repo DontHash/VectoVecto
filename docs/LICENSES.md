@@ -50,6 +50,7 @@ component below keeps its own terms.
 | VectoVecto Devanagari line reader (weights, server-side) | CC BY 4.0 (inherited) + MIT (code) | CRNN+CTC trained on heiDATA CC BY 4.0 data (doi:10.11588/data/EGOKEI); weights are not distributed in this repository - attribution required when deployed |
 | Demo figure (docs/assets/before_after.png) | CC BY 4.0 (page) + MIT (figure) | letterpress page from heiDATA doi:10.11588/data/EGOKEI; photo row is this repository's synthetic fixture; regenerate with scripts/make_demo_image.py |
 | heiDATA printed Devanagari (evaluation) | CC BY 4.0 | Merkel-Hilf 2022, doi:10.11588/data/EGOKEI - manifests only, pages not redistributed |
+| Nepali lexicon for the unknown_word flag (optional runtime data) | Apache-2.0 + MIT | tesseract-ocr/langdata nep/nep.wordlist (Apache-2.0) + bikashpadhikari/nepali-brihat-sabdakosh-json (MIT); built locally by scripts/fetch_nepali_lexicon.py - not redistributed in this repository |
 | Nepali government PDFs (evaluation) | internal-only | supremecourt.gov.np / lawcommission.gov.np; never redistributed |
 | himalaya-ai/nepali-deva-ocr-eval line crops (evaluation) | unknown - unverified provenance | provisional, behavior-only numbers until a human GT pass |
 

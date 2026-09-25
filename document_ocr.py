@@ -26,7 +26,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Collection, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -459,14 +459,21 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
         apply_deva_line_reader(result, img_bgr, deva_ckpt,
                                force=(deva_lines == "on"))
     calibration = None
+    lexicon = None
     if devanagari:
         from calibration import load_calibration
         calibration = load_calibration()
         if calibration:
             result.meta["calibration"] = f"isotonic:{os.path.basename(calibration.get('domain', '?'))}"
+        from lexicon import load_lexicon
+        lex = load_lexicon()
+        if lex:
+            lexicon = lex["words"]
+            result.meta["lexicon"] = f"{lex['source']}:{lex['count']}"
     result.meta["flagged"] = flag_tokens(result.tokens, conf_threshold,
                                          devanagari=devanagari,
-                                         calibration=calibration)
+                                         calibration=calibration,
+                                         lexicon=lexicon)
     result.meta["conf_threshold"] = conf_threshold
     if recheck_digits:
         conflicts = apply_digit_repass(result.tokens, img_bgr, be.recognize_crop,
@@ -625,16 +632,55 @@ RISK_WEIGHTS: Dict[str, float] = {
                               # not displace digit signals in the top-10
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
     "digit_added": 1.5,      # a number only the line reader saw (never silent)
+    "unknown_word": 0.5,     # Devanagari words absent from the lexicon (W-B);
+                             # the strict all-OOV rule keeps the digit queue
+                             # intact on both frozen sets (opt-in: needs the
+                             # data/lexicon fetch; see docs/PLAN.md Appendix T)
     "low_conf": 1.0,
 }
 
+# `unknown_word` fires when at least this share of a token's Devanagari words
+# is out-of-lexicon (1.0 = every word OOV; 0.0 = any OOV word). Dev-tuned by
+# `scripts/tune_lexicon_flag.py`; requires data/lexicon (see fetch script).
+LEXICON_OOV_FRAC: float = 1.0
+
 _LATIN_RE = re.compile(r"[A-Za-z]")
+
+
+def apply_unknown_word(tokens: List["Token"],
+                       lexicon: Optional[Collection[str]],
+                       oov_frac: Optional[float] = None) -> int:
+    """Flag tokens whose Devanagari words are mostly out-of-lexicon.
+
+    Flag-only (never edits text) and a no-op when no lexicon is loaded. The
+    lexicon is built by `scripts/fetch_nepali_lexicon.py`; it is optional at
+    runtime, like calibration. Digit-bearing tokens are skipped: the lexicon
+    has no digit knowledge and the digit queue must not be diluted (measured
+    on heidataset_dev). Returns the number of newly flagged tokens.
+    """
+    if not lexicon:
+        return 0
+    from lexicon import deva_words
+    frac = LEXICON_OOV_FRAC if oov_frac is None else oov_frac
+    flagged = 0
+    for tok in tokens:
+        if tok.has_digits:
+            continue
+        words = deva_words(tok.text)
+        if not words:
+            continue
+        oov = [w for w in words if w not in lexicon]
+        if oov and len(oov) >= frac * len(words):
+            tok.flags.append("unknown_word")
+            flagged += 1
+    return flagged
 
 
 def flag_tokens(tokens: List["Token"], conf_threshold: float,
                 devanagari: bool = False,
                 calibration: Optional[Dict] = None,
-                deva_digit_conf: float = 90.0) -> int:
+                deva_digit_conf: float = 90.0,
+                lexicon: Optional[Collection[str]] = None) -> int:
     """Attach honesty flags (never changes text). Returns flagged count.
 
     Devanagari-specific signals measured on the dev set (Appendix M):
@@ -642,6 +688,8 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
       letter substitutions) -> `script_mismatch`;
     * the mobile recognizer's digit confidence bar needs 90, not 80: at 80 it
       caught only 23% of digit errors, at 90 it catches 69%.
+    * out-of-lexicon Devanagari words -> `unknown_word` (W-B; only when the
+      optional lexicon is installed).
     """
     for tok in tokens:
         if tok.conf < conf_threshold:
@@ -661,6 +709,8 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
         if calibration is not None:
             from calibration import apply_isotonic
             tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)
+    if devanagari and lexicon:
+        apply_unknown_word(tokens, lexicon)
     return sum(1 for t in tokens if t.flags)
 
 

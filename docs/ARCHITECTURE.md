@@ -39,6 +39,7 @@ out; no services, no queue, no network.
 | `document_verifier.py` | optional second-model digit re-read (`--digit-verifier bodhan`); disagreements become `cross_model_conflict`, text is never silently changed |
 | `document_export.py` | searchable PDF (reportlab), numbered review overlay, transcript, OCR JSON; multi-page combined PDF |
 | `calibration.py` | isotonic confidence mapping (`cal_conf`) fitted on a dev set |
+| `lexicon.py` | optional Devanagari word list (built by `scripts/fetch_nepali_lexicon.py`) behind the `unknown_word` review flag; absent = flag off |
 | `cli.py` | command line: `--mode document|photo`, batch folders, all knobs |
 | `app.py` | Gradio studio (document tab first; `VECTOVECTO_DOCUMENT_ONLY=1` hides the photo tab) |
 

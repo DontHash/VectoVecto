@@ -103,7 +103,7 @@ No number in this repo is marketing.
 | Devanagari — letterpress books (the honest bar) | CER 0.434 [0.387–0.481], exact-token recall 0.647 (n=69, human-corrected ALTO GT) |
 | Devanagari — rendered fixtures | clean CER 0.030/0.028; degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
 | Digit honesty — 2× re-pass (default ON for Devanagari) | review-queue digit recall@10 **0.88** letterpress / **0.38** PDFs (was 0.73 / 0.15), ≈ +0.4 s/page |
-| Flags + calibration | `script_mismatch`, `invalid_sequence` (impossible combining sequence), isotonic `cal_conf`; ECE 0.82 → 0.30 on scans |
+| Flags + calibration | `script_mismatch`, `invalid_sequence` (impossible combining sequence), isotonic `cal_conf`; ECE 0.82 → 0.30 on scans; optional `unknown_word` lexicon flag (needs `scripts/fetch_nepali_lexicon.py`) lifts the frozen-PDF review queue R@10 **0.148 → 0.175** with the digit queue unchanged |
 | Optional digit verifier (`--digit-verifier bodhan`) | flags 0.71 recall / 0.81 precision; **opt-in** (cost gate failed: +8.3 s/page) |
 | Multi-page PDF | `--max-pages 0` → every page + `<stem>_combined.pdf`/`.txt`; GUI "All pages" checkbox |
 | Two-column reading order | arXiv set WER 0.870 → 0.268 (−69%) on split pages; >2 columns unsupported |
@@ -126,7 +126,7 @@ deva_crnn/                Devanagari line recognizer (CRNN+CTC) — research, no
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    231 tests
+tests/                    279 tests
 docs/                     architecture, evaluation, deployment, licensing, roadmap
 legacy/                   archived pre-pivot research (not part of the product)
 ```
@@ -148,19 +148,23 @@ legacy/                   archived pre-pivot research (not part of the product)
 python -m pytest tests/ -q
 ```
 
-260 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+279 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
 plumbing (height/width round-trip, beam search, cosine fine-tune), the
-real-line mining gate and the opt-in line reader (merge geometry, table-rule
-blocking, auto policy, graceful degradation, provenance).
+real-line mining gate, the opt-in line reader (merge geometry, table-rule
+blocking, auto policy, graceful degradation, provenance) and the lexicon
+fetch/build + `unknown_word` flag mechanics.
 
 ## Data, models and licensing
 
 This repository contains **code and evaluation evidence only**: no training
 datasets, no model checkpoints and no redistributed third-party corpora.
 Evaluation manifests record hashes and provenance; the data itself stays local
-(`data/`, `weights/` and `artifacts/` are git-ignored). Third-party license
+(`data/`, `weights/` and `artifacts/` are git-ignored). The optional
+Devanagari lexicon behind the `unknown_word` flag is built locally by
+`scripts/fetch_nepali_lexicon.py` (Apache-2.0 + MIT sources) and is not
+redistributed. Third-party license
 obligations and the air-gap story are tracked in
 [docs/LICENSES.md](docs/LICENSES.md).
 

@@ -32,6 +32,7 @@ FLAG_COLORS = {  # BGR
     "digit_conflict": (0, 0, 255),      # red
     "low_conf": (0, 191, 255),          # amber
     "digit_uncertain": (0, 191, 255),   # amber
+    "unknown_word": (0, 191, 255),      # amber: out-of-lexicon Devanagari word
 }
 OK_COLOR = (0, 180, 0)                  # green
 

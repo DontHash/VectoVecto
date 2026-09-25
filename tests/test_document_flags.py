@@ -17,8 +17,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from calibration import apply_isotonic, load_calibration  # noqa: E402
-from document_ocr import (RISK_WEIGHTS, Token, flag_tokens,  # noqa: E402
-                          review_queue, token_risk)
+from document_ocr import (RISK_WEIGHTS, Token, apply_unknown_word,  # noqa: E402
+                          flag_tokens, review_queue, token_risk)
 
 
 def _tok(text, conf, bbox=(0, 0, 10, 10), flags=None):
@@ -114,3 +114,60 @@ def test_calibration_file_metadata():
     assert cal["temperature_evidence"]["direction"] == "normal"
     assert os.path.exists(os.path.join(BASE_DIR, "calibration",
                                        "rapidocr_devanagari_v1.json"))
+
+
+def test_unknown_word_requires_lexicon_and_never_changes_text():
+    tok = _tok("गलत शब्द", 99)
+    flag_tokens([tok], conf_threshold=60, devanagari=True)
+    assert "unknown_word" not in tok.flags, "no lexicon -> no flag"
+
+    tok2 = _tok("गलत शब्द", 99)
+    before = (tok2.text, tok2.conf)
+    flag_tokens([tok2], conf_threshold=60, devanagari=True,
+                lexicon={"नेपाल"})
+    assert "unknown_word" in tok2.flags
+    assert (tok2.text, tok2.conf) == before
+
+
+def test_unknown_word_only_on_devanagari_tokens():
+    tok = _tok("नेपाल गलत", 99)
+    flag_tokens([tok], conf_threshold=60, devanagari=False,
+                lexicon={"नेपाल"})
+    assert "unknown_word" not in tok.flags
+
+
+def test_unknown_word_fraction_threshold(monkeypatch):
+    monkeypatch.setattr("document_ocr.LEXICON_OOV_FRAC", 0.5)
+    three = _tok("नेपाल कुल गलत", 99)
+    flag_tokens([three], conf_threshold=60, devanagari=True,
+                lexicon={"नेपाल", "कुल"})
+    assert "unknown_word" not in three.flags, "1/3 OOV is below the bar"
+
+    two = _tok("नेपाल गलत", 99)
+    flag_tokens([two], conf_threshold=60, devanagari=True,
+                lexicon={"नेपाल"})
+    assert "unknown_word" in two.flags
+
+
+def test_apply_unknown_word_oov_frac_argument():
+    tok = _tok("नेपाल कुल गलत", 99)
+    assert apply_unknown_word([tok], {"नेपाल", "कुल"}, oov_frac=0.0) == 1
+    assert "unknown_word" in tok.flags
+    assert apply_unknown_word([tok], None) == 0
+
+
+def test_unknown_word_skips_digit_tokens():
+    tok = _tok("गलत १२३", 99)
+    flag_tokens([tok], conf_threshold=60, devanagari=True,
+                lexicon={"नेपाल"})
+    assert "unknown_word" not in tok.flags, \
+        "digit tokens must not be diluted by the lexicon signal"
+
+
+def test_unknown_word_is_queued_below_digit_signals():
+    oov = _tok("गलत", 99, flags=["unknown_word"])
+    digit = _tok("१२", 99, flags=["digit_conflict"])
+    assert RISK_WEIGHTS["unknown_word"] < RISK_WEIGHTS["digit_conflict"]
+    assert RISK_WEIGHTS["unknown_word"] <= RISK_WEIGHTS["digit_uncertain"]
+    queue = review_queue([oov, digit])
+    assert queue[0].text == "१२", "digit signals keep the top of the queue"

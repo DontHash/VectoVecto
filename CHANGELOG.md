@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are
 [semantic](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **W-A: Nepali lexicon fetch** (`scripts/fetch_nepali_lexicon.py`): merges
+  tesseract-ocr/langdata `nep.wordlist` (Apache-2.0) and
+  `nepali-brihat-sabdakosh-json` (MIT) into a 132,997-word NFC-normalized list
+  plus a sha256 manifest under `data/lexicon/` (git-ignored; not
+  redistributed). Air-gapped builds pass local sources.
+- **W-B: `unknown_word` review flag** (opt-in): flags Devanagari tokens whose
+  words are all out-of-lexicon; digit-bearing tokens are skipped and text is
+  never changed. Frozen confirmation: modern-PDF token queue R@10
+  0.148 → **0.175**, P@10 +0.4pp, digit queue unchanged; letterpress neutral.
+  Active only when the lexicon is present (`VECTOVECTO_LEXICON` overrides).
+  Dev-tuning tool: `scripts/tune_lexicon_flag.py`; decision record:
+  [docs/PLAN.md](docs/PLAN.md) Appendix T; gate row in
+  [docs/EVALUATION.md](docs/EVALUATION.md).
+
 ## [1.2.0] - 2026-09-22
 
 ### Added

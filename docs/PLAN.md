@@ -1754,3 +1754,72 @@ data/doc_eval/heidata_printed --frozen evals/manifests/heidata_printed_v1.json
 * Default behaviour is unchanged (reader off) - no silent regressions.
 * `--deva-lines on` is the measured win for letterpress/running-text scans.
 
+## Appendix T - W-A/W-B: Nepali lexicon + `unknown_word` flag (2026-09-25)
+
+The born-digital Devanagari queue is the weakest honesty signal (token-flag
+coverage 0.002, digit R@10 0.154). The `amitness/ml-datasets` list supplied
+two license-clean word sources, so a lexical queue signal was built and
+measured under the usual discipline (dev tuning, frozen confirmation, no
+frozen tuning).
+
+### W-A - the lexicon (`scripts/fetch_nepali_lexicon.py`)
+
+| Source | License | Input | Kept |
+|---|---|---|---|
+| tesseract-ocr/langdata `nep/nep.wordlist` | Apache-2.0 | 33,507 | 29,541 |
+| nepali-brihat-sabdakosh-json `sabdakosh.json.gz` | MIT | 123,371 | 113,179 |
+| merged (NFC, ZWJ/ZWNJ-free, Devanagari-only, >=2 chars, dedup) | - | - | **132,997** |
+
+Dropped entries are punctuation/single-char/multi-word phrases (verified by
+sampling). Output `data/lexicon/nepali_lexicon_v1.txt` (gitignored) + a
+manifest with source and output sha256. Not redistributed; provenance is in
+`docs/LICENSES.md`. Absence is not an error: the flag is simply not emitted.
+
+### W-B - the flag
+
+`apply_unknown_word()` (flag-only, never edits text) marks a token when the
+share of out-of-lexicon Devanagari words reaches `LEXICON_OOV_FRAC`. Two
+design rules came from measurement, not preference:
+
+1. **Digit-bearing tokens are skipped.** The lexicon has no digit knowledge;
+   letting it add risk to money tokens dilutes the digit queue (measured:
+   digit R@10 0.8862 -> 0.8537 on dev before the exclusion).
+2. **Strict all-OOV rule (`frac=1.0`).** On the 72%-error letterpress dev set,
+   any-OOV coverage was 63% of tokens with no ranking information gained; the
+   all-OOV rule flags 31% and leaves the digit queue exactly intact.
+
+Dev sweep (heidata_dev, 61 pages / 2,917 tokens / 123 digit errors, re-pass
+ON; `python scripts/tune_lexicon_flag.py`):
+
+| config | token R@10 | token P@10 | digit R@10 | digit P@10 | flagged |
+|---|---|---|---|---|---|
+| baseline | 0.2858 | 0.9934 | 0.8862 | 0.1796 | 0 |
+| frac=1.0 w=0.5 (**chosen**) | 0.2867 | 0.9934 | 0.8862 | 0.1790 | 909 |
+| frac=0.5 w=0.5 (looser) | 0.2872 | 0.9934 | 0.8780 | 0.1770 | 1,402 |
+
+Frozen confirmation (`evals/harness/eval_flags.py --repass-digits`; baseline =
+`VECTOVECTO_LEXICON` pointed at a missing file):
+
+| set | token R@10 | token P@10 | digit R@10 | digit P@10 |
+|---|---|---|---|---|
+| nepali_pdf_v2 baseline | 0.1477 | 0.7509 | 0.3846 | 0.2575 |
+| nepali_pdf_v2 +lexicon | **0.1754** | **0.7547** | 0.3846 | 0.2256 |
+| heidata_printed baseline | 0.3145 | 0.9869 | 0.8832 | 0.1756 |
+| heidata_printed +lexicon | 0.3150 | 0.9870 | 0.8832 | 0.1754 |
+
+### Decision
+
+* **Opt-in, default off**: the flag exists only when the lexicon has been
+  fetched (or `VECTOVECTO_LEXICON` points at one). A fresh install, CI and the
+  Docker image emit no `unknown_word` — no silent behaviour change.
+* **Strict config adopted** because it is the only one with no digit cost on
+  either frozen set. Gate result is recorded as PARTIAL: the PDF token R@10
+  gain is +2.8pp against a +3pp bar, with precision +0.4pp and the digit queue
+  unchanged; letterpress is neutral.
+* The looser `frac=0.5` config is the documented alternative (+4.5pp PDF token
+  R@10, +3.3pp P@10) but costs 1.46pp of frozen letterpress digit R@10, so it
+  is not the shipped default.
+* Rebuild/verify: `python scripts/fetch_nepali_lexicon.py`,
+  `python scripts/tune_lexicon_flag.py --json out/lexicon_tune_dev.json`,
+  then the two `eval_flags.py` commands above.
+

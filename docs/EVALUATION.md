@@ -81,6 +81,7 @@ No set is trusted without an audit:
 | Mixed-page router (P5) | text CER +0%, non-text PSNR pass, no invented tokens | 1 invented token on photo texture → stays opt-in |
 | Letterpress preprocessing (W2.1) | CER −≥5% relative | FAIL — sauvola invents 1754 tokens; raw stays |
 | Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | FAIL so far — best **0.719** (h=48 Kaggle run + ensemble), single model 0.710; RapidOCR remains the engine but the recognizer is now 2.6× RapidOCR on digit-exact (0.719 vs 0.278) and better on line CER. Trajectory: [PLAN.md](PLAN.md) Appendix R2–R4 |
+| Lexicon flag `unknown_word` (W-B) | queue R@10 +≥3pp, no digit regression | **PARTIAL — opt-in.** Frozen modern PDFs: token R@10 0.1477 → **0.1754** (+2.8pp), token P@10 +0.4pp, digit R@10 unchanged; frozen letterpress: neutral (token +0.1pp, digit R@10 0.8832 unchanged). Active only when the optional lexicon is built (`scripts/fetch_nepali_lexicon.py`); the looser `frac=0.5` config reaches +4.5pp on PDFs but costs 1.5pp letterpress digit R@10. Details: [PLAN.md](PLAN.md) Appendix T |
 
 ## Known limitations (with evidence)
 
@@ -88,7 +89,9 @@ No set is trusted without an audit:
   treated as unread (mobile rec model) and surfaced through the review queue.
 - **Token flags on real Devanagari** carry little information (coverage 0.002
   on PDFs, 0.016 on letterpress; ECE 0.82) — the queue, not the colors, is the
-  honest signal.
+  honest signal. The optional lexicon flag (`unknown_word`, W-B) lifts the
+  frozen-PDF token queue to R@10 0.175 / P@10 0.755 (from 0.148 / 0.751) with
+  the digit queue unchanged; it is neutral on letterpress.
 - **Line-crop GT** (`nepali_lines`) is machine-generated and partly misaligned;
   numbers from it are behavior-only.
 - **Phone photos** are measured on a synthetic proxy, not a real field set:
