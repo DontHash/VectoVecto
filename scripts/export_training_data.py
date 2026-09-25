@@ -55,6 +55,12 @@ def load_real_lines(real_dir: str):
     return images, texts
 
 
+def load_corpus(path: str):
+    """Sentence pool from scripts/fetch_deva_corpus.py (W-C)."""
+    with open(path, encoding="utf-8") as f:
+        return [ln.strip() for ln in f if ln.strip()]
+
+
 def main():
     ap = argparse.ArgumentParser(description="Export W1 training data")
     ap.add_argument("--out", default=os.path.join(BASE_DIR, "deva_crnn", "data",
@@ -73,6 +79,10 @@ def main():
                          "cells (digits-heavy, square crops)")
     ap.add_argument("--real-dir", default=None,
                     help="dir produced by scripts/label_real_lines.py")
+    ap.add_argument("--corpus", default=None,
+                    help="sentence pool from scripts/fetch_deva_corpus.py "
+                         "(W-C: the word-sequence branch becomes real text; "
+                         "digit branches unchanged)")
     ap.add_argument("--real-heidata", action="append", default=None,
                     help="heiDATA dataset dir with human-GT letterpress lines "
                          "(repeatable: train books + dev set)")
@@ -85,10 +95,13 @@ def main():
 
     t0 = time.time()
     fonts = doc_data.available_deva_font_specs() if args.fonts == "all" else None
+    corpus = load_corpus(args.corpus) if args.corpus else None
     images, texts = synthesize_deva_lines(
         args.n, seed=args.seed, fonts=fonts, jitter=args.fonts == "all",
-        cell_frac=args.cell_frac)
+        cell_frac=args.cell_frac, corpus=corpus)
     counts = {"synthetic": len(texts)}
+    if corpus is not None:
+        counts["corpus_lines"] = len(corpus)
 
     real_images, real_texts = [], []
     for dir_ in (args.real_heidata or []):
@@ -140,6 +153,7 @@ def main():
         "size_mb": round(os.path.getsize(args.out) / 1e6, 1),
         "source": ("doc_data.synthesize_deva_lines + deva_crnn.gate."
                    "heidata_line_crops + label_real_lines + augment_line"),
+        "corpus": args.corpus,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     with open(os.path.splitext(args.out)[0] + ".card.json", "w",

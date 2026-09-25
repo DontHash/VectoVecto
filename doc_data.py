@@ -950,14 +950,32 @@ def _deva_long_line_text(rng: np.random.Generator) -> str:
     return text
 
 
-def sample_deva_line_text(rng: np.random.Generator) -> str:
-    """One training line text: 25% long, 45% digit-rich, else word sequences."""
+def _corpus_line(corpus: List[str], rng: np.random.Generator) -> str:
+    """One real sentence from the corpus, truncated to <=60 chars."""
+    text = corpus[int(rng.integers(0, len(corpus)))]
+    if len(text) > 60:
+        cut = text.rfind(" ", 0, 61)
+        text = text[:cut] if cut > 20 else text[:60]
+    return text.strip()
+
+
+def sample_deva_line_text(rng: np.random.Generator,
+                          corpus: Optional[List[str]] = None) -> str:
+    """One training line text: 25% long, 45% digit-rich, else word sequences.
+
+    With `corpus` (CC-100 sentences, W-C) the 30% word-sequence branch draws
+    real sentences instead of the hand-built pool; the digit-bearing branches
+    are unchanged, so a v8-vs-corpus comparison is controlled (same digit
+    exposure, same charset of digits/patterns).
+    """
     r = rng.random()
     if r < 0.25:
         return _deva_long_line_text(rng)
     if r < 0.70:
         pat = _DEVA_LINE_PATTERNS[int(rng.integers(0, len(_DEVA_LINE_PATTERNS)))]
         return _fmt_pattern(pat, rng)
+    if corpus:
+        return _corpus_line(corpus, rng)
     k = int(rng.integers(2, 6))
     idx = rng.integers(0, len(_DEVA_LINE_WORDS), size=k)
     return " ".join(_DEVA_LINE_WORDS[int(j)] for j in idx)
@@ -965,12 +983,15 @@ def sample_deva_line_text(rng: np.random.Generator) -> str:
 
 def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
                           max_px: int = 64, fonts: Optional[List[Dict]] = None,
-                          jitter: bool = False, cell_frac: float = 0.0):
+                          jitter: bool = False, cell_frac: float = 0.0,
+                          corpus: Optional[List[str]] = None):
     """In-memory synthetic Devanagari lines: (images_bgr, texts).
 
     `fonts` = specs from `available_deva_font_specs()`; when given, each line
     picks one at random. `jitter` adds letter-spacing / stretch variation.
     `cell_frac` mixes in short table cells (see `sample_deva_cell_text`).
+    `corpus` = sentences from `scripts/fetch_deva_corpus.py` (W-C); when given,
+    the word-sequence branch draws real sentences instead of the hand pool.
     Defaults preserve the single-font, unjittered pool of attempt 1.
     """
     rng = np.random.default_rng(seed)
@@ -980,7 +1001,7 @@ def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
         if cell_frac and rng.random() < cell_frac:
             text = sample_deva_cell_text(rng)
         else:
-            text = sample_deva_line_text(rng)
+            text = sample_deva_line_text(rng, corpus=corpus)
         px = int(rng.integers(min_px, max_px + 1))
         spec = None
         if fonts:
@@ -994,7 +1015,8 @@ def synthesize_deva_lines(n: int, seed: int = 1, min_px: int = 30,
 
 
 def build_synthetic_line_dataset(out_dir: str, n: int = 1000, seed: int = 1,
-                                 min_px: int = 30, max_px: int = 64) -> Dict:
+                                 min_px: int = 30, max_px: int = 64,
+                                 corpus: Optional[List[str]] = None) -> Dict:
     """Digit-rich synthetic Devanagari lines with exact GT (W1 training data).
 
     Writes `pages/<id>.png` + `labels.tsv` (name<TAB>text) + manifest. The
@@ -1006,7 +1028,7 @@ def build_synthetic_line_dataset(out_dir: str, n: int = 1000, seed: int = 1,
     entries: List[Dict] = []
     labels: List[str] = []
     for i in range(n):
-        text = sample_deva_line_text(rng)
+        text = sample_deva_line_text(rng, corpus=corpus)
         px = int(rng.integers(min_px, max_px + 1))
         img = render_devanagari_line(text, px=px)
         pid = f"line_{i:06d}"

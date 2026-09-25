@@ -16,7 +16,36 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from doc_data import (build_synthetic_line_dataset,  # noqa: E402
-                      render_devanagari_line)
+                      render_devanagari_line, sample_deva_line_text,
+                      synthesize_deva_lines, _corpus_line)
+
+
+def test_corpus_sampling_uses_real_sentences_and_is_deterministic():
+    corpus = ["नेपाल सरकारले आज बजेट सार्वजनिक गरेको छ",
+              "यो वर्ष धान उत्पादन बढेको छ"]
+    rng_a = np.random.default_rng(3)
+    a = [sample_deva_line_text(rng_a, corpus=corpus) for _ in range(40)]
+    rng_b = np.random.default_rng(3)
+    b = [sample_deva_line_text(rng_b, corpus=corpus) for _ in range(40)]
+    assert a == b, "corpus sampling must stay deterministic"
+    assert any(t in corpus for t in a), "the corpus branch must be exercised"
+    assert all(len(t) <= 60 for t in a)
+
+
+def test_corpus_line_truncates_at_a_word_boundary():
+    long = ("काठमाडौं " * 20).strip()
+    out = _corpus_line([long], np.random.default_rng(0))
+    assert len(out) <= 60
+    assert out.split()[-1] == "काठमाडौं", "cut must land on a word boundary"
+
+
+def test_corpus_default_pool_is_unchanged():
+    rng_a = np.random.default_rng(11)
+    rng_b = np.random.default_rng(11)
+    assert [sample_deva_line_text(rng_a) for _ in range(30)] == \
+        [sample_deva_line_text(rng_b) for _ in range(30)]
+    images, texts = synthesize_deva_lines(8, seed=5)
+    assert len(images) == len(texts) == 8
 
 
 def test_render_devanagari_line_shapes_and_ink():

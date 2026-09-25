@@ -1860,3 +1860,48 @@ Next lever for real textbook GT: a human-corrected slice over a handful of
 Cornell pages using the existing Gemini-anchor + worksheet workflow (A5-style
 field evidence remains open).
 
+## Appendix W - W-C: CC-100 corpus text in the synthetic mix (2026-09-25)
+
+**Question.** The CRNN's synthetic lines came from a 66-word hand pool + digit
+patterns; does real sentence structure move the frozen gate?
+
+**Build.**
+* `scripts/fetch_deva_corpus.py`: CC-100 Nepali (`ne.txt.xz`, 393 MB; "no
+  claims of intellectual property on the preparation") -> 12,732,810 lines
+  seen, 3,777,169 pass the filters (10-60 chars, >=60% Devanagari letters,
+  no invalid combining sequences, charset restricted to Devanagari + ASCII
+  digits + common punctuation), 100,000 reservoir-sampled (seed 1).
+* `doc_data.sample_deva_line_text(rng, corpus=...)`: the 30% word-sequence
+  branch draws real sentences instead of the hand pool; the 25% long-line and
+  45% digit-pattern branches are untouched (controlled comparison).
+* `deva_crnn/data/train_v9_corpus_h48w512.npz`: 84,448 lines (v8: 82,727),
+  charset 135 (v8: 133), same real-line mix and repeats.
+* GCP: Vertex AI GPU quota is 0 on this project (V100/P4/T4 all 429; P100
+  deprecated), so training ran on a Compute Engine SPOT V100 (n1-standard-4,
+  us-central1-a, Deep Learning VM) with the wheel + per-epoch GCS checkpoints.
+  Two pipeline bugs were found and fixed on the way: `deva_crnn.train` wrote
+  `gs://` outputs to a literal `gs:/...` directory and the upload fallback
+  copied a non-existent GCS object to itself; and the DLVM open kernel modules
+  do not support V100, so the startup script now installs the proprietary 580
+  driver and reboots once. 26 epochs, 2,276 s (~88 s/epoch).
+
+**Frozen results (same gates as W1).**
+
+| metric | v8 (shipped) | v9 corpus | bar |
+|---|---|---|---|
+| digit-exact (heiDATA lines) | 0.810 [0.769, 0.847] | **0.815** [0.775, 0.853] | >= 0.75 PASS |
+| line CER | 0.177 | 0.174 | - |
+| line bagCER | 0.235 | 0.229 | - |
+| integration page CER (off -> on) | 0.4335 -> 0.2531 | 0.4335 -> **0.2515** | not worse |
+| integration bagCER (off -> on) | 0.5529 -> 0.4339 | 0.5529 -> 0.4388 | not worse |
+| integration s/page | +0.77 | +0.29 | <= +1.0 |
+| silent invented digits | 0 | 0 | 0 |
+
+**Decision: no measurable gain - v8 weights stay.** Every delta is inside the
+frozen-set resolution (R5 recorded +-4.5pp on this gate; the CIs overlap), so
+corpus text is not adopted as a model change. The machinery (corpus builder,
+controlled sampler, wheel builder, fixed GCS output path, driver guard) is
+committed for future experiments that stack other levers (h=64, hidden 384,
+more human GT). Artifacts: `gs://neptrans-1048802048334-us-central1/w1_v9/out/`
+and `deva_crnn-0.2.1-py3-none-any.whl` in the same bucket.
+

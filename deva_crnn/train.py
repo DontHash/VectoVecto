@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import tempfile
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -99,6 +100,20 @@ def _upload_if_gcs(local_path: str, out_dir: str) -> None:
         print(f"WARN: could not upload {local_path} to GCS: {e}", flush=True)
 
 
+def resolve_out_dirs(out_dir: str) -> Tuple[str, Optional[str]]:
+    """(local_dir, remote_prefix) for a trainer output path.
+
+    `gs://bucket/prefix` keeps the per-epoch files in a local temp dir and
+    uploads each one via `_upload_if_gcs` (the Vertex/GCE pattern); a plain
+    path is used as-is with no upload. Before this, `gs://` outputs were
+    written to a literal `gs:/...` directory and the upload fallback copied a
+    non-existent GCS object to itself - checkpoints never left the VM.
+    """
+    if out_dir.startswith("gs://"):
+        return os.path.join(tempfile.gettempdir(), "deva_crnn_out"), out_dir
+    return out_dir, None
+
+
 def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
           lr: float = 1e-3, val_split: float = 0.05, seed: int = 1,
           max_hours: float = 3.0, init: Optional[str] = None,
@@ -147,7 +162,8 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
         sched = None
     ctc = nn.CTCLoss(blank=0, zero_infinity=True)
 
-    os.makedirs(out_dir, exist_ok=True)
+    local_dir, remote = resolve_out_dirs(out_dir)
+    os.makedirs(local_dir, exist_ok=True)
     history: List[Dict] = []
     best: Optional[float] = None
     t0 = time.time()
@@ -177,21 +193,26 @@ def train(data_path: str, out_dir: str, epochs: int = 30, batch: int = 64,
         print(f"epoch {epoch + 1}/{epochs} loss {rec['loss']:.3f} "
               f"val_exact {val['exact_match']:.3f} ({rec['seconds']}s)",
               flush=True)
-        ckpt_path = os.path.join(out_dir, "ckpt.pt")
+        ckpt_path = os.path.join(local_dir, "ckpt.pt")
         payload = {"model": model.state_dict(), "charset": charset,
                    "in_h": in_h, "in_w": in_w, "epoch": epoch + 1}
         torch.save(payload, ckpt_path)
+        best_path = os.path.join(local_dir, "ckpt_best.pt")
         if save_best and (best is None or val["exact_match"] > best):
             best = val["exact_match"]
-            torch.save(payload, os.path.join(out_dir, "ckpt_best.pt"))
+            torch.save(payload, best_path)
             print(f"  new best val_exact {best:.3f} -> ckpt_best.pt", flush=True)
         if sched is not None:
             sched.step()
-        with open(os.path.join(out_dir, "metrics.json"), "w") as f:
+        metrics_path = os.path.join(local_dir, "metrics.json")
+        with open(metrics_path, "w") as f:
             json.dump({"history": history, "charset_size": len(charset),
                        "lines": len(texts), "device": str(device)}, f, indent=2)
-        _upload_if_gcs(ckpt_path, out_dir)
-        _upload_if_gcs(os.path.join(out_dir, "metrics.json"), out_dir)
+        if remote:
+            _upload_if_gcs(ckpt_path, remote)
+            if save_best:
+                _upload_if_gcs(best_path, remote)
+            _upload_if_gcs(metrics_path, remote)
         if (time.time() - t0) / 3600.0 > max_hours:
             print("time budget reached, stopping", flush=True)
             break

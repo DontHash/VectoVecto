@@ -30,6 +30,16 @@ Real lines are repeated x4 and digit-bearing lines x2 (the gate metric is
 digit-exact). The frozen sets (`evals/manifests/`) are **never** used for
 training or tuning.
 
+## Corpus variant (W-C, measured null result)
+
+`scripts/fetch_deva_corpus.py` builds a CC-100 Nepali sentence pool and
+`--corpus` swaps it into the 30% word-sequence branch of the synthetic mix
+(the digit-bearing branches are untouched, so the comparison against v8 is
+controlled). The corpus-trained model passes the frozen gate (digit-exact
+0.815 [0.775, 0.853]) but every delta vs the shipped model is inside the
+frozen-set resolution, so the v8 weights stay; the machinery remains for
+future levers ([PLAN.md](PLAN.md) Appendix W).
+
 ## Reproduce
 
 ```bash

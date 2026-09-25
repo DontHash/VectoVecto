@@ -29,6 +29,16 @@ All notable changes to this project are documented here. The format follows
   are profiled as an unlabeled probe — 26.3 tokens/page, 24.8% flagged, 4.0%
   `unknown_word`, 1.46 s/page median, no CER claims. Negative results and
   sources recorded in [docs/PLAN.md](docs/PLAN.md) Appendix U.
+- **W-C: CC-100 corpus text experiment** (`scripts/fetch_deva_corpus.py`,
+  `--corpus` in `scripts/export_training_data.py`): 100k filtered Nepali
+  sentences replace the 30% word-pool branch of the synthetic mix (digit
+  branches unchanged); the corpus-trained model passes the frozen gate
+  (digit-exact **0.815** [0.775, 0.853] vs 0.810 [0.769, 0.847]) but every
+  delta is inside the frozen-set resolution, so the shipped v8 weights stay
+  ([docs/PLAN.md](docs/PLAN.md) Appendix W). Also fixes the GCS output path in
+  `deva_crnn.train` (checkpoints were written to a literal `gs:/...` dir and
+  never uploaded) and adds `scripts/gcp_w1_vm_startup.sh` with the DLVM
+  proprietary-driver guard for GCP training.
 
 ## [1.2.0] - 2026-09-22
 

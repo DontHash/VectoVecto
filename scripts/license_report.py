@@ -58,6 +58,10 @@ MODELS = [
      "rights not verified per item",
      "ecommons.cornell.edu collection 1813/24179; scanned books used for "
      "behaviour profiling only - internal evaluation, never redistributed"),
+    ("CC-100 Nepali corpus (W-C training text)",
+     "no claims of IP on the preparation (statmt.org)",
+     "web-crawled 2018 Common Crawl; rendered into synthetic training lines "
+     "by scripts/fetch_deva_corpus.py - not redistributed"),
     ("himalaya-ai/nepali-deva-ocr-eval line crops (evaluation)",
      "unknown - unverified provenance",
      "provisional, behavior-only numbers until a human GT pass"),
