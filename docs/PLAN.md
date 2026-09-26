@@ -2137,3 +2137,32 @@ is the unchanged output on those two pages.
 measured ordering defect where it exists). The remaining ToC error is digit
 recognition - the N2 track.
 
+## Appendix AC - N2 digit verifier: CRNN disagreement is not usable (2026-09-26)
+
+**Question.** Digits are the dominant residual on both modern sets (Appendix
+AB: ToC digBAG 0.62; v2-41 digBAG 0.29; v2 digit queue R@10 0.154). The
+bodhan verifier passes the verifier gate but costs +8.3 s/page; the W1 CRNN
+reader is 13 MB on CPU. Phase 1 asked whether the CRNN reading is a usable
+digit-verification signal, under a pre-registered decision rule: precision
+>= 0.6 -> adopt flag-only; >= 0.8 -> test a gated replacement; < 0.4 -> stop.
+
+**Measured** (digit sequences compared script-normalized, Latin digits mapped
+to Devanagari first, because the CRNN sometimes emits Latin):
+
+- ToC lesson numbers, position-paired (4 pages, n=23): engine 9/23 correct,
+  CRNN 11/23. 12 disagreements: CRNN right 0.500, engine right 0.333, both
+  wrong 0.167; disagreement recall over the 14 engine-wrong digits 0.429.
+- nepali_pdf_v2, digit tokens with >= 3 digits (36 pages, 261 tokens):
+  engine-in-GT 240 vs CRNN-in-GT 117; 168 conflicts (64% of tokens) and the
+  CRNN fixes 4. Its letterpress training does not transfer to case
+  numbers/dates, so the disagreement there is mostly noise.
+- heidata_printed (99 tokens): 95 conflicts, 2 fixes (the ALTO-GT substring
+  heuristic is unreliable there; recorded for completeness).
+- Cost: CRNN on digit crops only, 0.19-0.31 s/page (cheap).
+
+**Decision: stop (precision 0.50 < the 0.6 bar).** The CRNN is not a usable
+digit verifier and no verifier ships from this track. The digit residual
+needs a better model (N3: reader improvements) or more real digit ground
+truth (N5), not a second opinion from this reader. No production code was
+changed; the measurement is reproducible from this appendix's numbers.
+
