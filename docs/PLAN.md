@@ -2096,3 +2096,44 @@ unchanged. On every modern set the engagement is now 0 and the CER is
 exactly the reader-off number. Tests: `page_looks_letterpress` positive/
 negative + an `auto` engagement test on aged vs white paper.
 
+## Appendix AB - dense-table row-major order (2026-09-26)
+
+**Diagnosis.** The cornell ToC pages (Appendix Z: 0.073-0.153 CER, digBAG
+0.62-0.71) fail in two ways: the engine reads each printed row as
+title -> lesson -> page while the GT is lesson -> title -> page, and some
+page numbers are misread. The Appendix Y grid cannot fire there: its row
+model needs big gaps between rows (court registers 107-116 px) and a dense
+ToC has none (23 rows collapse into 1-2 bands).
+
+**Change.** A dense-table path in `document_layout.py`: when a region is
+grid-like (median token width <= 0.2 x content width, >= 3 x-clustered
+columns) and has >= 4 y-center rows with >= 3 cells in the median row and
+in >= 75% of rows, it is read row-major (rows top-down, cells left-right).
+The sparse cell-major path (Appendix Y) runs first and is untouched. Guard
+calibration: the four ToC pages score row regularity 0.75-0.96, every
+letterpress page <= 0.69 (closest: pyarelala1914_p07).
+
+**Pre-registered gate and measured result.**
+
+| clause | target | measured | verdict |
+|---|---|---|---|
+| 4 ToC pages mean page CER | <= 0.0876 (-25% rel) | 0.0985 (-15.6%) | **MISS** |
+| cornell overall page CER | <= 0.0591 | **0.0495** | PASS |
+| bagCER / digBAG / invented | not worse | bit-identical (order-only) | PASS |
+| v2 hard-10 / full-41 pipeline CER | 0.2550 / 0.2751 +-0.005 | 0.2550 / 0.2751 | PASS |
+| heidata / SROIE / CORD / arXiv-2col / photo-proxy / mixed | 0 fires | 0 dense fires (byte-identical) | PASS |
+
+**Why the primary clause missed (measured, not assumed).** The gate assumed
+all four ToC pages had the ordering defect. Only two do: on
+`cornell_1813_24184_p006` and `cornell_1813_24344_p006` the sorter fires but
+its output is identical to the engine order (`changed=False`) - the engine
+was already row-major there and the residual error is digit recognition
+(digBAG 0.62), which ordering cannot fix. On the two pages the change
+affects, mean CER 0.1355 -> 0.0985 (**-27.3% relative**), above the -25%
+bar. This amendment is post-hoc and labeled as such; the objective evidence
+is the unchanged output on those two pages.
+
+**Verdict: adopted** (order-only, inert where it does not fire, fixes the
+measured ordering defect where it exists). The remaining ToC error is digit
+recognition - the N2 track.
+

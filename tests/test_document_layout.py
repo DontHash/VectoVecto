@@ -222,6 +222,52 @@ def test_prose_lines_are_not_a_grid():
     assert [t.text for t in out] == [t.text for t in toks]
 
 
+def dense_toc_page(rows=8):
+    """ToC-like engine order: each printed row is one line of three cells
+    (lesson, title, page), but the engine emits them mid-cell first."""
+    toks = []
+    xs = [40, 500, 900]
+    for r in range(rows):
+        y = 40 + r * 50  # 50px pitch, 30px tall: no big row gaps
+        order = (1, 0, 2) if r % 2 == 0 else (2, 1, 0)
+        for c in order:
+            x = xs[c]
+            toks.append(T(f"r{r}c{c}", x, y, x + 120, y + 30))
+    return toks
+
+
+def test_dense_table_grid_read_row_major():
+    toks = dense_toc_page()
+    out = sort_reading_order(toks)
+    expected = [f"r{r}c{c}" for r in range(8) for c in range(3)]
+    assert [t.text for t in out] == expected
+
+
+def test_dense_table_keeps_every_token_once():
+    toks = dense_toc_page()
+    out = sort_reading_order(toks)
+    assert sorted(t.text for t in out) == sorted(t.text for t in toks)
+
+
+def test_verse_like_short_lines_stay_engine_order():
+    # Centered short lines: incidental x-clusters, one cell per row -> not a
+    # dense grid (regularity guard), so engine order is kept.
+    toks = []
+    for i in range(8):
+        y = 40 + i * 50
+        w = 200 + (i * 37) % 120
+        x = 300 - w // 2
+        toks.append(T(f"verse {i}", x, y, x + w, y + 30))
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks]
+
+
+def test_three_row_table_is_not_dense():
+    toks = dense_toc_page(rows=3)
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks]
+
+
 def test_pipeline_applies_reading_order(monkeypatch):
     import numpy as np
     import document_pipeline as dp

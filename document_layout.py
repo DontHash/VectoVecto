@@ -25,6 +25,9 @@ Algorithm (conservative XY-cut, measured against SROIE/CORD/arXiv renders):
     which is the measured 0.53 CER on the frozen court registers (PLAN.md
     Appendix Y). Guarded hard (>=4 columns, >=4 rows, >=4 cells/row) so
     label/value receipts, prose and letterpress title pages keep engine order.
+  * dense table grids (one-line rows with no big gaps; textbook tables of
+    contents) are read row-major instead: >=3 columns, >=4 y-center rows and
+    >=3 cells in >=75% of rows (Appendix AB).
   * no confident gutter -> preserve engine order, which is already row-major
     for both supported backends (RapidOCR detection order, Tesseract lines);
     aggressive row re-grouping measurably HURTS single-column receipts
@@ -84,6 +87,18 @@ GRID_MIN_CELLS_PER_ROW = 4
 GRID_MIN_TOKENS = 12
 GRID_COL_GAP_FACTOR = 2.0        # x-center gap > this * med_h starts a column
 GRID_ROW_GAP_FACTOR = 1.5        # y-gap > this * med_h starts a row band
+
+# Dense table grids (textbook tables of contents): rows are one line tall with
+# no big gaps, so the gap-based row model collapses them (measured: 23 ToC rows
+# read as 1-2 bands) and the cell-major path above cannot fire. A dense region
+# is grid-like by the same width/column guards, has >= 4 y-center rows, >= 3
+# cells in the median row, and >= 75% of rows carry >= 3 cells (letterpress
+# verse clusters at <= 0.69, the four frozen ToC pages at 0.75-0.96), and is
+# read row-major (PLAN.md Appendix AB).
+DENSE_MIN_COLUMNS = 3
+DENSE_MIN_ROWS = 4
+DENSE_MIN_CELLS_PER_ROW = 3
+DENSE_MIN_REGULARITY = 0.75
 
 
 def _find_gutter(tokens: Sequence[Token], med_h: float) -> Optional[Tuple[float, float]]:
@@ -288,6 +303,67 @@ def table_cell_order(tokens: Sequence[Token],
     return out
 
 
+def _y_rows(tokens: Sequence[Token], med_h: float) -> List[List[Token]]:
+    """Rows by y-center proximity (one printed line per row, wrapped lines
+    chain by overlap tolerance). Used by the dense-table path only."""
+    rows: List[dict] = []
+    for t in sorted(tokens, key=lambda t: (t.bbox[1] + t.bbox[3]) / 2.0):
+        cy = (t.bbox[1] + t.bbox[3]) / 2.0
+        for row in rows:
+            rcy = (row["y0"] + row["y1"]) / 2.0
+            if abs(cy - rcy) <= 0.5 * med_h:
+                row["tokens"].append(t)
+                row["y0"] = min(row["y0"], t.bbox[1])
+                row["y1"] = max(row["y1"], t.bbox[3])
+                break
+        else:
+            rows.append({"y0": t.bbox[1], "y1": t.bbox[3], "tokens": [t]})
+    return [row["tokens"] for row in rows]
+
+
+def _dense_grid_like(tokens: Sequence[Token], med_h: float) -> bool:
+    """Is this a dense table (one-line rows, no big gaps)? See Appendix AB."""
+    if len(tokens) < GRID_MIN_TOKENS:
+        return False
+    cw = _content_width(tokens)
+    if cw <= 0:
+        return False
+    med_w = statistics.median([t.bbox[2] - t.bbox[0] for t in tokens])
+    if med_w > GRID_CELL_WIDTH_FRACTION * cw:
+        return False
+    cols = _grid_columns(tokens, med_h)
+    if len(cols) < DENSE_MIN_COLUMNS:
+        return False
+    rows = _y_rows(tokens, med_h)
+    if len(rows) < DENSE_MIN_ROWS:
+        return False
+    col_of = {id(t): i for i, col in enumerate(cols) for t in col}
+    per_row = [len({col_of[id(t)] for t in row}) for row in rows]
+    if statistics.median(per_row) < DENSE_MIN_CELLS_PER_ROW:
+        return False
+    regular = sum(1 for n in per_row
+                  if n >= DENSE_MIN_CELLS_PER_ROW) / len(per_row)
+    return regular >= DENSE_MIN_REGULARITY
+
+
+def dense_table_order(tokens: Sequence[Token],
+                      med_h: Optional[float] = None) -> List[Token]:
+    """Row-major order for a dense table: rows top-down, cells left-right.
+
+    Unlike `table_cell_order` this assumes one printed line per row (the ToC
+    case); wrapped multi-line cells are the sparse grid's job.
+    """
+    toks = list(tokens)
+    if len(toks) < 2:
+        return toks
+    if med_h is None:
+        med_h = _median_height(toks)
+    out: List[Token] = []
+    for row in _y_rows(toks, med_h):
+        out.extend(sorted(row, key=lambda t: (t.bbox[0], t.bbox[1])))
+    return out
+
+
 def _content_width(tokens: Sequence[Token]) -> float:
     return max(t.bbox[2] for t in tokens) - min(t.bbox[0] for t in tokens)
 
@@ -397,6 +473,9 @@ def _sort_region(tokens: Sequence[Token], min_side: int, depth: int = 0,
         if _grid_like(tokens, med_h):
             stats["tables"] = stats.get("tables", 0) + 1
             return table_cell_order(tokens, med_h)
+        if _dense_grid_like(tokens, med_h):
+            stats["dense_tables"] = stats.get("dense_tables", 0) + 1
+            return dense_table_order(tokens, med_h)
         return list(tokens)
     out: List[Token] = []
     for band in bands:
@@ -411,18 +490,21 @@ def sort_reading_order(tokens: Sequence[Token],
 
     If no confident column split and no table grid exists anywhere, the input
     order is returned unchanged: band bookkeeping must never perturb
-    single-column pages. `stats["splits"]` / `stats["tables"]` (when a dict is
-    passed) record how many column splits and grid reorders fired.
+    single-column pages. `stats["splits"]` / `stats["tables"]` /
+    `stats["dense_tables"]` (when a dict is passed) record how many column
+    splits, cell-major grids and dense row-major grids fired.
     """
     toks = list(tokens)
     if not toks:
         return []
-    book = {"splits": 0, "tables": 0}
+    book = {"splits": 0, "tables": 0, "dense_tables": 0}
     out = _sort_region(toks, max(1, min_column_tokens), 0, book)
     if stats is not None:
         stats["splits"] = book["splits"]
         stats["tables"] = book["tables"]
-    return out if (book["splits"] or book["tables"]) else list(tokens)
+        stats["dense_tables"] = book["dense_tables"]
+    return out if (book["splits"] or book["tables"]
+                   or book["dense_tables"]) else list(tokens)
 
 
 def text_in_order(tokens: Sequence[Token]) -> str:

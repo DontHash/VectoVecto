@@ -85,6 +85,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Dense-table row-major order** (`document_layout.py`): textbook
+  tables-of-contents (one-line rows, no big gaps) are now read row-major when
+  a guarded grid is detected (≥3 columns, ≥4 y-center rows, ≥3 cells in ≥75%
+  of rows). Frozen cornell_real_v1: the 4 ToC pages mean CER 0.1167 → 0.0985
+  (2 were already row-major — sorter output unchanged; the 2 ordering-affected
+  pages −27.3%) and the overall page CER 0.0541 → **0.0495**; v2 hard-10/41
+  bit-identical; 0 dense fires on heidata/SROIE/CORD/arXiv-2col/photo-proxy/
+  mixed. The pre-registered −25% clause **missed** (−15.6%) and is recorded
+  with the post-hoc amendment in [docs/PLAN.md](docs/PLAN.md) Appendix AB.
 - **Reader `auto` gate tightened** (`deva_reader.page_looks_letterpress`):
   `--deva-lines auto` now requires aged/letterpress paper (Otsu-paper
   saturation ≥15 and luminance ≤225) in addition to the running-text geometry
