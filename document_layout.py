@@ -18,6 +18,13 @@ Algorithm (conservative XY-cut, measured against SROIE/CORD/arXiv renders):
   * full-width elements (titles, tables) split the page into vertical bands so
     each region gets its own column decision (a page-wide gutter does not
     exist on title + two-column layouts)
+  * table grids (short, column-aligned cells; measured: median token width
+    0.07 x content width vs 0.43-0.98 on prose) are read cell-major: rows
+    top-down, cells left-right, wrapped lines of a cell together. The engine
+    emits line-major rows (line 1 of every cell, then line 2 of every cell),
+    which is the measured 0.53 CER on the frozen court registers (PLAN.md
+    Appendix Y). Guarded hard (>=4 columns, >=4 rows, >=4 cells/row) so
+    label/value receipts, prose and letterpress title pages keep engine order.
   * no confident gutter -> preserve engine order, which is already row-major
     for both supported backends (RapidOCR detection order, Tesseract lines);
     aggressive row re-grouping measurably HURTS single-column receipts
@@ -63,6 +70,20 @@ WIDE_TOKEN_FRACTION = 0.5
 BAND_GAP_FACTOR = 2.5
 BAND_GAP_MIN_PX = 32.0
 MAX_DEPTH = 16
+
+# Table grid detection (PLAN.md Appendix Y). A region of short, column-aligned
+# cells is read cell-major; anything else keeps engine order. Measured on the
+# frozen court registers (grid: width 0.068-0.073 x content, 12-15 columns,
+# 5-6 rows, 10-12 cells/row) vs prose (0.43-0.98, 1-2 rows) and two measured
+# non-table regressions: a prose-like page (2 rows) and a letterpress title
+# page (5 columns but 3 rows / 3 cells per row, +3.8pp CER).
+GRID_CELL_WIDTH_FRACTION = 0.2   # median token width <= this * content width
+GRID_MIN_COLUMNS = 4
+GRID_MIN_ROWS = 4
+GRID_MIN_CELLS_PER_ROW = 4
+GRID_MIN_TOKENS = 12
+GRID_COL_GAP_FACTOR = 2.0        # x-center gap > this * med_h starts a column
+GRID_ROW_GAP_FACTOR = 1.5        # y-gap > this * med_h starts a row band
 
 
 def _find_gutter(tokens: Sequence[Token], med_h: float) -> Optional[Tuple[float, float]]:
@@ -191,6 +212,82 @@ def row_major(tokens: Sequence[Token]) -> List[Token]:
     return out
 
 
+def _grid_columns(tokens: Sequence[Token], med_h: float) -> List[List[Token]]:
+    """x-center clusters, left to right (table columns)."""
+    cols: List[dict] = []
+    for t in sorted(tokens, key=lambda t: (t.bbox[0] + t.bbox[2]) / 2.0):
+        c = (t.bbox[0] + t.bbox[2]) / 2.0
+        if cols and c - cols[-1]["c"] <= GRID_COL_GAP_FACTOR * med_h:
+            cols[-1]["tokens"].append(t)
+        else:
+            cols.append({"c": c, "tokens": [t]})
+    return [col["tokens"] for col in cols]
+
+
+def _grid_rows(tokens: Sequence[Token], med_h: float) -> List[List[Token]]:
+    """Table row bands: sweep by y with a gap threshold on the running max y1.
+
+    Wrapped cell lines overlap each other in y, so row separators are the
+    large gaps between table rows, not line gaps (measured: 107-116 px vs
+    <= 10 px inside a wrapped cell on the frozen court registers).
+    """
+    rows: List[List[Token]] = []
+    cur: List[Token] = []
+    cur_y1: Optional[float] = None
+    for t in sorted(tokens, key=lambda t: t.bbox[1]):
+        if cur and t.bbox[1] - cur_y1 > GRID_ROW_GAP_FACTOR * med_h:
+            rows.append(cur)
+            cur, cur_y1 = [], None
+        cur.append(t)
+        cur_y1 = t.bbox[3] if cur_y1 is None else max(cur_y1, t.bbox[3])
+    if cur:
+        rows.append(cur)
+    return rows
+
+
+def _grid_like(tokens: Sequence[Token], med_h: float) -> bool:
+    """Is this region a table grid (short, column-aligned cells)? See Appendix Y."""
+    if len(tokens) < GRID_MIN_TOKENS:
+        return False
+    cw = _content_width(tokens)
+    if cw <= 0:
+        return False
+    med_w = statistics.median([t.bbox[2] - t.bbox[0] for t in tokens])
+    if med_w > GRID_CELL_WIDTH_FRACTION * cw:
+        return False
+    cols = _grid_columns(tokens, med_h)
+    if len(cols) < GRID_MIN_COLUMNS:
+        return False
+    rows = _grid_rows(tokens, med_h)
+    if len(rows) < GRID_MIN_ROWS:
+        return False
+    col_of = {id(t): i for i, col in enumerate(cols) for t in col}
+    per_row = [len({col_of[id(t)] for t in row}) for row in rows]
+    return statistics.median(per_row) >= GRID_MIN_CELLS_PER_ROW
+
+
+def table_cell_order(tokens: Sequence[Token],
+                     med_h: Optional[float] = None) -> List[Token]:
+    """Cell-major order: rows top-down, cells left-right, wrapped lines together.
+
+    The engine emits line-major rows on tables (measured); the GT and a human
+    read cell-major. Order only: every token appears exactly once.
+    """
+    toks = list(tokens)
+    if len(toks) < 2:
+        return toks
+    if med_h is None:
+        med_h = _median_height(toks)
+    cols = _grid_columns(toks, med_h)
+    col_of = {id(t): i for i, col in enumerate(cols) for t in col}
+    out: List[Token] = []
+    for row in _grid_rows(toks, med_h):
+        for i in range(len(cols)):
+            out.extend(sorted((t for t in row if col_of[id(t)] == i),
+                              key=lambda t: (t.bbox[1], t.bbox[0])))
+    return out
+
+
 def _content_width(tokens: Sequence[Token]) -> float:
     return max(t.bbox[2] for t in tokens) - min(t.bbox[0] for t in tokens)
 
@@ -297,6 +394,9 @@ def _sort_region(tokens: Sequence[Token], min_side: int, depth: int = 0,
         wide_ids = set()  # every token fills the measure: single-column region
     bands = _bands(tokens, med_h, wide_ids)
     if len(bands) <= 1:
+        if _grid_like(tokens, med_h):
+            stats["tables"] = stats.get("tables", 0) + 1
+            return table_cell_order(tokens, med_h)
         return list(tokens)
     out: List[Token] = []
     for band in bands:
@@ -309,19 +409,20 @@ def sort_reading_order(tokens: Sequence[Token],
                        stats: Optional[dict] = None) -> List[Token]:
     """Return tokens in human reading order (new list; input untouched).
 
-    If no confident column split exists anywhere, the input order is returned
-    unchanged: band bookkeeping must never perturb single-column pages.
-    `stats["splits"]` (when a dict is passed) records how many column splits
-    fired, for telemetry.
+    If no confident column split and no table grid exists anywhere, the input
+    order is returned unchanged: band bookkeeping must never perturb
+    single-column pages. `stats["splits"]` / `stats["tables"]` (when a dict is
+    passed) record how many column splits and grid reorders fired.
     """
     toks = list(tokens)
     if not toks:
         return []
-    book = {"splits": 0}
+    book = {"splits": 0, "tables": 0}
     out = _sort_region(toks, max(1, min_column_tokens), 0, book)
     if stats is not None:
         stats["splits"] = book["splits"]
-    return out if book["splits"] else list(tokens)
+        stats["tables"] = book["tables"]
+    return out if (book["splits"] or book["tables"]) else list(tokens)
 
 
 def text_in_order(tokens: Sequence[Token]) -> str:

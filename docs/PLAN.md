@@ -1955,3 +1955,73 @@ not require. Bespoke training (Phases 2-4) remains the shippable path. Code,
 kernel and scripts committed; the V100 instance is stopped; results table:
 [evals/bakeoff_results.md](../evals/bakeoff_results.md).
 
+## Appendix Y - Table cell-major reading order (pre-registered 2026-09-26)
+
+**Where this came from.** Phase 1 (Appendix X) showed the VLM's only real
+win was page *order* on hard table pages (CER 0.53 -> 0.18, bagCER tied), and
+A0 measured that the shipped pipeline does not fix it: on the first 10
+`nepali_pdf_v2` pages raw@rapidocr CER 0.5295 [0.463-0.585] vs
+pipeline@rapidocr 0.5280 [0.461-0.579] (bagCER 0.3799/0.3758, digBAG
+0.1351/0.1294, 2.99/5.92 s/page, invented 0/35). Full 41 pages: raw 0.3379
+vs pipeline 0.3417, invented 0/455. The sorter is a no-op there: a court
+register's tokens are short cells, no confident gutter fires, and
+`sort_reading_order` returns engine order unchanged.
+
+**Diagnosis (token dump, dcb...p003).** The engine emits **line-major** rows
+(cell line 1 of every column, then cell line 2 of every column, ...) while
+the GT is **cell-major** (all wrapped lines of a cell, then the next cell):
+same tokens, wrong grouping. Measured grid features separate table pages
+from prose cleanly (median token width / content width: tables 0.068-0.073,
+prose 0.43-0.98; table rows >= 5 vs prose 1-2).
+
+**Pre-registered gate (before the code change).**
+- Primary: first-10 `nepali_pdf_v2` pipeline page CER improves by **>= 15%
+  relative** vs 0.5280 (i.e. <= 0.4488).
+- No regression: full-41 pipeline CER <= 0.3417 + 0.005; letterpress
+  `heidata_printed` (69p) unchanged; SROIE/CORD/arXiv layout fixtures
+  unchanged; `sort_reading_order` still identity when nothing fires.
+- Content guard: bagCER / digBAG / invented not worse than the pipeline
+  baseline (an order-only change must not alter the token multiset).
+- Cost: <= +0.2 s/page.
+
+**Planned guard** (grid-like region only): median token width <= 0.2 x
+content width, >= 4 x-clustered columns, >= 4 y-row bands, median >= 4
+cells/row. Prototype (unguarded) on the first 10 pages: mean CER
+0.5295 -> 0.2759, but `supreme_218512_p000` (2 rows, prose-like) regressed
+0.572 -> 0.751, so the guard is load-bearing.
+
+**Measured (same harness/config as the A0 baselines).**
+
+| first 10 `nepali_pdf_v2` pages | pipeline before | pipeline after | gate |
+|---|---|---|---|
+| page CER | 0.5280 [0.461-0.579] | **0.2550** [0.202-0.329] | <= 0.4488 PASS (-51.7%) |
+| bagCER | 0.3758 | 0.3758 | not worse PASS |
+| digBAG | 0.1294 | 0.1294 | not worse PASS |
+| invented (vs GT+rapidocr) | 35 | 35 | not worse PASS |
+| s/page | 5.92 | 4.99 | <= +0.2 PASS |
+
+| full 41 `nepali_pdf_v2` pages | pipeline before | pipeline after | gate |
+|---|---|---|---|
+| page CER | 0.3417 [0.307-0.379] | **0.2751** [0.258-0.297] | <= 0.3467 PASS (-19.5%) |
+| bagCER / digBAG | 0.4835 / 0.2907 | 0.4835 / 0.2907 | not worse PASS |
+
+**No-regression proof** (stronger than a before/after rerun): the change adds
+exactly one path, taken only when `_grid_like` is true, so a set with zero
+grid firings is byte-identical to the old code. Firing counts over every page
+(engine tokens -> `sort_reading_order(stats=...)`): heidata_printed 0/69,
+real_sroie 0/30, real_cord 0/30, real_two_column 0/32, nepali_photo_proxy
+0/41, mixed_pages 0/6, synthetic_two_column 0/4. The guard was tightened
+during the gate: a first pass (>=3 rows, >=3 cells/row) fired once on the
+letterpress title page `pyarelala1914_p00a` (5 columns but 3 rows / 3
+cells/row) and cost it +3.8pp CER; thresholds are now 4/4 (court registers:
+5-6 rows, 10-12 cells/row) and heidata is 0/69.
+
+**Verdict: adopted.** Order-only (bagCER/digBAG/invented bit-identical on the
+frozen slice), halves the hard-page CER at ~zero cost, provably inert where
+the guard does not fire. Wired into the shipped pipeline with
+`reading_order_tables` telemetry.
+
+**Data caveat.** The anchor GT on these table pages scores ~22% invalid
+Devanagari tokens (Gemini noise on degraded cells); absolute CER is inflated
+for every method equally and the comparison is relative.
+

@@ -73,6 +73,18 @@ All notable changes to this project are documented here. The format follows
   separator-normalized and the frozen `{"path": ...}` form is accepted;
   regression test in `tests/test_doc_data_mixed.py`.
 
+### Changed
+
+- **Table cell-major reading order** (`document_layout.py`): a guarded grid
+  path (≥4 columns, ≥4 rows, ≥4 cells/row, short cells) reads table pages
+  cell-major — wrapped lines of a cell together — instead of the engine's
+  line-major rows. Frozen `nepali_pdf_v2`: the 10 hardest pages drop pipeline
+  page CER 0.5280 → **0.2550** (−51.7%) and the full 41 pages 0.3417 →
+  0.2751, with bagCER/digBAG/invented bit-identical (order-only). The branch
+  fires 0× on heidata-printed, SROIE, CORD, arXiv two-column, photo-proxy and
+  mixed fixtures (byte-identical output); `reading_order_tables` telemetry.
+  Evidence: [docs/PLAN.md](docs/PLAN.md) Appendix Y.
+
 ## [1.2.0] - 2026-09-22
 
 ### Added

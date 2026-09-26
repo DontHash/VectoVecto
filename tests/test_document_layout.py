@@ -176,6 +176,52 @@ def test_gutter_tolerates_box_padding():
         [f"R{i} line" for i in range(1, 8)])
 
 
+def grid_page(cols=4, rows=4, wrapped=2):
+    """Line-major engine order on a table grid (the measured failure mode:
+    line 1 of every cell, then line 2 of every cell; PLAN.md Appendix Y)."""
+    toks = []
+    xs = [40 + 360 * c for c in range(cols)]
+    for r in range(rows):
+        y0 = 40 + 120 * r
+        for line in range(wrapped):
+            for c, x in enumerate(xs):
+                toks.append(T(f"r{r}c{c}l{line}", x, y0 + 40 * line,
+                              x + 200, y0 + 40 * line + 30))
+    return toks
+
+
+def test_table_grid_read_cell_major():
+    toks = grid_page()
+    out = sort_reading_order(toks)
+    expected = [f"r{r}c{c}l{line}"
+                for r in range(4) for c in range(4) for line in range(2)]
+    assert [t.text for t in out] == expected
+
+
+def test_table_grid_keeps_every_token_once():
+    toks = grid_page()
+    out = sort_reading_order(toks)
+    assert sorted(t.text for t in out) == sorted(t.text for t in toks)
+
+
+def test_two_row_grid_stays_engine_order():
+    # 2 rows: receipt-like, the guard rejects it (measured regression source).
+    toks = grid_page(rows=2)
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks]
+
+
+def test_prose_lines_are_not_a_grid():
+    # Long lines filling the measure (median width 0.6 x content) -> identity.
+    toks = []
+    for i in range(6):
+        y = 40 + i * 60
+        toks.append(T(f"prose line {i} text", 40, y, 40 + 500 - (i * 37) % 60,
+                      y + 30))
+    out = sort_reading_order(toks)
+    assert [t.text for t in out] == [t.text for t in toks]
+
+
 def test_pipeline_applies_reading_order(monkeypatch):
     import numpy as np
     import document_pipeline as dp
