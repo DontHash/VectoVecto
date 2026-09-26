@@ -24,13 +24,42 @@ from eval_models import iter_heidata_lines, score_lines  # noqa: E402
 
 def test_registry_and_list_candidates():
     names = set(bakeoff_models.REGISTRY)
-    assert {"rapidocr", "tesseract-nep", "trocr", "glmocr", "bodhan"} <= names
+    assert {"rapidocr", "tesseract-nep", "trocr", "glmocr", "bodhan",
+            "qwen3vl", "qwen3vl-8b-4bit", "qwen3vl-8b-4bit-rt",
+            "qwen3vl-4b", "qwen3vl-4b-4bit"} <= names
     listed = bakeoff_models.list_candidates()
     assert len(listed) == len(bakeoff_models.REGISTRY)
     for name, kind, lic, ok, why in listed:
         assert isinstance(ok, bool) and isinstance(why, str)
         assert kind in ("lines", "pages", "both")
         assert lic and lic != "?"
+
+
+def test_load_lines_source_deva_real_lines(tmp_path):
+    from eval_models import load_lines_source
+
+    root = tmp_path / "deva_real_lines"
+    (root / "lines").mkdir(parents=True)
+    (root / "lines" / "a.png").write_bytes(b"x")
+    (root / "labels.tsv").write_text("a.png\tकुल १२०.५०\n", encoding="utf-8")
+    items = load_lines_source("deva_real_lines", str(root), limit=10)
+    assert len(items) == 1
+    assert items[0]["id"] == "a.png" and items[0]["gt"] == "कुल १२०.५०"
+    assert items[0]["img_path"] == os.path.join(str(root), "lines", "a.png")
+
+
+def test_qwen_fit_pixels_caps_area():
+    """A born-digital page (~8.4 Mpx) must be downscaled to the model budget.
+
+    Regression: native-res pages OOMed the V100 vision tower (8.16 GB alloc).
+    """
+    cand = bakeoff_models.REGISTRY["qwen3vl"]
+    page = np.zeros((3301, 2550, 3), dtype=np.uint8)
+    out = cand._fit_pixels(page)
+    assert out.shape[0] * out.shape[1] <= cand.max_pixels
+    assert out.shape[2] == 3
+    small = np.zeros((100, 200, 3), dtype=np.uint8)
+    assert cand._fit_pixels(small) is small
 
 
 def test_digit_string_and_exact():
@@ -100,6 +129,8 @@ def test_score_lines_with_fake_candidate(tmp_path):
     s = res["summary"]
     assert s["lines"] == 1
     assert s["cer"] == 0.0
+    assert s["cer_median"] == 0.0
+    assert s["catastrophic_rate"] == 0.0
     assert s["digit_exact_rate"] == 1.0
     assert s["exact_match"] == 1.0
 

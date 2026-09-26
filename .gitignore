@@ -29,6 +29,9 @@ kaggle_*/
 kaggle_out*/
 verify_clone/
 
+# ===== Kaggle VLM eval staging (rebuildable; see kaggle/vlm_eval/) =====
+kaggle/vlm_eval/dataset/*.tar.gz
+
 # ===== Upscaled test outputs (regeneratable) =====
 testImg/*_ultrasharp.png
 testIMg/

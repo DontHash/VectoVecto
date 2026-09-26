@@ -49,3 +49,39 @@ caught. Integration (opt-in `--digit-verifier`, flag-only, text never
 changed) follows in the F4 commit. License obligations for shipping:
 attribution/notice, self-hosting allowed, no third-party hosted access,
 >500M MAU / >$250M revenue gate.
+
+## Phase 1 — Qwen3-VL: modern documents first (2026-09-26)
+
+Sets: `deva_real_lines` (first 150 of 745 modern line crops, Gemini-labelled)
+and the first 10 pages of `nepali_pdf_v2` (born-digital government PDFs,
+Gemini-anchor GT). Those 10 pages are the table-heavy hardest slice — on the
+full 41-page set RapidOCR scores CER 0.135. Frozen data; nothing tuned here.
+
+| model | license | mode | CER | bagCER | digit-exact / digBAG | invented (vs GT+rapidocr) | s/unit | verdict |
+|---|---|---|---|---|---|---|---|---|
+| rapidocr (baseline) | Apache-2.0 | lines 150 | **0.0082** | - | **1.000** | 0 | **0.08** | reference |
+| rapidocr (baseline) | Apache-2.0 | pages 10 | 0.5295 | 0.3799 | 0.1351 (digBAG) | 0 | 1.51 | reference |
+| qwen3vl-4b fp16 (V100) | Apache-2.0 | lines 150 | 0.146 | - | 0.077 | - | 3.46 | **loses** (exact 0.713) |
+| qwen3vl-8b-4bit-rt NF4 (T4) | Apache-2.0 | lines 150 | 1.959 mean / **median 0.000** / catastrophic 2% | - | 0.077 | - | 7.20 | **loses** — 72.7% exact vs 92.7%; digits render as **Bengali numerals** (२०७५ → ২০১৫); one runaway repetition (CER 272) drives the mean |
+| qwen3vl-8b-4bit-rt NF4 (T4) | Apache-2.0 | pages 10 | **0.176** [0.129-0.235] / median 0.141 / catastrophic 0% | 0.369 | **0.107** (digBAG) | **224 tokens / 30 digit** (rate 0.47) | **152.7** | **quality win, gate fail** — page CER 3× better than baseline (reading order on tables) but ~100× slower and hallucinates |
+
+**Verdict: no VLM mode ships; the classical engine stays the default.**
+Neither pre-registered role passes: the primary gate wants ≤8 s/page and
+invented ≈0 (measured 152.7 s/page on a T4 and 224 invented tokens on 10
+pages), the verifier gate wants digit-exact ≥0.65 (measured 0.077). What is
+real: on the hard table pages the VLM's reading order cuts CER 0.53 → 0.18
+while bagCER is a tie (0.369 vs 0.380) — the classical weakness there is
+structure/order, not glyph reading. The only defensible VLM use is a hybrid
+(classical/CRNN lines + digits, VLM as an opt-in page reader for table-heavy
+pages, digit verifier as guard) — Phase 5 material, and only on GPUs the
+product does not currently require. The shippable path remains bespoke
+training (W1 line reader + Phases 2–4).
+
+Reproduce (Kaggle T4, runtime NF4 of the Apache-2.0 checkpoint):
+`kaggle/vlm_eval/` kernel + `bhishmbhandari/vectovecto-vlm-eval-data`
+dataset; GCP fp16 recipe in `scripts/gcp_vlm_8b_startup.sh`. Infra lessons:
+DLVM torchaudio ABI needs the shim; `jinja2>=3.1`; `rapidocr` needs
+`onnxruntime`; the in-dir manifest stored Windows separators (fixed —
+`doc_data.load_dataset` now normalizes, POSIX-safe); 8B fp16 does not fit a
+16 GB V100 (CPU offload ⇒ ~1 h+/page with repetition loops — abandoned);
+NF4 needs compute capability ≥7.5 (T4 yes, V100 no).

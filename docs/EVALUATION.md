@@ -82,6 +82,7 @@ No set is trusted without an audit:
 | Letterpress preprocessing (W2.1) | CER −≥5% relative | FAIL — sauvola invents 1754 tokens; raw stays |
 | Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | FAIL so far — best **0.719** (h=48 Kaggle run + ensemble), single model 0.710; RapidOCR remains the engine but the recognizer is now 2.6× RapidOCR on digit-exact (0.719 vs 0.278) and better on line CER. Trajectory: [PLAN.md](PLAN.md) Appendix R2–R4 |
 | Lexicon flag `unknown_word` (W-B) | queue R@10 +≥3pp, no digit regression | **PARTIAL — opt-in.** Frozen modern PDFs: token R@10 0.1477 → **0.1754** (+2.8pp), token P@10 +0.4pp, digit R@10 unchanged; frozen letterpress: neutral (token +0.1pp, digit R@10 0.8832 unchanged). Active only when the optional lexicon is built (`scripts/fetch_nepali_lexicon.py`); the looser `frac=0.5` config reaches +4.5pp on PDFs but costs 1.5pp letterpress digit R@10. Details: [PLAN.md](PLAN.md) Appendix T |
+| VLM page reader (Qwen3-VL-8B, Phase 1) | page CER ≤0.25, ≤8 s/page, invented ~0 | **FAIL on cost + invented.** Same 10 hard `nepali_pdf_v2` pages: CER **0.176** vs RapidOCR 0.530 (median 0.141, digBAG 0.107 vs 0.135) — but **152.7 s/page** (T4, NF4) and 224 invented tokens; lines median CER 0.0 yet digit-exact 0.077 (Bengali numerals). No VLM mode ships; hybrid is Phase 5 material at best. Details: [bakeoff_results.md](../evals/bakeoff_results.md) |
 
 ## Real textbook probe (W-D, unlabeled)
 

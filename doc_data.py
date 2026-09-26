@@ -1284,8 +1284,8 @@ def load_line_dataset(data_dir: str) -> Dict:
     with open(os.path.join(data_dir, "manifest.json"), encoding="utf-8") as f:
         manifest = json.load(f)
     for e in manifest["entries"]:
-        e["_image_path"] = os.path.join(data_dir, e["image"])
-        e["_gt_path"] = os.path.join(data_dir, e["gt"])
+        e["_image_path"] = os.path.join(data_dir, _rel_path(e["image"]))
+        e["_gt_path"] = os.path.join(data_dir, _rel_path(e["gt"]))
     return manifest
 
 
@@ -1502,17 +1502,29 @@ def make_demo_pdf(path: str):
     c.save()
 
 
+def _rel_path(value) -> str:
+    """Manifest-relative path with POSIX separators.
+
+    Manifests built on Windows store ``pages\\x.png``; joining that on POSIX
+    yields a literal backslash filename, so normalize here. Accepts both the
+    plain-string and the frozen ``{"path": ...}`` forms.
+    """
+    if isinstance(value, dict):
+        value = value.get("path", "")
+    return str(value).replace("\\", "/")
+
+
 def load_dataset(data_dir: str) -> Dict:
     with open(os.path.join(data_dir, "manifest.json"), encoding="utf-8") as f:
         manifest = json.load(f)
     for e in manifest["entries"]:
-        e["_clean_path"] = os.path.join(data_dir, e["clean"])
-        e["_degraded_path"] = os.path.join(data_dir, e["degraded"])
-        e["_gt_path"] = os.path.join(data_dir, e["gt"])
+        e["_clean_path"] = os.path.join(data_dir, _rel_path(e["clean"]))
+        e["_degraded_path"] = os.path.join(data_dir, _rel_path(e["degraded"]))
+        e["_gt_path"] = os.path.join(data_dir, _rel_path(e["gt"]))
         if e.get("boxes"):
-            e["_boxes_path"] = os.path.join(data_dir, e["boxes"])
+            e["_boxes_path"] = os.path.join(data_dir, _rel_path(e["boxes"]))
         if e.get("regions"):
-            with open(os.path.join(data_dir, e["regions"]),
+            with open(os.path.join(data_dir, _rel_path(e["regions"])),
                       encoding="utf-8") as rf:
                 e["_regions"] = json.load(rf)
     return manifest

@@ -52,6 +52,26 @@ All notable changes to this project are documented here. The format follows
   per-file errors, previously swallowed audit/verifier errors and the photo
   bicubic fallback are now logged instead of only printed or hidden; the
   Gradio status output is unchanged.
+- **Phase 1 VLM bake-off (Qwen3-VL)**: `qwen3vl` (fp16 8B), `qwen3vl-4b`,
+  `qwen3vl-8b-4bit` and `qwen3vl-8b-4bit-rt` candidates in
+  `evals/harness/bakeoff_models.py`, with a deterministic 1 Mpx pixel cap and
+  a VRAM reservation for offload headroom; `--lines-source deva_real_lines`
+  and median-CER + catastrophic-rate stats in the bake-off summaries. Runs:
+  SPOT V100 fp16 (`scripts/gcp_vlm_8b_startup.sh`) and Kaggle T4 runtime-NF4
+  (`kaggle/vlm_eval/`). Frozen result: the 8B cuts page CER 0.53 → **0.176**
+  on the hardest 10 modern pages (reading order) but costs 152.7 s/page and
+  invents 224 tokens; lines: median CER 0.0 yet digit-exact 0.077 (Bengali
+  numerals) — **no VLM mode ships**; evidence in
+  [evals/bakeoff_results.md](evals/bakeoff_results.md) and
+  [docs/PLAN.md](docs/PLAN.md) Appendix X.
+
+### Fixed
+
+- **`doc_data.load_dataset` on POSIX**: in-dir manifests written on Windows
+  stored `pages\x.png`; joining on Linux produced literal-backslash paths, so
+  every page silently scored zero (GCP pages bake-off). Relative paths are now
+  separator-normalized and the frozen `{"path": ...}` form is accepted;
+  regression test in `tests/test_doc_data_mixed.py`.
 
 ## [1.2.0] - 2026-09-22
 

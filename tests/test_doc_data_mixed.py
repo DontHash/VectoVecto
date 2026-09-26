@@ -7,6 +7,7 @@ gates are measured on this set.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 
@@ -17,6 +18,31 @@ sys.path.insert(0, BASE_DIR)
 
 from doc_data import (build_mixed_dataset, build_photo_proxy_dataset,  # noqa: E402
                       load_dataset, render_mixed_document)
+
+
+def test_load_dataset_normalizes_windows_and_dict_paths(tmp_path):
+    """Manifests are written on Windows (backslashes) and must load on POSIX.
+
+    Regression: a literal ``pages\\x.png`` in a manifest made every page
+    unreadable on Linux, silently scoring zero pages (GCP bake-off).
+    """
+    (tmp_path / "pages").mkdir()
+    (tmp_path / "gt").mkdir()
+    (tmp_path / "pages" / "p00.png").write_bytes(b"x")
+    (tmp_path / "gt" / "p00.txt").write_text("कुल", encoding="utf-8")
+    manifest = {"kind": "real_pages", "entries": [{
+        "id": "p00",
+        "clean": {"path": "pages\\p00.png", "bytes": 1, "sha256": "0"},
+        "degraded": "pages\\p00.png",
+        "gt": "gt\\p00.txt"}]}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest),
+                                            encoding="utf-8")
+    e = load_dataset(str(tmp_path))["entries"][0]
+    assert e["_clean_path"].endswith("pages/p00.png")
+    assert e["_degraded_path"].endswith("pages/p00.png")
+    assert e["_gt_path"].endswith("gt/p00.txt")
+    assert os.path.exists(e["_degraded_path"])
+    assert open(e["_gt_path"], encoding="utf-8").read() == "कुल"
 
 
 def test_render_mixed_document_has_all_region_kinds():

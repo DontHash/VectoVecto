@@ -86,6 +86,21 @@ def load_lines_source(source: str, data_dir: Optional[str],
         return [{"id": e["id"], "img_path": e["_image_path"],
                  "gt": open(e["_gt_path"], encoding="utf-8").read().strip()}
                 for e in entries]
+    if source == "deva_real_lines":
+        root = data_dir or os.path.join(BASE_DIR, "data", "doc_eval",
+                                        "deva_real_lines")
+        labels = os.path.join(root, "labels.tsv")
+        out: List[Dict] = []
+        for line in open(labels, encoding="utf-8"):
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            name, text = line.split("\t", 1)
+            out.append({"id": name, "img_path": os.path.join(root, "lines", name),
+                        "gt": text})
+            if limit and len(out) >= limit:
+                break
+        return out
     raise SystemExit(f"unknown lines source {source!r}")
 
 
@@ -117,6 +132,9 @@ def score_lines(cand, ctx, items: List[Dict], lang: Optional[str]) -> Dict:
     summary = {
         "lines": len(items),
         "cer": float(np.mean(cers)) if cers else None,
+        "cer_median": float(np.median(cers)) if cers else None,
+        "catastrophic_rate": (float(np.mean([c >= 1.0 for c in cers]))
+                              if cers else None),
         "cer_ci": [round(v, 4) for v in doc_metrics.bootstrap_ci(cers, seed=1)]
         if cers else None,
         "exact_match": float(np.mean(exact)) if exact else None,
@@ -172,6 +190,9 @@ def score_pages(cand, ctx, data_dir: str, lang: Optional[str],
     summary = {
         "pages": len(rows),
         "cer": float(np.mean(cers)) if cers else None,
+        "cer_median": float(np.median(cers)) if cers else None,
+        "catastrophic_rate": (float(np.mean([c >= 1.0 for c in cers]))
+                              if cers else None),
         "cer_ci": [round(v, 4) for v in doc_metrics.bootstrap_ci(cers, seed=1)]
         if cers else None,
         "cer_bag": float(np.mean(bags)) if bags else None,
@@ -195,6 +216,8 @@ def print_lines(summary: Dict) -> None:
         print(f"CER                : {s['cer']:.4f}"
               + (f"  CI [{s['cer_ci'][0]:.3f}-{s['cer_ci'][1]:.3f}]"
                  if s.get("cer_ci") else ""))
+        print(f"CER median         : {s['cer_median']:.4f}  "
+              f"catastrophic (CER>=1): {s['catastrophic_rate']:.3f}")
     print(f"exact match        : {s['exact_match']:.3f}")
     if s["digit_exact_rate"] is not None:
         print(f"digit-seq exact    : {s['digit_exact_rate']:.3f} "
@@ -207,9 +230,14 @@ def print_pages(summary: Dict) -> None:
     s = summary
     print("\n=== BAKE-OFF: PAGES ===")
     print(f"pages        : {s['pages']}")
+    if s.get("cer") is None:
+        print("CER          : n/a (no page was scored - check the input paths)")
+        return
     print(f"CER          : {s['cer']:.4f}"
           + (f"  CI [{s['cer_ci'][0]:.3f}-{s['cer_ci'][1]:.3f}]"
              if s.get("cer_ci") else ""))
+    print(f"CER median   : {s['cer_median']:.4f}  "
+          f"catastrophic (CER>=1): {s['catastrophic_rate']:.3f}")
     print(f"bagCER       : {s['cer_bag']:.4f}"
           + (f"  CI [{s['cer_bag_ci'][0]:.3f}-{s['cer_bag_ci'][1]:.3f}]"
              if s.get("cer_bag_ci") else ""))
@@ -225,7 +253,7 @@ def main():
     ap.add_argument("--model", choices=sorted(bakeoff_models.REGISTRY))
     ap.add_argument("--mode", choices=["lines", "pages"])
     ap.add_argument("--lines-source", default="heidata",
-                    choices=["heidata", "nepali_lines"])
+                    choices=["heidata", "nepali_lines", "deva_real_lines"])
     ap.add_argument("--data-dir", default=None)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--lang", default="ne")

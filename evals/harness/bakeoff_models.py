@@ -342,9 +342,156 @@ class BodhanCandidate(Candidate):
         return out
 
 
+class Qwen3VLCandidate(Candidate):
+    """Qwen3-VL Instruct as an OCR-VLM candidate (Apache-2.0).
+
+    Why this model (2026-09-25 research): the independent real-Devanagari
+    stress-test (arXiv 2606.29213) puts Qwen3-VL-8B first among open models
+    (chrF++ 75.2, median CER 0.0, 3.3% catastrophic), while Chandra's weights
+    are OpenRAIL and PaddleOCR-VL has no Devanagari evidence. `load_in_4bit`
+    uses bitsandbytes (needs compute capability >= 7.5: T4/RTX-20xx+; a V100
+    is 7.0 and cannot run NF4). The pre-quantized `*-bnb-4bit` repos carry
+    their quantization config, so only `device_map` is passed there.
+    """
+    name = "qwen3vl"
+    kind = "both"
+    license = "Apache-2.0"
+    model_id = "Qwen/Qwen3-VL-8B-Instruct"
+    load_in_4bit = False
+    pre_quantized = False
+    # A v2 page carries ~2k characters; 1024 tokens would truncate and inflate
+    # the page CER. 4096 covers the longest frozen page with headroom.
+    max_new_tokens = 4096
+
+    def available(self):
+        _shim_broken_torchaudio()
+        try:
+            import torch  # noqa: F401
+            import transformers
+            if not hasattr(transformers, "Qwen3VLForConditionalGeneration"):
+                return False, "transformers too old for Qwen3-VL"
+            if self.load_in_4bit:
+                import bitsandbytes  # noqa: F401
+        except Exception as e:  # noqa: BLE001
+            return False, f"missing dep: {e}"
+        return True, self.model_id
+
+    def load(self, lang=None):
+        _shim_broken_torchaudio()
+        import torch
+        from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+        kwargs: Dict = {"device_map": "auto"}
+        if self.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+            kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16)
+        elif not self.pre_quantized:
+            # fp16, not bf16: a V100 (the GPU we can rent) has no bf16 units.
+            kwargs["torch_dtype"] = (torch.float16 if torch.cuda.is_available()
+                                     else torch.float32)
+            if torch.cuda.is_available():
+                # An 8B fp16 (~16.4 GB) barely fits a 16 GB V100, and a plain
+                # device_map packs it so tightly that the vision pass over a
+                # full page OOMs (8.16 GB activation). Reserve ~4 GB of VRAM
+                # for activations and let the remainder live in host RAM.
+                total = torch.cuda.get_device_properties(0).total_memory / 2**30
+                kwargs["max_memory"] = {0: f"{max(2, int(total) - 4)}GiB",
+                                        "cpu": "12GiB"}
+        processor = AutoProcessor.from_pretrained(self.model_id)
+        try:  # cap page visual tokens (Qwen-VL default is 1280*28*28)
+            processor.image_processor.max_pixels = 1280 * 28 * 28
+        except Exception:  # noqa: BLE001
+            pass
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            self.model_id, **kwargs)
+        model.eval()
+        return {"processor": processor, "model": model, "torch": torch}
+
+    _PROMPT = ("Transcribe all text in this image exactly as written, in "
+               "reading order. Output only the text, no commentary.")
+
+    # Qwen-VL's native visual budget (1280 * 28 * 28 px).
+    max_pixels = 1280 * 28 * 28
+
+    def _fit_pixels(self, img_bgr):
+        """Cap the image area at the model's native budget (~1.0 Mpx).
+
+        A born-digital page is ~8.4 Mpx; feeding it natively OOMs the vision
+        tower on a 16 GB V100 (8.16 GB activation) and the processor knob for
+        this is not stable across transformers versions, so downscale here.
+        """
+        import cv2
+        h, w = img_bgr.shape[:2]
+        if h * w <= self.max_pixels:
+            return img_bgr
+        scale = (self.max_pixels / float(h * w)) ** 0.5
+        return cv2.resize(img_bgr,
+                          (max(1, int(round(w * scale))),
+                           max(1, int(round(h * scale)))),
+                          interpolation=cv2.INTER_AREA)
+
+    def _generate(self, ctx, img_bgr) -> str:
+        import cv2
+        from PIL import Image
+        processor, model, torch = ctx["processor"], ctx["model"], ctx["torch"]
+        pil = Image.fromarray(cv2.cvtColor(self._fit_pixels(img_bgr),
+                                           cv2.COLOR_BGR2RGB))
+        messages = [{"role": "user", "content": [
+            {"type": "image"},
+            {"type": "text", "text": self._PROMPT},
+        ]}]
+        text = processor.apply_chat_template(messages, tokenize=False,
+                                             add_generation_prompt=True)
+        inputs = processor(text=[text], images=[pil], return_tensors="pt")
+        inputs = inputs.to(model.device)
+        with torch.no_grad():
+            out = model.generate(**inputs, max_new_tokens=self.max_new_tokens,
+                                 do_sample=False)
+        trimmed = out[:, inputs["input_ids"].shape[1]:]
+        return processor.batch_decode(trimmed, skip_special_tokens=True)[0].strip()
+
+    def recognize_lines(self, ctx, crops, lang=None):
+        return [self._generate(ctx, c) for c in crops]
+
+    def recognize_pages(self, ctx, images, lang=None):
+        return [self._generate(ctx, img) for img in images]
+
+
+class Qwen3VL8B4Bit(Qwen3VLCandidate):
+    name = "qwen3vl-8b-4bit"
+    model_id = "unsloth/Qwen3-VL-8B-Instruct-bnb-4bit"
+    pre_quantized = True  # quantization config ships with the repo
+
+
+class Qwen3VL8B4BitRT(Qwen3VLCandidate):
+    """Runtime NF4 quantization of the Apache-2.0 checkpoint.
+
+    The pre-quantized unsloth repos trip bitsandbytes' state loader under
+    transformers 5.x (`fix_4bit_weight_quant_state_from_module`), so the
+    Kaggle T4 path quantizes fresh fp16 weights instead. Needs CC >= 7.5.
+    """
+    name = "qwen3vl-8b-4bit-rt"
+    model_id = "Qwen/Qwen3-VL-8B-Instruct"
+    load_in_4bit = True
+
+
+class Qwen3VL4B(Qwen3VLCandidate):
+    name = "qwen3vl-4b"
+    model_id = "Qwen/Qwen3-VL-4B-Instruct"
+
+
+class Qwen3VL4B4Bit(Qwen3VLCandidate):
+    name = "qwen3vl-4b-4bit"
+    model_id = "unsloth/Qwen3-VL-4B-Instruct-bnb-4bit"
+    pre_quantized = True
+
+
 REGISTRY: Dict[str, Candidate] = {
     c.name: c() for c in (RapidOCRCandidate, TesseractCandidate, TrOCRCandidate,
-                          GLMOCRCandidate, BodhanCandidate)
+                          GLMOCRCandidate, BodhanCandidate, Qwen3VLCandidate,
+                          Qwen3VL8B4Bit, Qwen3VL8B4BitRT, Qwen3VL4B,
+                          Qwen3VL4B4Bit)
 }
 
 

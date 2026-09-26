@@ -1905,3 +1905,53 @@ committed for future experiments that stack other levers (h=64, hidden 384,
 more human GT). Artifacts: `gs://neptrans-1048802048334-us-central1/w1_v9/out/`
 and `deva_crnn-0.2.1-py3-none-any.whl` in the same bucket.
 
+## Appendix X - Phase 1 VLM bake-off: Qwen3-VL-8B vs RapidOCR (2026-09-26)
+
+**Question.** Before more bespoke training, does a modern OCR-VLM beat the
+classical engine on *modern* documents? Model choice was research-driven
+(2026-09-25): Qwen3-VL-8B is Apache-2.0 and the only open model with
+independent real-Devanagari evidence (chrF++ 75.2, median CER 0.0, 3.3%
+catastrophic; arXiv 2606.29213); Chandra weights are OpenRAIL, PaddleOCR-VL
+has no Devanagari evidence, PP-OCRv5 has no server devanagari model.
+
+**Setup.** `evals/harness/bakeoff_models.py` gained `qwen3vl` (fp16 8B),
+`qwen3vl-4b`, `qwen3vl-8b-4bit`, `qwen3vl-8b-4bit-rt` (runtime NF4) plus a
+deterministic pixel cap (1 Mpx, the model's native budget — native 8.4 Mpx
+pages OOMed the V100 vision tower at 8.16 GB) and a VRAM reservation
+(`max_memory`) for offload headroom. Runs: 4B fp16 on a SPOT V100
+(`scripts/gcp_vlm_eval_startup.sh`), 8B NF4 on a Kaggle T4
+(`kaggle/vlm_eval/`, runtime quantization — the pre-quantized unsloth repos
+trip bitsandbytes' state loader under transformers 5.x). Frozen sets only:
+150 `deva_real_lines` crops and the first 10 (hardest) `nepali_pdf_v2` pages.
+
+**Measured.**
+
+| metric (same data) | RapidOCR | Qwen3-VL-8B NF4 | Qwen3-VL-4B fp16 |
+|---|---|---|---|
+| lines: CER (mean / median) | **0.0082** / - | 1.959 / **0.000** | 0.146 / - |
+| lines: exact | **0.927** | 0.727 | 0.713 |
+| lines: digit-exact | **1.000** | 0.077 | 0.077 |
+| pages 10: CER | 0.5295 | **0.176** (median 0.141) | - |
+| pages 10: bagCER | 0.3799 | 0.369 | - |
+| pages 10: digBAG | 0.1351 | **0.107** | - |
+| pages 10: invented tokens | **0** | 224 (30 digit) | - |
+| s/line / s/page | **0.08** / **1.51** | 7.2 / **152.7** | 3.46 / - |
+
+**Findings.** (1) On hard table pages the VLM cuts page CER 0.53 → 0.18 —
+reading order, not glyphs: bagCER is a tie (0.369 vs 0.380), so the classical
+failure there is structure. (2) On lines the VLM loses on exact-match
+(0.73 vs 0.93) and catastrophically on digits: Devanagari numerals come out as
+Bengali (२०७५ → ২০১৫), digit-exact 0.077 vs 1.000. (3) Failures are heavy
+tailed: median line CER 0.0 with 2% runaway repetitions (one line repeated
+"८-" for 272× CER). (4) Cost: 152.7 s/page on a T4; the 8B does not fit a
+16 GB V100 in fp16 (CPU offload made a single page take >1 h with loops) and
+NF4 needs compute capability ≥7.5.
+
+**Decision: no VLM mode.** Both pre-registered gates fail — primary
+(≤8 s/page, invented ≈0) and verifier (digit-exact ≥0.65, invented ≈0). The
+classical engine + the W1 line reader stay the product; the VLM's page-order
+strength is Phase 5 material only as a hybrid opt-in on GPUs the product does
+not require. Bespoke training (Phases 2-4) remains the shippable path. Code,
+kernel and scripts committed; the V100 instance is stopped; results table:
+[evals/bakeoff_results.md](../evals/bakeoff_results.md).
+
