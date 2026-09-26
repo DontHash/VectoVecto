@@ -64,6 +64,16 @@ All notable changes to this project are documented here. The format follows
   numerals) — **no VLM mode ships**; evidence in
   [evals/bakeoff_results.md](evals/bakeoff_results.md) and
   [docs/PLAN.md](docs/PLAN.md) Appendix X.
+- **Track D: first real-scan ground truth** (`cornell_real_v1`): 16 content
+  pages from 4 Cornell eCommons Nepali textbook scans (collection 1813/24179),
+  rendered at 200 dpi, engine-prefilled and **human-corrected** (0.0% invalid
+  Devanagari on all pages); frozen manifest with hashes. First real-scan
+  numbers: pipeline page CER **0.0541** [0.036-0.076], bagCER 0.1376, digBAG
+  0.2296 (prose 0.007-0.049; table-of-contents pages 0.073-0.153). The W1
+  CRNN reader **hurts** real scans (0.0541 → 0.1558 with `deva_lines on`) —
+  letterpress-specific, stays off. Builder:
+  `scripts/build_cornell_labeling.py`; details in
+  [docs/PLAN.md](docs/PLAN.md) Appendix Z.
 
 ### Fixed
 

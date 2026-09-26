@@ -15,6 +15,7 @@ limitations are.
 | `evals/manifests/nepali_pdf_v1.json` | 41 pages, first version | same | corrupt text layer — historical only, superseded by v2 |
 | `evals/manifests/nepali_lines_v1.json` | 500 real line crops | HF `himalaya-ai/nepali-deva-ocr-eval` (unknown provenance) | machine-generated, partly misaligned → behavior-only numbers |
 | `evals/manifests/nepali_photo_proxy_v1.json` | 41 pages, camera artifacts | derived from `nepali_pdf_v2` | anchor GT, labeled **proxy** for real photos |
+| `evals/manifests/cornell_real_v1.json` | 16 real textbook scans (4 books, grades 4-7), 564 lines | Cornell eCommons collection 1813/24179 (evaluation only, pages not redistributed) | **human-corrected** from the shipped pipeline pre-fill; 0.0% invalid Devanagari on all pages |
 
 Discipline: frozen sets are never used to tune thresholds. A dataset change is
 a new freeze version, not an edit.
@@ -112,7 +113,13 @@ textbook ground truth.
 - **Line-crop GT** (`nepali_lines`) is machine-generated and partly misaligned;
   numbers from it are behavior-only.
 - **Phone photos** are measured on a synthetic proxy, not a real field set:
-  CER 0.370 medium / 0.757 heavy.
+  CER 0.370 medium / 0.757 heavy. Clean printed textbook scans are now
+  measured on human GT instead: `cornell_real_v1` pipeline CER **0.0541**
+  [0.036-0.076] (prose 0.007-0.049, table-of-contents pages 0.073-0.153) —
+  clean print is a solved case; degradation and tables are the remaining gap.
+  The W1 CRNN reader measurably **hurts** real scans (`deva_lines on`:
+  CER 0.0541 → 0.1558 on the same 16 pages): it is letterpress-specific and
+  stays off by default. Details: [PLAN.md](PLAN.md) Appendix Z.
 - **>2 columns** are unsupported; the router and layout logic assume one or two.
 
 Full history, per-appendices, in [PLAN.md](PLAN.md); the bake-off table is in

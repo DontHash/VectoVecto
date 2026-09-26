@@ -2025,3 +2025,43 @@ the guard does not fire. Wired into the shipped pipeline with
 Devanagari tokens (Gemini noise on degraded cells); absolute CER is inflated
 for every method equally and the comparison is relative.
 
+## Appendix Z - Track D: first real-scan ground truth (cornell_real_v1, 2026-09-26)
+
+**Build.** `scripts/build_cornell_labeling.py` renders 16 content pages (4
+books x 4, 200 dpi) from the Cornell eCommons Nepali textbook scans
+(collection 1813/24179, no text layer; blank versos skipped by ink fraction),
+pre-fills each with the shipped pipeline reading, and writes a side-by-side
+`out/labeling/cornell/index.html`. The project owner corrected every page
+against the scan (~2 h); the frozen set is
+`evals/manifests/cornell_real_v1.json` (16 entries, images + text hashed).
+Validation: 0.0% invalid Devanagari tokens on all 16 pages (the v2 anchor GT
+scores 21-22%); one typo fixed during import (Latin `6` -> `६` in the
+24344 ToC); ISBNs keep Latin digits by convention. The raw correction dump is
+kept next to the data (`corrections_2026-09-26.txt`).
+
+**Measured** (`eval_document.py --frozen`, `--recheck-digits`, lang ne):
+
+| method | CER | bagCER | digBAG | s/page | invented |
+|---|---|---|---|---|---|
+| raw@rapidocr | **0.0541** [0.036-0.076] | 0.1376 | 0.2296 | 2.76 | 0 |
+| pipeline@rapidocr | **0.0541** [0.036-0.074] | 0.1376 | 0.2296 | 3.75 | 0 |
+
+Per page: prose 0.007-0.049 (excellent); the four table-of-contents pages are
+the weak spot, 0.073-0.153 with digBAG 0.62-0.71 (page-number columns). The
+ToCs are 3-column tables, so the Appendix Y grid (>=4 columns) does not fire -
+a measured, concrete extension target (relax to >=3 columns with the
+title-page/poetry guards kept; gate on the ToC pages + the frozen regression
+sets).
+
+**Reader on real scans: hurts.** `deva_lines on` vs `off` on the same 16
+pages: mean CER 0.0541 -> **0.1558** (+10.2pp; every page worse, +0.02 to
++0.24). The W1 CRNN is letterpress-specific; the shipped default (off) is
+correct on modern print scans, and "auto" must never engage here.
+
+**What this changes.** The photo-proxy numbers (CER 0.370 medium / 0.757
+heavy) were the only scan-domain evidence; clean printed textbook scans are
+now measured on human GT at **CER 0.054** - a solved case. The remaining
+real-world gap is degradation (photos, faxes, aged print), which the proxy
+only approximates, plus table pages (v2 court registers 0.255 after Appendix
+Y; textbook ToCs 0.12-0.15).
+

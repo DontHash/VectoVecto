@@ -1,0 +1,300 @@
+{
+  "freeze_version": 1,
+  "name": "cornell_real_v1",
+  "created": "2026-09-26 19:21:26",
+  "license": "Cornell eCommons collection 1813/24179 (scans; evaluation only, pages not redistributed)",
+  "provenance": "16 content pages x 4 Nepali school textbooks (grades 4-7, v.s. 2052-2068), 200 dpi render; engine pre-fill corrected by the project owner 2026-09-26",
+  "notes": "First real-scan Devanagari GT. invalid-rate 0.0 on all pages; ISBNs keep Latin digits.",
+  "data_dir": "data/doc_eval/cornell_real",
+  "n_entries": 16,
+  "entries": [
+    {
+      "id": "cornell_1813_24184_p002",
+      "clean": {
+        "path": "pages/cornell_1813_24184_p002.png",
+        "bytes": 1608434,
+        "sha256": "ca4741a94b69374274a82f9fac3fbdada45b327e9181052fc946751c2bcee5e4"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24184_p002.png",
+        "bytes": 1608434,
+        "sha256": "ca4741a94b69374274a82f9fac3fbdada45b327e9181052fc946751c2bcee5e4"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24184_p002.txt",
+        "bytes": 205,
+        "sha256": "c064c0b7d56f48d2bd0009f37caeb38197572c810c8e64194ce1f6d5d90088be"
+      }
+    },
+    {
+      "id": "cornell_1813_24184_p004",
+      "clean": {
+        "path": "pages/cornell_1813_24184_p004.png",
+        "bytes": 2416930,
+        "sha256": "f771c3f131382d24bec4201a4c31f59169ec1a4bc6dbfcf0991d4863c3036d6e"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24184_p004.png",
+        "bytes": 2416930,
+        "sha256": "f771c3f131382d24bec4201a4c31f59169ec1a4bc6dbfcf0991d4863c3036d6e"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24184_p004.txt",
+        "bytes": 3611,
+        "sha256": "e013dc166d40147c5a5ba3dded69d43d8957590b6bd6cfa68ce7886071992ae4"
+      }
+    },
+    {
+      "id": "cornell_1813_24184_p005",
+      "clean": {
+        "path": "pages/cornell_1813_24184_p005.png",
+        "bytes": 2690361,
+        "sha256": "fcd30cc51d151bb549e5d0ed6aac1bfe8a32488fe7718c5354c321f9a1429c0b"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24184_p005.png",
+        "bytes": 2690361,
+        "sha256": "fcd30cc51d151bb549e5d0ed6aac1bfe8a32488fe7718c5354c321f9a1429c0b"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24184_p005.txt",
+        "bytes": 5083,
+        "sha256": "d1239bcc1cfa83b6ec5a481f0a71cdad0996a6e763557dd5ee604d1c8ae78d6b"
+      }
+    },
+    {
+      "id": "cornell_1813_24184_p006",
+      "clean": {
+        "path": "pages/cornell_1813_24184_p006.png",
+        "bytes": 1968965,
+        "sha256": "fa829d385718359fe23f3ee650bc79c0fbf72b16eb7e183ecc546ca47e17252a"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24184_p006.png",
+        "bytes": 1968965,
+        "sha256": "fa829d385718359fe23f3ee650bc79c0fbf72b16eb7e183ecc546ca47e17252a"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24184_p006.txt",
+        "bytes": 1400,
+        "sha256": "162a143583a399c6a85c93fed12c3c9574f60b78f3ded8d07217da162b924d63"
+      }
+    },
+    {
+      "id": "cornell_1813_24344_p002",
+      "clean": {
+        "path": "pages/cornell_1813_24344_p002.png",
+        "bytes": 1513877,
+        "sha256": "0f515029413a95113062fd4a30f479ddeba572798ac80400b778f742a48fd014"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24344_p002.png",
+        "bytes": 1513877,
+        "sha256": "0f515029413a95113062fd4a30f479ddeba572798ac80400b778f742a48fd014"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24344_p002.txt",
+        "bytes": 402,
+        "sha256": "e524339a47e17df603a71cf6286e0f74b6e3791f98ee11250b3cf59b225d64af"
+      }
+    },
+    {
+      "id": "cornell_1813_24344_p003",
+      "clean": {
+        "path": "pages/cornell_1813_24344_p003.png",
+        "bytes": 1731372,
+        "sha256": "8c25d0c0962877183fdb0267a48e7adb7f62ef4a934ec0a26a598927d06942f0"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24344_p003.png",
+        "bytes": 1731372,
+        "sha256": "8c25d0c0962877183fdb0267a48e7adb7f62ef4a934ec0a26a598927d06942f0"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24344_p003.txt",
+        "bytes": 1000,
+        "sha256": "875167eae6819bcf9e3ba72156d630446c5260ca23976aa0824fde63ea9d395f"
+      }
+    },
+    {
+      "id": "cornell_1813_24344_p004",
+      "clean": {
+        "path": "pages/cornell_1813_24344_p004.png",
+        "bytes": 2348764,
+        "sha256": "ead25b66b479de9fec5660b29e16930f528ce2143dc8a9c3ba780345f5322bc4"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24344_p004.png",
+        "bytes": 2348764,
+        "sha256": "ead25b66b479de9fec5660b29e16930f528ce2143dc8a9c3ba780345f5322bc4"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24344_p004.txt",
+        "bytes": 4644,
+        "sha256": "d529a4bb27ab6a3588e82e6451f1fde13035c1fea1ebbbec1cf1cfd95fb043d5"
+      }
+    },
+    {
+      "id": "cornell_1813_24344_p006",
+      "clean": {
+        "path": "pages/cornell_1813_24344_p006.png",
+        "bytes": 1881555,
+        "sha256": "751b33ff3966968fdcad30bdcdc075972da5ea438306d18bcc9534559dd4f2f7"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_24344_p006.png",
+        "bytes": 1881555,
+        "sha256": "751b33ff3966968fdcad30bdcdc075972da5ea438306d18bcc9534559dd4f2f7"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_24344_p006.txt",
+        "bytes": 2186,
+        "sha256": "acbf9bf0ff81941a8070b46fce8309100242ab9babcddd2400c4856d61ba234a"
+      }
+    },
+    {
+      "id": "cornell_1813_44173_p003",
+      "clean": {
+        "path": "pages/cornell_1813_44173_p003.png",
+        "bytes": 3016538,
+        "sha256": "80b00d097ce825f0167af81e01d745b841579d0d98ffc378c84f023ec3b18f6d"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44173_p003.png",
+        "bytes": 3016538,
+        "sha256": "80b00d097ce825f0167af81e01d745b841579d0d98ffc378c84f023ec3b18f6d"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44173_p003.txt",
+        "bytes": 1613,
+        "sha256": "e7f030d0e3b7ab4f019671ecca32df948b5abc0225ddb18dd22222c6b46b1aaf"
+      }
+    },
+    {
+      "id": "cornell_1813_44173_p004",
+      "clean": {
+        "path": "pages/cornell_1813_44173_p004.png",
+        "bytes": 3591293,
+        "sha256": "a1748f580fde4333ceb1fda461b6ea653fe0575613cf20b1853a19c6b7d2bf4c"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44173_p004.png",
+        "bytes": 3591293,
+        "sha256": "a1748f580fde4333ceb1fda461b6ea653fe0575613cf20b1853a19c6b7d2bf4c"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44173_p004.txt",
+        "bytes": 8047,
+        "sha256": "711c00579914f9cafc4da8b7314ec56002f4871afb35b93c72a5b81d4b7c41db"
+      }
+    },
+    {
+      "id": "cornell_1813_44173_p005",
+      "clean": {
+        "path": "pages/cornell_1813_44173_p005.png",
+        "bytes": 3026789,
+        "sha256": "89a8762b333a1f603c6b9c4ba081eabd56387429c4644ca8a7087bd88ac4b302"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44173_p005.png",
+        "bytes": 3026789,
+        "sha256": "89a8762b333a1f603c6b9c4ba081eabd56387429c4644ca8a7087bd88ac4b302"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44173_p005.txt",
+        "bytes": 1512,
+        "sha256": "fad0bbcd64fb84b7ac77a0c0519d88e2da89e63d89a92803a5c002c930413413"
+      }
+    },
+    {
+      "id": "cornell_1813_44173_p006",
+      "clean": {
+        "path": "pages/cornell_1813_44173_p006.png",
+        "bytes": 3334498,
+        "sha256": "280b59f086b3a90dcd475bf76404d1bfa4b6c56208318641ce502e1e966bff4d"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44173_p006.png",
+        "bytes": 3334498,
+        "sha256": "280b59f086b3a90dcd475bf76404d1bfa4b6c56208318641ce502e1e966bff4d"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44173_p006.txt",
+        "bytes": 1335,
+        "sha256": "2fda767c95b4bdefbf15702a00e7d3fca82d4ac9ee2cc1b46a605dff4eec60d7"
+      }
+    },
+    {
+      "id": "cornell_1813_44175_p004",
+      "clean": {
+        "path": "pages/cornell_1813_44175_p004.png",
+        "bytes": 3764680,
+        "sha256": "eae3a78c4fb93b88ea41d956c30d9bd65b4be83fea91c86eb3ca7c58dd1c2b8c"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44175_p004.png",
+        "bytes": 3764680,
+        "sha256": "eae3a78c4fb93b88ea41d956c30d9bd65b4be83fea91c86eb3ca7c58dd1c2b8c"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44175_p004.txt",
+        "bytes": 7859,
+        "sha256": "bb52f32b9f113c039383a1c66cd9b5269ffbf86b98fb86de678d3ad3f4d68cf7"
+      }
+    },
+    {
+      "id": "cornell_1813_44175_p006",
+      "clean": {
+        "path": "pages/cornell_1813_44175_p006.png",
+        "bytes": 3380673,
+        "sha256": "cb9286bd9a30fd8183d02090899e06c57ff8a8fe0a0d65cb937eea4d91e78f3c"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44175_p006.png",
+        "bytes": 3380673,
+        "sha256": "cb9286bd9a30fd8183d02090899e06c57ff8a8fe0a0d65cb937eea4d91e78f3c"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44175_p006.txt",
+        "bytes": 1675,
+        "sha256": "1ab553baac76604676259f59e4a813f03014aa76dc86fa3ae68be7134d7ef738"
+      }
+    },
+    {
+      "id": "cornell_1813_44175_p008",
+      "clean": {
+        "path": "pages/cornell_1813_44175_p008.png",
+        "bytes": 3452174,
+        "sha256": "35f4bb34a8e6b1c8749595e54aac74b6a73ed62f04866e5105ee45f4912c3ce3"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44175_p008.png",
+        "bytes": 3452174,
+        "sha256": "35f4bb34a8e6b1c8749595e54aac74b6a73ed62f04866e5105ee45f4912c3ce3"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44175_p008.txt",
+        "bytes": 2009,
+        "sha256": "67dba9bc4912a0f5c3010d9e589c71ee1108af78477a0d3fbb9eb5feec45cc44"
+      }
+    },
+    {
+      "id": "cornell_1813_44175_p010",
+      "clean": {
+        "path": "pages/cornell_1813_44175_p010.png",
+        "bytes": 3325794,
+        "sha256": "3f54eaad99bc322c65296475cad0d79d89452b04a33075096abe25be3ff219cc"
+      },
+      "degraded": {
+        "path": "pages/cornell_1813_44175_p010.png",
+        "bytes": 3325794,
+        "sha256": "3f54eaad99bc322c65296475cad0d79d89452b04a33075096abe25be3ff219cc"
+      },
+      "gt": {
+        "path": "gt/cornell_1813_44175_p010.txt",
+        "bytes": 1690,
+        "sha256": "fd1aa985d76d218d500256addec3623071d3d31bfa1474dd45db76fc77c5bed5"
+      }
+    }
+  ]
+}
