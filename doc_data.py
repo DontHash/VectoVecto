@@ -207,11 +207,11 @@ def render_synthetic_invoice(seed: int = 0, dpi: int = 300) -> Tuple[np.ndarray,
 # ---------------------------------------------------------------------------
 
 def pdf_to_pages(pdf_path: str, dpi: int = 200):
-    """Yield (page_index, BGR image, text-layer GT, clean-render CER floor).
+    """Yield (page_index, BGR image, text-layer text).
 
     NOTE: text-layer order is the PDF's internal order; multi-column layouts may
-    not be in reading order. The per-page floor CER (OCR of the *clean* render
-    vs its own text layer) quantifies that noise for every method comparison.
+    not be in reading order. A per-page clean-render CER floor is computed by
+    the callers that need it (ocr of the clean render vs its own text layer).
     """
     import pypdfium2 as pdfium
     doc = pdfium.PdfDocument(pdf_path)
