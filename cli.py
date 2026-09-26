@@ -322,7 +322,9 @@ def main():
                           "trained recognizer for line crops (measured -42% "
                           "page CER on letterpress scans; it hurts on modern "
                           "table pages); auto = engage only on running-text "
-                          "pages; off = backend reading only (default)")
+                          "pages with aged/letterpress paper (clean modern "
+                          "print stays on the engine); off = backend reading "
+                          "only (default)")
     doc.add_argument("--deva-ckpt", default=None,
                      help="path to the line-reader checkpoint (defaults "
                           "to $VECTOVECTO_DEVA_CKPT or weights/)")

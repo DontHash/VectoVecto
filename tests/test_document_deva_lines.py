@@ -55,6 +55,11 @@ def _img(h=400, w=600):
     return np.full((h, w, 3), 255, dtype=np.uint8)
 
 
+def _img_letterpress(h=500, w=600):
+    """Beige aged paper: saturated (55) and not bright (lum ~204)."""
+    return np.full((h, w, 3), (170, 200, 225), dtype=np.uint8)
+
+
 def test_ocr_page_replaces_texts_and_records_provenance(monkeypatch):
     backend = _FakeBackend(["मिति २०८१", "कुल जम्मा"])
     reader = _FakeReader(["मिति २०८१-०४-२७", "कुल जम्मा रु. ५०"])
@@ -145,6 +150,46 @@ def test_auto_policy_skips_cell_like_pages(monkeypatch):
     res2 = ocr_page(_img(), backend="fake", lang="ne", deva_lines="on")
     assert reader.calls == 1, "explicit --deva-lines on must force the reader"
     assert res2.meta["deva_line_reader"]["active"] is True
+
+
+def test_auto_gate_requires_letterpress_paper(monkeypatch):
+    """`auto` must not engage on clean modern print (PLAN.md Appendix AA).
+
+    The reader hurts real modern scans (+10.2pp on cornell_real_v1) which are
+    still line-shaped, so geometry alone is not enough: the paper must look
+    aged/letterpress (saturated, not bright white).
+    """
+    from deva_reader import page_looks_letterpress
+
+    assert page_looks_letterpress(_img_letterpress()) is True
+    assert page_looks_letterpress(_img()) is False
+    assert page_looks_letterpress(None) is False
+
+    class _B:
+        name = "fake"
+
+        def run(self, img, lang=None):
+            boxes = [(0, 0, 600, 60), (0, 200, 600, 260), (0, 400, 600, 460)]
+            tokens = [Token(text="कुल", conf=90.0, bbox=b, backend="fake")
+                      for b in boxes]
+            return OCRResult(text="x", tokens=tokens, backend="fake", meta={})
+
+        def recognize_crop(self, crop, lang=None):
+            return "", 0.0
+
+    reader = _FakeReader(["कुल जम्मा", "दोस्रो", "तेस्रो"])
+    monkeypatch.setattr(document_ocr, "get_backend", lambda name: _B())
+    monkeypatch.setattr(deva_reader, "get_reader", lambda ckpt=None: reader)
+
+    modern = ocr_page(_img(), backend="fake", lang="ne", deva_lines="auto")
+    assert reader.calls == 0, "clean modern paper must not engage auto"
+    info = modern.meta["deva_line_reader"]
+    assert info["active"] is False and "modern" in info["reason"]
+
+    aged = ocr_page(_img_letterpress(), backend="fake", lang="ne",
+                    deva_lines="auto")
+    assert reader.calls == 1, "letterpress paper must engage auto"
+    assert aged.meta["deva_line_reader"]["active"] is True
 
 
 def test_merge_line_boxes_stops_at_a_table_rule():

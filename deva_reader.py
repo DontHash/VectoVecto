@@ -17,6 +17,7 @@ import os
 import threading
 from typing import Dict, List, Optional
 
+import cv2
 import numpy as np
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -122,6 +123,40 @@ def page_is_line_like(tokens, page_width: int, min_median_aspect: float = 5.0,
         widths.append((x1 - x0) / max(1, page_width))
     return (float(np.median(aspects)) >= min_median_aspect
             and float(np.median(widths)) >= min_width_frac)
+
+
+# `auto` also requires an aged-paper signal (PLAN.md Appendix AA): the reader
+# is trained on letterpress and measurably hurts clean modern print
+# (cornell_real_v1: page CER 0.054 -> 0.156 with the reader on) even though
+# that is still line-shaped running text. Measured on the frozen sets, paper
+# colour separates them cleanly: letterpress scans have saturated (beige)
+# paper (median 46, min 29) with luminance <= 213, while modern scans are
+# neutral (saturation 0, luminance 231) and born-digital pages bright
+# (luminance 243-254, even the tinted ones).
+AUTO_MIN_PAPER_SAT = 15.0
+AUTO_MAX_PAPER_LUM = 225.0
+
+
+def page_looks_letterpress(img: Optional[np.ndarray],
+                           min_sat: float = AUTO_MIN_PAPER_SAT,
+                           max_lum: float = AUTO_MAX_PAPER_LUM) -> bool:
+    """True when the paper looks aged/letterpress-like (the `auto` gate).
+
+    Otsu paper pixels must be both saturated (beige) and not bright white.
+    Both conditions hold on the letterpress frozen set and fail on the modern
+    scans and born-digital PDFs where the reader was measured to hurt.
+    """
+    if img is None or img.size == 0:
+        return False
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    t, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    paper = gray > t
+    if int(paper.sum()) < 100:
+        return False
+    paper_bgr = img[paper].astype(np.int16)
+    sat = float((paper_bgr.max(axis=1) - paper_bgr.min(axis=1)).mean())
+    lum = float(gray[paper].mean())
+    return sat >= min_sat and lum <= max_lum
 
 
 class DevaLineReader:

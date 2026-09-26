@@ -447,7 +447,9 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     `deva_lines` selects the Devanagari line reader: "off" (default, the
     measured-safe shipped behaviour), "on" (force it: -42% page CER on frozen
     letterpress scans, but measured to hurt on modern table pages), "auto"
-    (engage when a checkpoint exists and the page looks like running text).
+    (engage when a checkpoint exists, the page looks like running text *and*
+    the paper looks aged/letterpress — clean modern print is excluded because
+    the reader measurably hurts there).
     Line texts are replaced only when the model output is plausible; otherwise
     the backend reading stays. Provenance lands in `meta["deva_line_reader"]`
     and `Token.text_source`.
@@ -508,7 +510,8 @@ def apply_deva_line_reader(result: OCRResult, img_bgr: np.ndarray,
     model output is implausible. Never raises.
     """
     from deva_reader import (DevaLineReader, get_reader,  # noqa: WPS433
-                             merge_line_boxes, page_is_line_like)
+                             merge_line_boxes, page_is_line_like,
+                             page_looks_letterpress)
     from doc_metrics import digit_tokens  # noqa: WPS433
     reader = get_reader(deva_ckpt)
     if reader is None:
@@ -518,6 +521,11 @@ def apply_deva_line_reader(result: OCRResult, img_bgr: np.ndarray,
     if not force and not page_is_line_like(result.tokens, img_bgr.shape[1]):
         result.meta["deva_line_reader"] = {
             "active": False, "reason": "page layout is cell-like (auto)"}
+        return result.meta["deva_line_reader"]
+    if not force and not page_looks_letterpress(img_bgr):
+        result.meta["deva_line_reader"] = {
+            "active": False,
+            "reason": "paper looks modern, not letterpress (auto)"}
         return result.meta["deva_line_reader"]
     old_tokens = result.tokens
     groups = merge_line_boxes(old_tokens, img_bgr)

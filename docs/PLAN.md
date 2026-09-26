@@ -2065,3 +2065,34 @@ real-world gap is degradation (photos, faxes, aged print), which the proxy
 only approximates, plus table pages (v2 court registers 0.255 after Appendix
 Y; textbook ToCs 0.12-0.15).
 
+## Appendix AA - reader `auto` gate: letterpress paper only (2026-09-26)
+
+**Why.** Appendix Z measured that the W1 CRNN reader hurts real modern scans
+(cornell_real_v1 page CER 0.0541 -> 0.1558 with `deva_lines on`, every page
+worse). Those pages are line-shaped running text, so `auto`'s existing
+geometry gate (`page_is_line_like`: median box aspect >= 5, width >= 25% of
+the page) would have engaged there and shipped the +10pp harm.
+
+**Signal.** Paper colour separates the measured sets cleanly (Otsu paper
+pixels): letterpress heiDATA saturation median 46 (min 29), luminance
+165-213; cornell scans saturation 0.0 (all 16); born-digital v2 luminance
+243-254 (even its eight tinted court pages, sat 31-38, are bright).
+`deva_reader.page_looks_letterpress` requires **saturation >= 15 and
+luminance <= 225**; `auto` now needs both gates, `on`/`off` are untouched.
+
+**Measured** (`deva_lines="auto"` over every frozen page):
+
+| set | pages | auto engaged | auto CER | reader off / forced on |
+|---|---|---|---|---|
+| heidata_printed (letterpress) | 69 | 42 | **0.3730** | 0.4335 / 0.2531 |
+| cornell_real (modern scans) | 16 | **0** | **0.0541** | 0.0541 / 0.1558 |
+| nepali_pdf_v2 (born-digital) | 41 | **0** | **0.3379** | 0.3379 / hurts |
+| nepali_photo_proxy | 41 | **0** | - | hurts |
+
+On heidata the paper gate excludes nobody (all 69 pages pass it): the 27
+pages `auto` skips are the pre-existing geometry gate's subset, so this
+change adds zero exclusions there and the letterpress behaviour is
+unchanged. On every modern set the engagement is now 0 and the CER is
+exactly the reader-off number. Tests: `page_looks_letterpress` positive/
+negative + an `auto` engagement test on aged vs white paper.
+

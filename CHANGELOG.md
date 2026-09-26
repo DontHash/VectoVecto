@@ -85,6 +85,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Reader `auto` gate tightened** (`deva_reader.page_looks_letterpress`):
+  `--deva-lines auto` now requires aged/letterpress paper (Otsu-paper
+  saturation ≥15 and luminance ≤225) in addition to the running-text geometry
+  gate, because the CRNN reader measurably hurts real modern scans
+  (cornell_real_v1: 0.0541 → 0.1558 forced). Measured: `auto` engages 0/16
+  cornell, 0/41 born-digital, 0/41 photo-proxy (CER exactly reader-off) and
+  42/69 heidata unchanged. `on`/`off` untouched. Appendix AA.
 - **Table cell-major reading order** (`document_layout.py`): a guarded grid
   path (≥4 columns, ≥4 rows, ≥4 cells/row, short cells) reads table pages
   cell-major — wrapped lines of a cell together — instead of the engine's
