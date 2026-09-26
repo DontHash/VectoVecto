@@ -31,6 +31,9 @@ import numpy as np
 
 import sr_engine
 from sr_engine import load_engine, tiled_run
+from logging_setup import get_logger
+
+_LOG = get_logger("smart_upscaler")
 
 import vector_raster_hybrid as vrh  # noqa: F401  (kept for API compatibility)
 from vector_raster_hybrid import (
@@ -166,6 +169,7 @@ class SmartUpscaler:
             print(f"  [SmartUpscaler] engine ready: {self.engine}")
         except Exception as e:  # noqa: BLE001
             print(f"  [SmartUpscaler] engine load failed ({e}); using bicubic fallback")
+            _LOG.warning("engine load failed (%s); using bicubic fallback", e)
             self.engine = sr_engine.ClassicalEngine("bicubic", 4)
 
     def _init_fidelity(self):

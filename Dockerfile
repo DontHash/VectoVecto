@@ -42,7 +42,7 @@ COPY document_export.py document_layout.py document_ocr.py \
      document_router.py document_verifier.py ./
 COPY smart_upscaler.py sr_engine.py srvggnet.py tv_refinement.py \
      vector_raster_hybrid.py ./
-COPY lexicon.py ./
+COPY lexicon.py logging_setup.py ./
 
 # Bundled OFL font for the Devanagari PDF text layer and overlay annotations.
 COPY fonts/ fonts/

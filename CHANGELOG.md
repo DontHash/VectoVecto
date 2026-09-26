@@ -46,6 +46,12 @@ All notable changes to this project are documented here. The format follows
   font → system fonts (Mangal/Lohit/Noto) → Helvetica with a logged warning.
   Noto Sans Devanagari was measured to lose ASCII letters in reportlab's
   subsetter, hence Mukta; extraction round-trips are pinned by tests.
+- **W5: logging foundation**: `logging_setup.py` configures a `vectovecto.*`
+  stderr logger (idempotent, `VECTOVECTO_LOG_LEVEL`, default INFO) from both
+  entry points. Server-side pipeline failures, unreadable inputs, CLI
+  per-file errors, previously swallowed audit/verifier errors and the photo
+  bicubic fallback are now logged instead of only printed or hidden; the
+  Gradio status output is unchanged.
 
 ## [1.2.0] - 2026-09-22
 

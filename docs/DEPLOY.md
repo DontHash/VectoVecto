@@ -23,6 +23,7 @@ Environment knobs:
 | `VECTOVECTO_USER` / `VECTOVECTO_PASSWORD` | unset | when both are set, Gradio requires HTTP basic auth |
 | `VECTOVECTO_DOCUMENT_ONLY` | unset | `1` hides the photo tab (its upscale weights are non-commercial and not in the image) |
 | `VECTOVECTO_LEXICON` | `data/lexicon/nepali_lexicon_v1.txt` | path override for the optional `unknown_word` lexicon; not in the image, so the flag is off unless a lexicon is mounted (see `scripts/fetch_nepali_lexicon.py`) |
+| `VECTOVECTO_LOG_LEVEL` | `INFO` | stderr log level for the studio/CLI (`DEBUG`, `WARNING`, ...) |
 
 For a private demo, always set the auth pair:
 

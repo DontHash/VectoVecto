@@ -80,6 +80,7 @@ py-modules = [
   "document_router",
   "document_verifier",
   "lexicon",
+  "logging_setup",
   "smart_upscaler",
   "sr_engine",
   "srvggnet",

@@ -41,8 +41,9 @@ PRODUCT_MODULES = [
     "app", "calibration", "cli", "degradation_document", "doc_data",
     "doc_metrics", "document_export", "document_layout", "document_ocr",
     "document_orientation", "document_pipeline", "document_restore",
-    "document_router", "document_verifier", "lexicon", "smart_upscaler",
-    "sr_engine", "srvggnet", "tv_refinement", "vector_raster_hybrid",
+    "document_router", "document_verifier", "lexicon", "logging_setup",
+    "smart_upscaler", "sr_engine", "srvggnet", "tv_refinement",
+    "vector_raster_hybrid",
 ]
 
 a_cli = Analysis(

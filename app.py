@@ -25,6 +25,9 @@ if WORKSPACE_DIR not in sys.path:
     sys.path.insert(0, WORKSPACE_DIR)
 
 from smart_upscaler import SmartUpscaler
+from logging_setup import configure_logging, get_logger
+
+_LOG = get_logger("app")
 
 # Output storage directory
 OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "web_outputs")
@@ -129,6 +132,7 @@ def process_document(
         if not all_pages:
             pages = pages[:1]
         if not pages:
+            _LOG.warning("could not read PDF %s (no pages rendered)", pdf_file)
             return None, None, None, None, None, "Could not read that PDF."
         _idx0, img_bgr, _gt0 = pages[0]
         stem = f"pdf_{ts}"
@@ -141,6 +145,8 @@ def process_document(
                     make_pdf=want_pdf, make_overlay=want_overlay,
                     make_txt=want_txt, make_json=True))
         except Exception as e:  # noqa: BLE001
+            _LOG.exception("document pipeline failed (pdf=%s, stem=%s)",
+                           pdf_file, stem)
             return None, None, None, None, None, f"**Document pipeline failed:** {e}"
         result = results[0]
         pages_done = len(results)
@@ -160,6 +166,7 @@ def process_document(
             from document_orientation import load_image_bgr
             img_bgr = load_image_bgr(input_img)
             if img_bgr is None:
+                _LOG.warning("could not read image %s", input_img)
                 return None, None, None, None, None, "Could not read that image."
         else:
             img_bgr = cv2.cvtColor(input_img, cv2.COLOR_RGB2BGR)
@@ -171,6 +178,7 @@ def process_document(
                 make_pdf=want_pdf, make_overlay=want_overlay,
                 make_txt=want_txt, make_json=True)
         except Exception as e:  # noqa: BLE001
+            _LOG.exception("document pipeline failed (image, stem=%s)", stem)
             return None, None, None, None, None, f"**Document pipeline failed:** {e}"
 
     orig_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -251,15 +259,20 @@ def process_image(
 
     # Step 1: Run Smart Router Pipeline
     upscaler = _get_upscaler(model_choice)
-    out_bgr = upscaler.upscale(
-        img=img_bgr,
-        scale=scale,
-        mode=mode,
-        fast=fast_mode,
-        grain_strength=grain_val,
-        export_svg_path=svg_path,
-        export_mask_path=mask_path
-    )
+    try:
+        out_bgr = upscaler.upscale(
+            img=img_bgr,
+            scale=scale,
+            mode=mode,
+            fast=fast_mode,
+            grain_strength=grain_val,
+            export_svg_path=svg_path,
+            export_mask_path=mask_path
+        )
+    except Exception:
+        _LOG.exception("photo upscale failed (model=%s, mode=%s)",
+                       model_choice, mode)
+        raise
 
     # Convert results back to RGB for Gradio display
     out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
@@ -323,6 +336,7 @@ CUSTOM_CSS = """
 
 
 def create_app():
+    configure_logging()
     # Hosted deployments can hide the photo tab (its upscale weights are
     # non-commercial and stay out of the image): VECTOVECTO_DOCUMENT_ONLY=1.
     document_only = os.environ.get("VECTOVECTO_DOCUMENT_ONLY", "") == "1"
@@ -487,6 +501,7 @@ def main():
     import argparse
     import os
 
+    configure_logging()
     parser = argparse.ArgumentParser(description="Launch VectoVecto Studio")
     parser.add_argument("--host", default=os.environ.get("VECTOVECTO_HOST",
                                                          "127.0.0.1"),
@@ -506,6 +521,9 @@ def main():
     auth = (user, password) if user and password else None
 
     app = create_app()
+    _LOG.info("launching studio on %s:%s (auth=%s, document_only=%s)",
+              args.host, args.port, bool(auth),
+              os.environ.get("VECTOVECTO_DOCUMENT_ONLY", "") == "1")
     print(f"\n=======================================================")
     print(f"  VectoVecto — Document Restore Studio running on:")
     print(f"  http://{args.host}:{args.port}"

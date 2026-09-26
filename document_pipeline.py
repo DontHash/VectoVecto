@@ -37,6 +37,9 @@ from document_orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
                                   RotationInfo, detect_rotation, infer_angle,
                                   rotate_bgr, vertical_fraction)
 from document_restore import fit_max_side, restore_document
+from logging_setup import get_logger
+
+_LOG = get_logger("document_pipeline")
 
 
 @dataclass
@@ -169,6 +172,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
             conflicts = compare_digit_streams(result, audit)
         except Exception as e:  # noqa: BLE001
             audit_error = str(e)
+            _LOG.warning("audit OCR pass failed: %s", e)
         return _Pass(restored, display, primary_img, primary_name, result,
                      conflicts, audit_error)
 
@@ -234,6 +238,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
             }
         except Exception as e:  # noqa: BLE001
             result.meta["digit_verifier_error"] = str(e)
+            _LOG.warning("digit verifier failed: %s", e)
     result.meta["primary_stream"] = p.primary_name
     if p.audit_error:
         result.meta["audit_error"] = p.audit_error

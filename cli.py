@@ -34,6 +34,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE_DIR)
 
 from sr_engine import IMG_EXTS, Engine, load_engine  # noqa: E402
+from logging_setup import configure_logging, get_logger  # noqa: E402
+
+_LOG = get_logger("cli")
 
 
 def list_inputs(path: str, recursive: bool) -> List[str]:
@@ -173,6 +176,7 @@ def run_document_mode(args) -> int:
         except Exception as e:  # noqa: BLE001
             failed += 1
             records.append({"src": src, "name": name, "status": "error", "error": str(e)})
+            _LOG.warning("document failed for %s: %s", name, e)
             print(f"  FAILED {name}: {e}")
             return "error", None
 
@@ -234,6 +238,7 @@ def run_document_mode(args) -> int:
         except Exception as e:  # noqa: BLE001
             failed += 1
             records.append({"src": src, "status": "error", "error": str(e)})
+            _LOG.warning("document failed for %s: %s", src, e)
             print(f"  FAILED {src}: {e}")
 
     total = time.time() - t_start
@@ -250,6 +255,7 @@ def run_document_mode(args) -> int:
 
 
 def main():
+    configure_logging()
     ap = argparse.ArgumentParser(description="Batch SR upscaler / document restore")
     ap.add_argument("--mode", choices=["photo", "document"], default="photo")
     ap.add_argument("--input", required=True, help="file or folder (document mode also accepts .pdf)")
@@ -380,6 +386,7 @@ def main():
         except Exception as e:  # noqa: BLE001
             failed += 1
             records.append({"src": src, "dst": dst, "status": "error", "error": str(e)})
+            _LOG.warning("photo failed for %s: %s", src, e)
             print(f"  [{i}/{len(files)}] FAILED {src}: {e}")
 
     total = time.time() - t0

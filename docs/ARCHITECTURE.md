@@ -42,6 +42,7 @@ out; no services, no queue, no network.
 | `lexicon.py` | optional Devanagari word list (built by `scripts/fetch_nepali_lexicon.py`) behind the `unknown_word` review flag; absent = flag off |
 | `cli.py` | command line: `--mode document|photo`, batch folders, all knobs |
 | `app.py` | Gradio studio (document tab first; `VECTOVECTO_DOCUMENT_ONLY=1` hides the photo tab) |
+| `logging_setup.py` | one stderr logger (`vectovecto.*`, `VECTOVECTO_LOG_LEVEL`, default INFO) configured by both entry points |
 
 ### Data and metrics
 
