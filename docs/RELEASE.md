@@ -8,13 +8,14 @@ Tags are `vX.Y.Z` on `main`. The changelog is [../CHANGELOG.md](../CHANGELOG.md)
 ## Checklist
 
 ```bash
-# 1. Green suite (313 tests) and license gate
+# 1. Green suite (324 tests) and license gate
 python -m pytest tests/ -q
 python scripts/license_report.py --check
 
 # 2. Frozen sets unchanged since the last release
 python evals/harness/eval_freeze.py --check evals/manifests/heidata_printed_v1.json
 python evals/harness/eval_freeze.py --check evals/manifests/nepali_pdf_v2.json
+python evals/harness/eval_freeze.py --check evals/manifests/cornell_real_v1.json
 
 # 3. Web image builds and answers
 docker build -t vectovecto:$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])") .
