@@ -18,6 +18,8 @@ OUT_URI="$(meta OUT_URI)"
 NPZ_NAME="$(meta NPZ_NAME)"
 EPOCHS="$(meta EPOCHS || echo 26)"
 BATCH="$(meta BATCH || echo 64)"
+HIDDEN="$(meta HIDDEN || echo 256)"
+LR_SCHEDULE="$(meta LR_SCHEDULE || echo none)"
 
 # DLVM images ship the *open* kernel modules, which do not support V100
 # (Volta): nvidia-smi fails and torch falls back to CPU. Install the
@@ -44,7 +46,8 @@ python3 -m deva_crnn.train \
   --data "pkg://data/$NPZ_NAME" \
   --out "$OUT_URI" \
   --epochs "$EPOCHS" --batch "$BATCH" --lr 1e-3 \
-  --in-h 48 --in-w 512 --max-hours 3.0 --workers 2 --save-best
+  --in-h 48 --in-w 512 --hidden "$HIDDEN" --lr-schedule "$LR_SCHEDULE" \
+  --max-hours 3.0 --workers 2 --save-best
 
 echo "[w1] $(date -u) training finished; stopping instance"
 shutdown -h now
