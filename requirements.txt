@@ -4,13 +4,10 @@ opencv-python
 scipy
 scikit-image
 torch
-torchvision
-onnx
 onnxruntime
 Pillow
 jiwer
 rapidocr==3.9.*
 reportlab
 pypdfium2
-transformers
 huggingface_hub

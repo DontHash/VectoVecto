@@ -24,7 +24,7 @@ def _doc_args(**overrides) -> argparse.Namespace:
         mode="document", input=None, output=None, model="auto", scale=4,
         recursive=False, flat=False, skip_existing=False, suffix="", format="png",
         quality=95, device="auto", tile=None, tta=False, no_fp16=False, grain=0.0,
-        report=None, workers=1, limit=0, ocr=None, lang=None, deskew=False,
+        report=None, limit=0, ocr=None, lang=None, deskew=False,
         repass_digits=False, max_pages=1, dpi=0, no_pdf=False, no_overlay=False,
         no_txt=False, no_md=False,
     )

@@ -77,8 +77,8 @@ def build_generator(path: str, scale: int = 4, device: str = "cpu"):
         from srvggnet import SRVGGNetCompact
         model = SRVGGNetCompact(3, 3, 64, 32, upscale=scale)
     else:
-        raise ValueError("deep-unfolding checkpoints are not handled by sr_engine; "
-                         "use SmartUpscaler's fidelity mode")
+        raise ValueError("deep-unfolding checkpoints are not handled by "
+                         "sr_engine (the fidelity mode was removed)")
     missing, unexpected = model.load_state_dict(sd, strict=False)
     if missing or unexpected:
         print(f"[sr_engine] load: {len(missing)} missing / {len(unexpected)} unexpected keys")

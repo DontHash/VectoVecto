@@ -130,13 +130,12 @@ webapp/                   the studio: FastAPI backend (vvweb/) + SolidJS fronten
 document_*.py, doc_*.py   pipeline: OCR, layout, orientation, restore, export, router, verifier
 calibration.py            isotonic confidence calibration
 smart_upscaler.py, sr_engine.py, ...   photo/vector restore stack
-deva_crnn/                Devanagari line recognizer (CRNN+CTC) — research, not shipped
+deva_crnn/                Devanagari line reader (CRNN+CTC), opt-in via --deva-lines
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    313 tests
-docs/                     architecture, evaluation, deployment, licensing, roadmap
-legacy/                   archived pre-pivot research (not part of the product)
+tests/                    325 tests
+docs/                     architecture, evaluation, deployment, licensing, plan
 ```
 
 ## Docs

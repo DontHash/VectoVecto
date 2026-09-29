@@ -28,26 +28,24 @@ dependencies = [
   "scipy",
   "scikit-image",
   "torch",
-  "torchvision",
-  "onnx",
   "onnxruntime",
   "Pillow",
   "jiwer",
   "rapidocr==3.9.*",
   "reportlab",
   "pypdfium2",
-  "transformers",
   "huggingface_hub",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest",
+  "httpx",
   "matplotlib",
-  "tqdm",
+  "scipy",
   "pyiqa",
   "datasets",
-  "onnxconverter-common",
+  "transformers",
   "PySide6",
   "google-genai",
 ]
@@ -66,6 +64,7 @@ py-modules = [
   "calibration",
   "cli",
   "degradation_document",
+  "deva_reader",
   "doc_data",
   "doc_metrics",
   "document_export",
@@ -78,12 +77,13 @@ py-modules = [
   "document_verifier",
   "lexicon",
   "logging_setup",
+  "rrdbnet",
   "smart_upscaler",
   "sr_engine",
   "srvggnet",
-  "tv_refinement",
   "vector_raster_hybrid",
 ]
+packages = ["deva_crnn"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

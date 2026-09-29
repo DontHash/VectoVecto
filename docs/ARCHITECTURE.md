@@ -65,8 +65,8 @@ post-processing), `vector_raster_hybrid.py` (raster→vector hybrid output).
 | `evals/harness/` | evaluation harnesses: frozen-set verification, metrics, anchor transcription, model bake-off, gates |
 | `evals/manifests/` | content-hash frozen evaluation sets (the numbers in the README come from these) |
 | `scripts/` | data acquisition (`harvest_*`), training-data export, real-line labeling, recognizer gate, license/release tooling |
-| `deva_crnn/` | Devanagari line recognizer (CRNN+CTC) — trained, gated, **not adopted** yet (see [PLAN.md](PLAN.md) Appendix R2) |
-| `legacy/` | archived pre-pivot research (photo SR training, cloud VM scripts) |
+| `deva_crnn/` | Devanagari line recognizer (CRNN+CTC): the opt-in reader behind `--deva-lines`; weights are not distributed |
+| `kaggle/w1_train/` | private-script kernel that trains the line recognizer (see [TRAINING.md](TRAINING.md)) |
 
 ## Design rules
 

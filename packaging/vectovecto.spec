@@ -40,11 +40,11 @@ for pkg in ("rapidocr", "onnxruntime", "reportlab", "pypdfium2"):
         print(f"[spec] skip {pkg}: {exc}")
 
 PRODUCT_MODULES = [
-    "calibration", "cli", "degradation_document", "doc_data",
-    "doc_metrics", "document_export", "document_layout", "document_ocr",
-    "document_orientation", "document_pipeline", "document_restore",
-    "document_router", "document_verifier", "lexicon", "logging_setup",
-    "smart_upscaler", "sr_engine", "srvggnet", "tv_refinement",
+    "calibration", "cli", "degradation_document", "deva_reader", "deva_crnn",
+    "doc_data", "doc_metrics", "document_export", "document_layout",
+    "document_ocr", "document_orientation", "document_pipeline",
+    "document_restore", "document_router", "document_verifier", "lexicon",
+    "logging_setup", "rrdbnet", "smart_upscaler", "sr_engine", "srvggnet",
     "vector_raster_hybrid",
 ]
 

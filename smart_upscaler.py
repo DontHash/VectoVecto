@@ -8,8 +8,8 @@ What changed in v2 (the anti-clay release):
   * The always-on unsharp mask and forced micro-grain were removed. Grain is
     opt-in (`grain_strength=0` by default). These were band-aids that produced
     the "clay / plastic" sheen users noticed.
-  * `mode="fidelity"` keeps the paper-style deep-unfolding path (TV-free,
-    reconstruction-consistent, hallucination-free) as a distinct choice.
+  * The `fidelity` (deep-unfolding) mode was removed: its checkpoint was never
+    published, so the mode could only fall back to the engine path.
 
 Content routing (unchanged):
   1. High-contrast typography/logos -> Bézier vector engine (SVG export).
@@ -21,7 +21,6 @@ API: numpy array in -> numpy array out (Phase 0 harness contract).
 """
 from __future__ import annotations
 
-import os
 import sys
 import time
 from typing import Any, Dict, List, Optional
@@ -30,7 +29,7 @@ import cv2
 import numpy as np
 
 import sr_engine
-from sr_engine import load_engine, tiled_run
+from sr_engine import load_engine
 from logging_setup import get_logger
 
 _LOG = get_logger("smart_upscaler")
@@ -44,19 +43,6 @@ from vector_raster_hybrid import (
     render_vector_shapes,
     export_svg,
 )
-
-_TORCH_AVAILABLE = False
-try:
-    import torch  # noqa: F401
-    _TORCH_AVAILABLE = True
-except Exception:
-    _TORCH_AVAILABLE = False
-
-_DEFAULT_CHECKPOINT = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "artifacts", "deep_sr", "best_checkpoint.pth"
-)
-
 
 # ---------------------------------------------------------------------------
 # cheap page classifier (document vs photo) — no models, no OCR
@@ -146,16 +132,13 @@ class SmartUpscaler:
     """Phase 7 meta-upscaler: routes photo content to a professional SR model and
     graphic content to the vector engine."""
 
-    def __init__(self, checkpoint_path: Optional[str] = None,
-                 device: Optional[str] = None, model_spec: str = "auto",
+    def __init__(self, device: Optional[str] = None, model_spec: str = "auto",
                  tile: Optional[int] = None, tta: bool = False):
         self.model_spec = model_spec
         self.device = device or "auto"
         self.tile = tile
         self.tta = tta
-        self.checkpoint_path = checkpoint_path or _DEFAULT_CHECKPOINT
         self.engine: Optional[sr_engine.Engine] = None
-        self._fidelity_fn = None
 
     # ------------------------------------------------------------------
     # Neural engine management
@@ -171,36 +154,6 @@ class SmartUpscaler:
             print(f"  [SmartUpscaler] engine load failed ({e}); using bicubic fallback")
             _LOG.warning("engine load failed (%s); using bicubic fallback", e)
             self.engine = sr_engine.ClassicalEngine("bicubic", 4)
-
-    def _init_fidelity(self):
-        if self._fidelity_fn is not None:
-            return
-        import torch
-        from drunet import DRUNet
-        from deep_unfolding import DeepUnfoldingSR, create_gaussian_kernel
-
-        dev = torch.device("cuda" if (self.device in ("auto", "cuda") and torch.cuda.is_available())
-                           else "cpu")
-        sd = torch.load(self.checkpoint_path, map_location="cpu", weights_only=True)
-        if "model_state_dict" in sd:
-            sd = sd["model_state_dict"]
-        unfolding = DeepUnfoldingSR(DRUNet(in_channels=3, num_feat=64, num_blocks=20),
-                                    iterations=5, scale=4)
-        unfolding.load_state_dict(sd, strict=True)
-        unfolding.eval().to(dev)
-        kernel = create_gaussian_kernel(sigma=1.2).to(dev)
-
-        def fn(patch_bgr: np.ndarray) -> np.ndarray:
-            rgb = cv2.cvtColor(patch_bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
-            x = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0).to(dev)
-            with torch.no_grad():
-                y = unfolding(x, kernel)
-            y = y.squeeze(0).permute(1, 2, 0).float().cpu().numpy()
-            return cv2.cvtColor((np.clip(y, 0, 1) * 255).round().astype(np.uint8),
-                                cv2.COLOR_RGB2BGR)
-
-        self._fidelity_fn = fn
-        print("  [SmartUpscaler] fidelity engine ready (deep unfolding, TV-free)")
 
     # ------------------------------------------------------------------
     # Content analysis (unchanged behavior)
@@ -293,16 +246,6 @@ class SmartUpscaler:
         H, W = img_bgr.shape[:2]
         return self._fit_scale(out, W * scale, H * scale)
 
-    def _upscale_fidelity(self, img_bgr: np.ndarray, scale: int) -> np.ndarray:
-        if not _TORCH_AVAILABLE or not os.path.exists(self.checkpoint_path):
-            print("  [SmartUpscaler] fidelity model unavailable; using engine path")
-            return self._upscale_raster(img_bgr, scale, fast=True)
-        self._init_fidelity()
-        assert self._fidelity_fn is not None
-        out = tiled_run(self._fidelity_fn, img_bgr, 4, tile=self.tile or 256, pad=32)
-        H, W = img_bgr.shape[:2]
-        return self._fit_scale(out, W * scale, H * scale)
-
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -356,10 +299,7 @@ class SmartUpscaler:
             export_svg(analysis.vector_shapes, W, H, export_svg_path, scale=1.0)
             print(f"  [SmartUpscaler] SVG -> {export_svg_path}")
 
-        if mode == "fidelity":
-            raster_hr = self._upscale_fidelity(img_bgr, scale)
-        else:
-            raster_hr = self._upscale_raster(img_bgr, scale, fast)
+        raster_hr = self._upscale_raster(img_bgr, scale, fast)
 
         should_blend_vector = (mode in ("auto", "vector")) and (len(analysis.vector_shapes) > 0)
         if should_blend_vector:
@@ -381,7 +321,7 @@ class SmartUpscaler:
             final_bgr = self._apply_grain(final_bgr, strength=grain_strength)
 
         elapsed = time.time() - t0
-        engine_name = self.engine.name if self.engine else "fidelity"
+        engine_name = self.engine.name if self.engine else "classical"
         vector_count = len(analysis.vector_shapes) if should_blend_vector else 0
         print(f"  [SmartUpscaler] {H}x{W} -> {out_H}x{out_W} in {elapsed:.2f}s | "
               f"engine={engine_name} mode={mode} vectors={vector_count}")

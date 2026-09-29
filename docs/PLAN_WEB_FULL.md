@@ -18,8 +18,8 @@ unused stays in the product path.
 |---|---|---|
 | Gradio removal (user decision) | **done** 2026-09-30 | `app.py` + its tests deleted; gradio dep, `vectovecto-studio` script, Docker, CI, packaging and docs updated |
 | Markdown export (user request) | **near-finished** 2026-09-30 | `<stem>.md` in export/CLI/web, tests green; web smoke on a PDF passed (23 tokens → `transcript.md`) |
-| P0 Repo truth & hygiene | in progress | frontend CI job, first `webapp` tests, Docker web image, docs truth pass done; committing `webapp/` still pending |
-| P1 Diet & broken-path fixes | not started | |
+| P0 Repo truth & hygiene | **done** 2026-09-30 | frontend CI job, first `webapp` tests, Docker web image, docs pass; `webapp/` committed and pushed (`04d4eb2`) |
+| P1 Diet & broken-path fixes | **done** 2026-09-30 | legacy + kaggle/vlm_eval removed (w1_train kept); fidelity removed; rrdbnet/deva_reader shipped; dead ONNX deleted; `--workers` removed; deps split (scipy stays — skimage). Held: CLI grain unify (P3) |
 | P2 Web document parity | not started | engine choice, output toggles, all-pages, meta |
 | P3 Web photo studio | not started | the remaining feature gap (CLI-only today) |
 | P4 Efficiency & deploy | partially done | Docker now builds the web app; dependency split pending (P1) |
@@ -49,17 +49,17 @@ Sizes measured on this machine 2026-09-30.
 | # | Finding | Evidence | Verdict |
 |---|---|---|---|
 | 1 | **`webapp/` is untracked** — the entire new UI is unversioned; GitHub `main` has no `webapp` path at all | `git status --short` → `?? webapp/`; `.gitignore:122-126` only anticipates its subpaths | **Commit it** (P0) |
-| 2 | `legacy/` (pre-pivot research, cloud VM scripts) — zero importers | grep: no `import legacy` anywhere; only its own files import root modules | **Remove from tree** (P1); history keeps it |
-| 3 | `kaggle/` (VLM eval staging; the VLM mode was dropped) — zero importers, no tests | grep: nothing imports `kaggle`; 43 MB local, mostly ignored tarballs | **Remove from tree** (P1) |
-| 4 | `tv_refinement.py` — runtime-unreachable: only `vector_raster_hybrid.hybrid_vector_raster_upscale()` imports it, and no runtime code calls that function (tests/evals/legacy only) | `vector_raster_hybrid.py:584`; grep callers | **Drop from the shipped wheel**; keep the function only if tests/evals need it (P1) |
-| 5 | **Fidelity mode is dead code:** `smart_upscaler._init_fidelity` imports `drunet` + `deep_unfolding`, which exist only under `legacy/research/`, and `artifacts/deep_sr/best_checkpoint.pth` has never shipped | `smart_upscaler.py:175-187` | **Remove the mode** until a checkpoint is published, or ship the module + checkpoint (decide, P1) |
-| 6 | **`rrdbnet` module is not shipped** — the x4plus `.pth` path does `from rrdbnet import RRDBNet`, and `rrdbnet.py` exists only in `legacy/research/`, so on a fresh clone/pip install the torch x4plus path fails and silently falls back to bicubic | `sr_engine.py:74`; `legacy/research/rrdbnet.py` | **Ship `rrdbnet.py` at the root** (BSD-3, small) — we already advertise x4plus (P1) |
-| 7 | `weights/onnx/x4v3_fp16.onnx` — referenced by no code | grep `x4v3_fp16` = 0 hits | **Delete the local file** (P1) |
-| 8 | `deva_reader.py` + `deva_crnn/` are not shipped anywhere: missing from `pyproject.toml` `py-modules`, from `packaging/vectovecto.spec`, and from the Docker COPY list; `.dockerignore:28` also removes `deva_crnn/`. `docs/DEPLOY.md:62-72` documents mounting a checkpoint to enable `--deva-lines`, which cannot work in those environments; the lazy import (`document_ocr.py:512`) is not guarded | paths above | **Ship the reader** in wheel/Docker/spec (opt-in stays off by default), or remove the feature and the doc claim (decide, P1) |
-| 9 | `.dockerignore:21` excludes `calibration/` while `Dockerfile:39` copies `calibration.py` → `cal_conf` is silently inert in the Docker image, and a repo test asserts the JSON must ship | `tests/test_document_flags.py:84-85` | **Copy `calibration/` into the image** (P1) |
-| 10 | `cli.py --workers` is declared and never read | `cli.py:279` | Remove the flag (or implement); never silently dead (P1) |
-| 11 | CLI grain is a flat per-pixel numpy formula, the app uses the luminance-conditioned `SmartUpscaler` grain — same flag, two looks | `cli.py:373-375` vs `smart_upscaler.py:394-403` | Unify on the app formula (P1) |
-| 12 | Dev-only deps are in the runtime list: `scipy`, `torchvision`, `onnx`, `transformers` are imported only by `evals/`, `legacy/`, or eval tooling; `huggingface_hub` only by the opt-in bodhan verifier; `torch` only by photo + opt-ins | import graph audit (P1 table below) | **Split requirements/extras** (P1) |
+| 2 | `legacy/` (pre-pivot research, cloud VM scripts) — zero importers | grep: no `import legacy` anywhere; only its own files import root modules | **Done 2026-09-30**: removed from the tree; git history keeps it |
+| 3 | `kaggle/` VLM eval staging (the VLM mode was dropped) — nothing imports it | grep: no importers; 43 MB local, mostly ignored tarballs | **Done 2026-09-30**: `kaggle/vlm_eval` removed; `kaggle/w1_train` stays (trainer for the shipped reader) |
+| 4 | `tv_refinement.py` — runtime-unreachable: only `vector_raster_hybrid.hybrid_vector_raster_upscale()` imports it, and no runtime code calls that function | `vector_raster_hybrid.py:584`; grep callers | **Done 2026-09-30**: out of the shipped module lists; kept for tests/evals |
+| 5 | **Fidelity mode was dead code:** it imported `drunet` + `deep_unfolding` (legacy-only) against a checkpoint that never shipped | `smart_upscaler.py` (removed) | **Done 2026-09-30**: mode removed; nothing else referenced it |
+| 6 | **`rrdbnet` module was not shipped** — the x4plus `.pth` path does `from rrdbnet import RRDBNet`, and the module existed only under `legacy/research/` | `sr_engine.py:74` | **Done 2026-09-30**: `rrdbnet.py` moved to the root; wheel + PyInstaller lists updated |
+| 7 | `weights/onnx/x4v3_fp16.onnx` — referenced by no code | grep `x4v3_fp16` = 0 hits | **Done 2026-09-30**: local file deleted (weights are not tracked) |
+| 8 | `deva_reader.py` + `deva_crnn/` were not in the wheel/PyInstaller lists, so the documented `--deva-lines` recipe could not work from a build | paths above | **Done 2026-09-30**: shipped in wheel + PyInstaller lists; the web image stays document-only by design (no CLI there) |
+| 9 | `.dockerignore` excluded `calibration/` while the code shipped → `cal_conf` was silently inert in the image | `tests/test_document_flags.py:84-85` | **Done 2026-09-30**: the image ships `calibration/` |
+| 10 | `cli.py --workers` was declared and never read | `cli.py` (removed) | **Done 2026-09-30**: flag and docstring claim removed |
+| 11 | CLI grain is a flat per-pixel formula; `SmartUpscaler` grain is luminance-conditioned — same flag, two looks | `cli.py` vs `smart_upscaler.py` | **Held for P3**: the web photo studio will use `SmartUpscaler`; the CLI keeps its own flag |
+| 12 | Runtime list carried dev-only deps: `torchvision`, `onnx`, `transformers` (legacy/eval only). `scipy` looked dev-only but **stays** (scikit-image imports it transitively); `torch`/`huggingface_hub` back the photo/verifier features | import audit + the blocked-import check | **Done 2026-09-30**: split into `requirements.txt` (full), `requirements-doc.txt` (lean web/CLI-document), dev extras |
 | 13 | Local disk weight (git-ignored): `data/` 4.55 GB, `out/` 1.47 GB, `deva_crnn/` 1.16 GB, `upscayl-repo/` 231 MB, `weights/` 116 MB, `node_modules/` 109 MB, `brag-output/` 69 MB, `webapp/runs` 28 MB, `webapp/shots` 17 MB, `web_outputs/` 17 MB. The distributed repo itself is only ~11.8 MB (`.git`) / ~3.8 MiB tracked | measured 2026-09-30 | **The GitHub repo is already lean** — the weight is local data and generated output; clean the generated part, keep user data (P0) |
 | 14 | `brag-output/` is untracked *and* un-ignored; `scripts/build_digit_crop_sheet.py` is untracked though functional; `webapp/shots/` (26 screenshots) is referenced by no code | `git status`; grep | gitignore `brag-output/`; track the script; delete `shots/` local (P0) |
 | 15 | Docs disagree with code: `docs/ARCHITECTURE.md:68` calls the line reader "not adopted" while v1.2 shipped it opt-in; `README.md:125` says `deva_crnn/` "research, not shipped"; test counts 313/324 vs 321 actual; `docs/RELEASE.md` still says v1.1.0-era things; `docs/DEPLOY.md` has the broken deva recipe; the web landing says "No network access is used — the models ship with the app" while `ne/hi` downloads the Devanagari rec model on first use | paths above | **Truth pass** (P0) |
@@ -81,9 +81,10 @@ Sizes measured on this machine 2026-09-30.
 | Nepali lexicon (`scripts/fetch_nepali_lexicon.py`), calibration JSON | optional `unknown_word`, `cal_conf` | Keep; fix Docker calibration (#9) |
 
 **Bottom line:** no model is being downloaded or bundled that shouldn't be;
-the real waste is *code that can never run* (legacy, kaggle, fidelity,
-tv_refinement, a dead ONNX file), *deps that should be dev-only*, and *the
-untracked web UI*.
+the real waste was *code that can never run* (legacy, kaggle/vlm_eval,
+fidelity, tv_refinement, a dead ONNX file — all removed 2026-09-30),
+*deps that should be dev-only* (split 2026-09-30), and *the untracked web UI*
+(committed 2026-09-30).
 
 ### 0.3 Where the web stands vs. the CLI (the parity target)
 

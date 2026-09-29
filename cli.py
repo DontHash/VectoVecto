@@ -14,8 +14,6 @@ Document mode (searchable PDF + overlay + transcript, local):
 
 Notes:
   * Alpha channels are preserved (RGB upscaled by the model, alpha by Lanczos).
-  * `--workers` >1 is only used for CPU-side engines (ncnn/classical); GPU
-    engines (torch/ONNX-DirectML) run single-process to avoid device contention.
   * Document mode never needs the cloud: OCR models are bundled with RapidOCR.
 """
 from __future__ import annotations
@@ -285,8 +283,6 @@ def main():
     ap.add_argument("--grain", type=float, default=0.0,
                     help="optional luminance micro-grain (0 = off, professional default)")
     ap.add_argument("--report", default=None, help="write JSON report here")
-    ap.add_argument("--workers", type=int, default=1,
-                    help=">1 only for ncnn/classical engines")
     ap.add_argument("--limit", type=int, default=0)
     doc = ap.add_argument_group("document mode")
     doc.add_argument("--ocr", default=None, help="rapidocr | tesseract (default: best available)")

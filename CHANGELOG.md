@@ -28,11 +28,25 @@ All notable changes to this project are documented here. The format follows
   logging now lives in `webapp/vvweb/api.py` (`vectovecto.web`).
 - `docs/DEPLOY.md`, `docs/ARCHITECTURE.md` and the READMEs describe the web
   studio; `docs/LICENSES.md` drops gradio.
+- **Dependencies split**: `requirements.txt` is the full local product,
+  `requirements-doc.txt` the lean document-only set (no torch) used by the
+  web image; `scipy` stays (scikit-image imports it transitively —
+  caught by a blocked-import check), `torchvision`/`onnx`/`transformers`
+  leave the runtime list.
+- `rrdbnet.py` (the x4plus RRDBNet) moved to the repo root; `deva_reader` +
+  `deva_crnn` are in the wheel/PyInstaller lists, so `--deva-lines` works
+  from builds (the web image stays document-only by design).
 
 ### Removed
 
 - Gradio dependency, `vectovecto-studio` console script, `app.py` and its
   tests; the desktop spec is CLI-only.
+- Fidelity (deep-SR) mode — its checkpoint was never published, so it could
+  only fall back to the engine.
+- `legacy/` research tree and `kaggle/vlm_eval` (git history keeps them; the
+  `kaggle/w1_train` training kernel stays — see `docs/TRAINING.md`).
+- `cli.py --workers` (declared, never read) and the dead local
+  `x4v3_fp16.onnx` weight file.
 
 ## [1.3.0] - 2026-09-26
 

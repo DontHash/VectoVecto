@@ -3,11 +3,11 @@ pytest
 # FastAPI TestClient for the web-app tests (webapp/requirements-web.txt + this)
 httpx
 matplotlib
-tqdm
+# 2026-09-30: moved out of the runtime set (eval/tooling only)
+scipy
+transformers
 pyiqa
 datasets
-huggingface_hub
-onnxconverter-common
 # Qt is used to render shaped Devanagari fixtures for training/evaluation
 PySide6
 # Gemini anchor transcription (Vertex AI) for frozen-set ground truth

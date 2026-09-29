@@ -39,12 +39,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# CPU-only torch keeps the image ~1 GB smaller than the default CUDA wheels.
-RUN pip install --index-url https://download.pytorch.org/whl/cpu \
-        torch torchvision
-
-COPY requirements.txt webapp/requirements-web.txt ./
-RUN pip install -r requirements.txt -r requirements-web.txt
+# Document-only image: no torch (the web document path never imports it);
+# the photo stack and the opt-in readers stay local/full-install features.
+COPY requirements-doc.txt webapp/requirements-web.txt ./
+RUN pip install -r requirements-doc.txt -r requirements-web.txt
 
 COPY cli.py ./
 COPY degradation_document.py doc_data.py doc_metrics.py ./

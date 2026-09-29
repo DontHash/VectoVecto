@@ -1,0 +1,13 @@
+# Lean document-only runtime: the web studio and `cli.py --mode document`.
+# No torch (photo upscaler is a full-install feature), no eval tooling.
+# scipy is required transitively by scikit-image's Sauvola thresholding.
+numpy
+opencv-python
+scipy
+scikit-image
+onnxruntime
+Pillow
+jiwer
+rapidocr==3.9.*
+reportlab
+pypdfium2

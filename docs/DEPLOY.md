@@ -41,9 +41,9 @@ docker run --rm -p 8000:8000 \
   vectovecto
 ```
 
-The image runs as a non-root user, excludes `data/`, `weights/`, `artifacts/`,
-`legacy/`, `kaggle/` and the frontend build state (see `.dockerignore`), and
-carries a healthcheck on `/api/health`.
+The image runs as a non-root user, excludes `data/`, `weights/`, `artifacts/`
+and the frontend build state (see `.dockerignore`), and carries a healthcheck
+on `/api/health`.
 
 ## Managed platforms
 
