@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are
 [semantic](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Markdown output**: every document run writes `<stem>.md` (web:
+  `transcript.md`) — the reading-order transcript plus the review queue as a
+  table; CLI knob `--no-md`, download link in the web studio.
+- CI: a frontend build job (Node 22) and the first `webapp` tests
+  (`tests/test_webapp_api.py`).
+
+### Fixed
+
+- **Web app: uploaded PDFs were routed to the image loader** because streamed
+  uploads have no file extension; the validator's detected kind now decides
+  the loader (`webapp/vvweb/pipeline.py::_load_page`), with a regression test.
+
+### Changed
+
+- **The web app is the studio.** `app.py` (Gradio) is removed; the FastAPI +
+  SolidJS app under `webapp/` is the single UI — the root `Dockerfile`
+  builds and serves it (`/api/health`, port 8000), and the server-side error
+  logging now lives in `webapp/vvweb/api.py` (`vectovecto.web`).
+- `docs/DEPLOY.md`, `docs/ARCHITECTURE.md` and the READMEs describe the web
+  studio; `docs/LICENSES.md` drops gradio.
+
+### Removed
+
+- Gradio dependency, `vectovecto-studio` console script, `app.py` and its
+  tests; the desktop spec is CLI-only.
+
 ## [1.3.0] - 2026-09-26
 
 ### Added

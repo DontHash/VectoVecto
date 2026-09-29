@@ -216,12 +216,15 @@ def pdf_to_pages(pdf_path: str, dpi: int = 200):
     import pypdfium2 as pdfium
     doc = pdfium.PdfDocument(pdf_path)
     scale = dpi / 72.0
-    for i in range(len(doc)):
-        page = doc[i]
-        pil = page.render(scale=scale).to_pil().convert("RGB")
-        text = normalize_text(page.get_textpage().get_text_range())
-        arr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
-        yield i, arr, text
+    try:
+        for i in range(len(doc)):
+            page = doc[i]
+            pil = page.render(scale=scale).to_pil().convert("RGB")
+            text = normalize_text(page.get_textpage().get_text_range())
+            arr = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+            yield i, arr, text
+    finally:
+        doc.close()
 
 
 def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = None,

@@ -157,7 +157,8 @@ def run_document_mode(args) -> int:
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
                 make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
-                make_txt=not args.no_txt, make_json=True)
+                make_txt=not args.no_txt, make_json=True,
+                make_md=not getattr(args, "no_md", False))
             ok += 1
             low = sum(1 for t in res.ocr.tokens if "low_conf" in t.flags)
             review = res.review_list
@@ -204,7 +205,8 @@ def run_document_mode(args) -> int:
                     if status == "ok" and res is not None:
                         page_results.append(res)
                 if args.max_pages == 0 and page_results:
-                    from document_export import write_searchable_pdf_pages
+                    from document_export import (write_combined_transcript_md,
+                                                 write_searchable_pdf_pages)
                     combined_pdf = os.path.join(args.output, f"{stem}_combined.pdf")
                     write_searchable_pdf_pages(
                         combined_pdf,
@@ -214,11 +216,18 @@ def run_document_mode(args) -> int:
                     combined_txt = os.path.join(args.output, f"{stem}_combined.txt")
                     with open(combined_txt, "w", encoding="utf-8") as f:
                         f.write("\n\n".join(r.ocr.text for r in page_results) + "\n")
+                    combined_outputs = {"pdf": combined_pdf, "txt": combined_txt}
+                    if not getattr(args, "no_md", False):
+                        combined_md = os.path.join(args.output,
+                                                   f"{stem}_combined.md")
+                        write_combined_transcript_md(
+                            combined_md, [r.ocr for r in page_results],
+                            title=stem)
+                        combined_outputs["md"] = combined_md
                     records.append({"src": src, "name": f"{stem}_combined",
                                     "status": "combined",
                                     "pages": len(page_results),
-                                    "outputs": {"pdf": combined_pdf,
-                                                "txt": combined_txt}})
+                                    "outputs": combined_outputs})
                     print(f"  combined: {os.path.basename(combined_pdf)} "
                           f"({len(page_results)} pages)")
                 elif args.max_pages == 0 and len(page_results) < len(pages):
@@ -331,6 +340,8 @@ def main():
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")
+    doc.add_argument("--no-md", action="store_true", dest="no_md",
+                     help="skip the Markdown transcript (.md)")
     args = ap.parse_args()
 
     if args.mode == "document":

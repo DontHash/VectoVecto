@@ -26,7 +26,7 @@ def _doc_args(**overrides) -> argparse.Namespace:
         quality=95, device="auto", tile=None, tta=False, no_fp16=False, grain=0.0,
         report=None, workers=1, limit=0, ocr=None, lang=None, deskew=False,
         repass_digits=False, max_pages=1, dpi=0, no_pdf=False, no_overlay=False,
-        no_txt=False,
+        no_txt=False, no_md=False,
     )
     base.update(overrides)
     return argparse.Namespace(**base)
@@ -51,7 +51,12 @@ def test_cli_document_mode_writes_outputs(tmp_path):
     assert "scan.pdf" in written
     assert "scan_overlay.png" in written
     assert "scan.txt" in written
+    assert "scan.md" in written
     assert "scan.json" in written
+
+    md = (out_dir / "scan.md").read_text(encoding="utf-8")
+    assert md.startswith("# Transcript")
+    assert "INVOICE" in md.upper()
 
     payload = json.load(open(report, encoding="utf-8"))
     assert payload["summary"]["ok"] == 1
@@ -99,6 +104,9 @@ def test_cli_document_all_pages_writes_combined(tmp_path):
 
     txt = (out_dir / "multi_combined.txt").read_text(encoding="utf-8").upper()
     assert "PAGE 0" in txt and "PAGE 2" in txt
+    md = (out_dir / "multi_combined.md").read_text(encoding="utf-8")
+    assert md.startswith("# multi")
+    assert "## Page 1" in md and "PAGE 0" in md.upper()
     assert (out_dir / "multi_p000.pdf").exists(), "per-page artifacts stay"
 
 

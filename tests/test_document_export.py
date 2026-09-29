@@ -98,7 +98,7 @@ def test_export_document_outputs_end_to_end(tmp_path):
     degraded = degrade_page(page, seed=3101, level="mild")
     result = ocr_page(degraded, backend="rapidocr")
     out = export_document_outputs(str(tmp_path), "inv", degraded, result)
-    assert set(out.keys()) == {"pdf", "overlay", "txt", "json"}
+    assert set(out.keys()) == {"pdf", "overlay", "txt", "md", "json"}
     for path in out.values():
         assert os.path.getsize(path) > 0
 
@@ -113,6 +113,10 @@ def test_export_document_outputs_end_to_end(tmp_path):
 
     lines = open(out["txt"], encoding="utf-8").read().splitlines()
     assert len(lines) >= 5
+
+    md = open(out["md"], encoding="utf-8").read()
+    assert md.startswith("# Transcript")
+    assert "INVOICE" in md.upper()
 
     payload = json.load(open(out["json"], encoding="utf-8"))
     assert payload["backend"] == "rapidocr"

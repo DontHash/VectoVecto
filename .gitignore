@@ -119,3 +119,11 @@ training_*.png
 # ===== Local media (large, dump only) =====
 Kholakhola.mp4
 *.mp4
+# ===== Web app =====
+webapp/runs/
+webapp/frontend/node_modules/
+webapp/frontend/dist/
+webapp/shots/
+
+# ===== Local working media (large, never commit) =====
+brag-output/

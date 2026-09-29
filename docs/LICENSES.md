@@ -17,7 +17,6 @@ component below keeps its own terms.
 | `onnx` | 1.22.0 | Apache-2.0 |
 | `onnxruntime` | 1.20.1 | MIT License |
 | `Pillow` | 12.2.0 | MIT-CMU |
-| `gradio` | 6.20.0 | Apache-2.0 |
 | `jiwer` | 4.0.0 | Apache-2.0 |
 | `rapidocr` | 3.9.2 | Apache-2.0 |
 | `reportlab` | 4.5.1 | BSD license (see license.txt for details), Copyright (c) 2000-2025, ReportLab Inc. |
@@ -30,6 +29,7 @@ component below keeps its own terms.
 | Package | Version | License |
 |---|---|---|
 | `pytest` | 9.1.1 | MIT |
+| `httpx` | 0.28.1 | BSD-3-Clause |
 | `matplotlib` | 3.10.8 | Python Software Foundation License |
 | `tqdm` | 4.67.1 | MPL-2.0 AND MIT |
 | `pyiqa` | 0.1.16 | NTU S-Lab License 1.0 (research use) |

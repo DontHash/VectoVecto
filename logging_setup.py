@@ -1,11 +1,11 @@
 """
 logging_setup.py — one logging configuration for CLI, studio and library code.
 
-Product modules log under the `vectovecto` logger (`vectovecto.app`,
-`vectovecto.cli`, `vectovecto.document_export`, ...). `configure_logging()` is
+Product modules log under the `vectovecto` logger (`vectovecto.cli`,
+`vectovecto.web`, `vectovecto.document_export`, ...). `configure_logging()` is
 idempotent, is called by the entry points, and reads `VECTOVECTO_LOG_LEVEL`
 (default INFO). Server-side errors then reach container logs instead of only
-the Gradio status markdown; the CLI keeps its user-facing prints.
+the HTTP response; the CLI keeps its user-facing prints.
 
 No heavy imports; safe for the shipped path.
 """

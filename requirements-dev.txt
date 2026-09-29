@@ -1,5 +1,7 @@
 # Development / evaluation tooling (not needed to run the product)
 pytest
+# FastAPI TestClient for the web-app tests (webapp/requirements-web.txt + this)
+httpx
 matplotlib
 tqdm
 pyiqa

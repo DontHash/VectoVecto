@@ -32,7 +32,6 @@ dependencies = [
   "onnx",
   "onnxruntime",
   "Pillow",
-  "gradio",
   "jiwer",
   "rapidocr==3.9.*",
   "reportlab",
@@ -59,13 +58,11 @@ Issues = "https://github.com/DontHash/VectoVecto/issues"
 
 [project.scripts]
 vectovecto = "cli:main"
-vectovecto-studio = "app:main"
 
 [tool.setuptools]
 # Product modules only. The training package (`deva_crnn/`) and the evaluation
 # harness stay out of the distributed wheel — they are repo tooling.
 py-modules = [
-  "app",
   "calibration",
   "cli",
   "degradation_document",

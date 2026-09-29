@@ -51,7 +51,7 @@ second OCR backend (clean-scan fallback and the OSD rotation fallback).
 ### CLI
 
 ```bash
-# Photo/scan in, searchable PDF + overlay + transcript + JSON out
+# Photo/scan in: searchable PDF + overlay + transcript + Markdown + JSON out
 python cli.py --mode document --input page.jpg --output out/run1
 
 # Multi-page PDF (first page by default; 0 = all pages + combined PDF)
@@ -67,18 +67,24 @@ Useful knobs (all default to the measured best configuration):
 --ocr rapidocr|tesseract     --lang en|ne|hi       --deskew
 --no-reading-order           --rotate auto|off     --repass-digits/--no-repass-digits
 --digit-verifier off|bodhan  (optional second-model digit check)
---no-pdf --no-overlay --no-txt
+--no-pdf --no-overlay --no-txt --no-md
 ```
 
-### Web app
+### Web app (the studio)
+
+The single UI — FastAPI + SolidJS, running the same pipeline as the CLI.
 
 ```bash
-python app.py                 # http://127.0.0.1:7860
+pip install -r webapp/requirements-web.txt    # backend, on top of requirements.txt
+cd webapp/frontend && npm install && npm run build && cd ../..
+python webapp/server.py                       # http://127.0.0.1:8000
 ```
 
 Hosted deployments (Docker, basic auth, HF Spaces/Render/Fly) are covered in
-[docs/DEPLOY.md](docs/DEPLOY.md). The app binds to localhost by default; the
-pipeline, models and any training artifacts stay server-side.
+[docs/DEPLOY.md](docs/DEPLOY.md). The server binds to localhost by default;
+the pipeline, models and any training artifacts stay server-side. The photo
+upscaler is CLI-only for now (its weights are non-commercial); a web photo
+studio is planned in [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md).
 
 ### Outputs (per page)
 
@@ -88,6 +94,7 @@ pipeline, models and any training artifacts stay server-side.
 | `*_searchable.pdf` | image + invisible Unicode text layer (Devanagari included; bundled Mukta font), selectable/copyable |
 | `*_overlay.png` | numbered review boxes for the flagged tokens |
 | `*_transcript.txt` | reading-order plain text |
+| `*_transcript.md` | Markdown: the transcript plus the review queue as a table |
 | `*_ocr.json` | tokens, risk flags, review queue, orientation/reading-order evidence |
 
 ## Measured behaviour
@@ -118,7 +125,8 @@ Known limitations are listed with their evidence in
 ## Project layout
 
 ```
-app.py, cli.py            product entry points (studio / command line)
+cli.py                    command-line entry point (document + photo)
+webapp/                   the studio: FastAPI backend (vvweb/) + SolidJS frontend
 document_*.py, doc_*.py   pipeline: OCR, layout, orientation, restore, export, router, verifier
 calibration.py            isotonic confidence calibration
 smart_upscaler.py, sr_engine.py, ...   photo/vector restore stack
@@ -140,6 +148,7 @@ legacy/                   archived pre-pivot research (not part of the product)
 | [docs/DEPLOY.md](docs/DEPLOY.md) | hosted web app (Docker, auth, spaces) |
 | [docs/LICENSES.md](docs/LICENSES.md) | dependency + model license gate |
 | [docs/RELEASE.md](docs/RELEASE.md) | release checklist, versioning, desktop packaging path |
+| [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md) | web studio: audit, diet and phased plan |
 | [docs/PLAN.md](docs/PLAN.md) | the full research log and decision record |
 
 ## Tests
@@ -148,7 +157,7 @@ legacy/                   archived pre-pivot research (not part of the product)
 python -m pytest tests/ -q
 ```
 
-313 tests: OCR/export/routing/CLI/app, layout, orientation, language plumbing,
+325 tests: OCR/export/routing/CLI/web, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
 plumbing (height/width round-trip, beam search, cosine fine-tune), the
@@ -157,8 +166,8 @@ blocking, auto policy, graceful degradation, provenance), the lexicon
 fetch/build + `unknown_word` flag mechanics, the textbook harvest parsers +
 real-print scan probe, the CC-100 corpus builder + controlled sampler, the
 Vertex wheel builder and the trainer GCS output path, the Devanagari
-PDF text-layer extraction round-trips, and the logging configuration +
-server-error capture.
+PDF text-layer extraction round-trips, the logging configuration +
+server-error capture, and the Markdown export (per page and combined).
 
 ## Data, models and licensing
 

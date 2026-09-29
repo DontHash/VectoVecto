@@ -18,7 +18,12 @@ verify_clone
 upscayl-repo
 testIMg
 testImg
-calibration
+
+# Web app build state (the frontend is built inside the image)
+webapp/frontend/node_modules
+webapp/frontend/dist
+webapp/runs
+webapp/shots
 
 # Research, evaluation and tooling (not needed at runtime)
 legacy
@@ -38,7 +43,9 @@ docs
 *.svg
 *.png
 *.ipynb
-!app.py
+# ...but the studio's public assets are needed to build the frontend
+!webapp/frontend/public
+!webapp/frontend/public/**
 
 # Python noise
 __pycache__

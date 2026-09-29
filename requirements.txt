@@ -1,4 +1,4 @@
-# Runtime dependencies (document restore + photo upscaler + app)
+# Runtime dependencies (document restore + photo upscaler + CLI)
 numpy
 opencv-python
 scipy
@@ -8,7 +8,6 @@ torchvision
 onnx
 onnxruntime
 Pillow
-gradio
 jiwer
 rapidocr==3.9.*
 reportlab

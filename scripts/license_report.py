@@ -82,7 +82,6 @@ KNOWN_LICENSES = {
     "scipy": "BSD-3-Clause",
     "scikit-image": "BSD-3-Clause",
     "pillow": "MIT-CMU",
-    "gradio": "Apache-2.0",
     "reportlab": "BSD-3-Clause",
     "transformers": "Apache-2.0",
     "huggingface-hub": "Apache-2.0",

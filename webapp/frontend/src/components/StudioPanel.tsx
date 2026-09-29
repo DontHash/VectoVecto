@@ -1,0 +1,105 @@
+import { For, Show } from "solid-js";
+import { DropZone } from "./DropZone";
+import { EXAMPLE_FILES, limitsLine, type StudioState } from "../lib/studio-state";
+import type { Lang } from "../lib/types";
+
+/** The studio controls: drop a page, pick an example, set options, run.
+ *  `compact` is the homepage hero treatment. */
+export function StudioPanel(props: { state: StudioState; compact?: boolean }) {
+  const s = props.state;
+  const running = () => s.phase() === "running";
+
+  return (
+    <div class="panel">
+      <DropZone
+        file={s.file()}
+        onFile={s.chooseFile}
+        onClear={s.clearFile}
+        disabled={running()}
+      />
+
+      <div class="panel__examples">
+        <span class="eyebrow">or try a real example</span>
+        <div class="example-chips">
+          <For each={EXAMPLE_FILES}>
+            {(ex) => (
+              <button
+                class="btn btn--ghost btn--small"
+                type="button"
+                disabled={running()}
+                onClick={() => void s.pickExample(ex.path, ex.name)}
+              >
+                {ex.label}
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
+
+      <div class="panel__options">
+        <div class="field">
+          <label class="field__label" for={`lang-${props.compact ? "hero" : "page"}`}>
+            Language
+          </label>
+          <select
+            id={`lang-${props.compact ? "hero" : "page"}`}
+            class="select"
+            value={s.lang()}
+            disabled={running()}
+            onChange={(e) => s.setLang(e.currentTarget.value as Lang)}
+          >
+            <option value="ne">Nepali (Devanagari)</option>
+            <option value="hi">Hindi (Devanagari)</option>
+            <option value="en">English / Latin</option>
+          </select>
+        </div>
+
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            checked={s.deskew()}
+            disabled={running()}
+            onChange={(e) => s.setDeskew(e.currentTarget.checked)}
+          />
+          <span>Deskew small rotations</span>
+        </label>
+      </div>
+
+      <Show when={!props.compact}>
+        <p class="field__hint">
+          Picking the wrong script lowers accuracy — it is not auto-detected per token.
+        </p>
+      </Show>
+
+      <div class="runbar">
+        <button
+          class="btn btn--primary btn--block"
+          type="button"
+          disabled={!s.file() || running()}
+          onClick={() => void s.start()}
+        >
+          <Show when={!running()} fallback={<>Reading… {s.elapsed().toFixed(1)}s</>}>
+            Restore &amp; read <span class="arrow">→</span>
+          </Show>
+        </button>
+        <Show when={running()}>
+          <div class="progress" aria-hidden="true">
+            <div class="progress__fill" />
+          </div>
+        </Show>
+        <div class="runbar__status">
+          <span>{limitsLine(s.health())}</span>
+          <Show when={s.health()?.busy}>
+            <span>worker busy — you may queue</span>
+          </Show>
+        </div>
+      </div>
+
+      <Show when={s.phase() === "error" && s.error()}>
+        <div class="alert" role="alert">
+          {s.error()}
+        </div>
+      </Show>
+    </div>
+  );
+}

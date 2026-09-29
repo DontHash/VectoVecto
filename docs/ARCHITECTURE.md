@@ -41,7 +41,7 @@ out; no services, no queue, no network.
 | `calibration.py` | isotonic confidence mapping (`cal_conf`) fitted on a dev set |
 | `lexicon.py` | optional Devanagari word list (built by `scripts/fetch_nepali_lexicon.py`) behind the `unknown_word` review flag; absent = flag off |
 | `cli.py` | command line: `--mode document|photo`, batch folders, all knobs |
-| `app.py` | Gradio studio (document tab first; `VECTOVECTO_DOCUMENT_ONLY=1` hides the photo tab) |
+| `webapp/` | the studio: FastAPI backend (`vvweb/`) + SolidJS frontend; web entry point for the document pipeline (photo studio planned) |
 | `logging_setup.py` | one stderr logger (`vectovecto.*`, `VECTOVECTO_LOG_LEVEL`, default INFO) configured by both entry points |
 
 ### Data and metrics

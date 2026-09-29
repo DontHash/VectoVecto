@@ -29,6 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
           pip install -r requirements.txt -r requirements-dev.txt
+          pip install -r webapp/requirements-web.txt
 
       - name: Test suite
         run: python -m pytest tests -rs
@@ -44,6 +45,22 @@ jobs:
       - name: Rebuild the report and check for unresolved licenses
         run: python scripts/license_report.py --check --out /tmp/LICENSES.md
 
+  frontend:
+    name: frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webapp/frontend/package-lock.json
+      - name: Build the studio
+        working-directory: webapp/frontend
+        run: |
+          npm ci
+          npm run build
+
   docker:
     name: web image builds and answers
     runs-on: ubuntu-latest
@@ -53,13 +70,11 @@ jobs:
       - name: Build image
         run: docker build -t vectovecto:ci .
 
-      - name: Run and check HTTP 200
+      - name: Run and check the health endpoint
         run: |
-          docker run -d --name vectovecto-ci \
-            -e VECTOVECTO_DOCUMENT_ONLY=1 \
-            -p 7860:7860 vectovecto:ci
+          docker run -d --name vectovecto-ci -p 8000:8000 vectovecto:ci
           for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:7860/ || true)
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/health || true)
             if [ "$code" = "200" ]; then echo "up after ${i} tries"; exit 0; fi
             sleep 10
           done

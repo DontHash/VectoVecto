@@ -12,11 +12,13 @@ Permissive stack only:
 API:
     export_document_outputs(out_dir, stem, image_bgr, ocr_result, dpi=None,
                             make_pdf=True, make_overlay=True, make_txt=True,
-                            make_json=True) -> dict of written paths
+                            make_json=True, make_md=True) -> dict of written paths
 
     write_searchable_pdf(path, image_bgr, tokens, dpi=None)
     write_overlay_png(path, image_bgr, tokens)
     write_transcript(path, result)
+    write_transcript_md(path, result, title="Transcript")
+    write_combined_transcript_md(path, results, title=stem)
     write_ocr_json(path, result)
 """
 from __future__ import annotations
@@ -217,6 +219,67 @@ def write_transcript(path: str, result: OCRResult) -> str:
     return path
 
 
+def transcript_md_text(result: OCRResult) -> str:
+    """Markdown body for one page: provenance line, transcript, review table.
+
+    Deterministic (no timestamps): the same OCR result always produces the
+    same bytes. The review table is omitted when nothing was flagged.
+    """
+    from document_ocr import review_queue
+
+    review = review_queue(result.tokens)
+    low = sum(1 for t in result.tokens if "low_conf" in t.flags)
+    conflicts = sum(1 for t in result.tokens if "digit_conflict" in t.flags)
+
+    body = [
+        f"*{result.backend} · {len(result.tokens)} tokens · {low} "
+        f"low-confidence · {conflicts} digit conflicts · "
+        f"{len(review)} to review*",
+        "",
+    ]
+    body.extend(t.text for t in result.tokens if t.text)
+    if review:
+        body += [
+            "",
+            "## Review queue",
+            "",
+            "| token | flags | alternative | conf |",
+            "|---|---|---|---|",
+        ]
+        for tok in review:
+            text = (tok.text or "").replace("|", "\\|").replace("\n", " ")
+            alt = (tok.alt_text or "").replace("|", "\\|").replace("\n", " ")
+            alt_cell = f"`{alt}`" if alt else "—"
+            body.append(f"| `{text}` | {', '.join(tok.flags)} | {alt_cell} | "
+                        f"{tok.conf:.0f} |")
+    return "\n".join(body) + "\n"
+
+
+def write_transcript_md(path: str, result: OCRResult,
+                        title: Optional[str] = "Transcript") -> str:
+    """Markdown transcript for one page (transcript + review-queue table)."""
+    text = transcript_md_text(result)
+    if title:
+        text = f"# {title}\n\n{text}"
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return path
+
+
+def write_combined_transcript_md(path: str, results, title: str) -> str:
+    """Multi-page Markdown: one `## Page N` section per OCRResult."""
+    parts = [f"# {title}", ""]
+    for idx, result in enumerate(results):
+        parts.append(f"## Page {idx + 1}")
+        parts.append("")
+        parts.append(transcript_md_text(result))
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(parts))
+    return path
+
+
 def write_ocr_json(path: str, result: OCRResult) -> str:
     from document_ocr import review_queue, token_risk
 
@@ -259,6 +322,7 @@ def export_document_outputs(out_dir: str, stem: str, image_bgr: np.ndarray,
                             result: OCRResult, dpi: Optional[int] = None,
                             make_pdf: bool = True, make_overlay: bool = True,
                             make_txt: bool = True, make_json: bool = True,
+                            make_md: bool = True,
                             overlay_source: Optional[np.ndarray] = None) -> Dict[str, str]:
     """Write the product outputs. `overlay_source` lets the caller draw boxes on
     the restored/display image instead of the raw input."""
@@ -273,6 +337,8 @@ def export_document_outputs(out_dir: str, stem: str, image_bgr: np.ndarray,
                                                result.tokens)
     if make_txt:
         written["txt"] = write_transcript(os.path.join(out_dir, f"{stem}.txt"), result)
+    if make_md:
+        written["md"] = write_transcript_md(os.path.join(out_dir, f"{stem}.md"), result)
     if make_json:
         written["json"] = write_ocr_json(os.path.join(out_dir, f"{stem}.json"), result)
     return written
