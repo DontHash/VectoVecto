@@ -19,7 +19,9 @@ for path in (REPO, HERE):
 
 from vvweb.config import settings  # noqa: E402
 from vvweb.api import create_app  # noqa: E402
+from logging_setup import configure_logging  # noqa: E402
 
+configure_logging()
 app = create_app()
 
 

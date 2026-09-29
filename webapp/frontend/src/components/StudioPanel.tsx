@@ -162,7 +162,8 @@ export function StudioPanel(props: { state: StudioState; compact?: boolean }) {
 
       <Show when={!props.compact}>
         <p class="field__hint">
-          Picking the wrong script lowers accuracy — it is not auto-detected per token.
+          Picking the wrong script lowers accuracy — it is not auto-detected per
+          token. Devanagari models download once on first use, then run offline.
         </p>
       </Show>
 

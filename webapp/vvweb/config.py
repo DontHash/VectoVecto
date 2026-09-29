@@ -28,6 +28,10 @@ class Settings:
     max_concurrent: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_CONCURRENCY", 1))
     queue_wait_s: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_QUEUE_WAIT_S", 25))
 
+    # OCR language warmed at startup so the first visitor does not pay the
+    # model init / one-time Devanagari download (the UI defaults to Nepali).
+    warm_lang: str = field(default_factory=lambda: os.environ.get("VECTOVECTO_WEB_WARM_LANG", "ne"))
+
     # Retention
     run_ttl_minutes: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_TTL_MINUTES", 60))
     prune_interval_s: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_PRUNE_S", 600))

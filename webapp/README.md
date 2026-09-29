@@ -71,7 +71,8 @@ app can reach a private network path; the only outbound work is none.
   counts can differ by one or two from the full-resolution run. OCR is sensitive
   to the bytes; the site never mixes a run's numbers across files.
 - Only the document pipeline is exposed. The photo/upscale path is not (its
-  weights are non-commercial — see docs/LICENSES.md).
+  weights are non-commercial — see docs/LICENSES.md); the web photo studio is
+  parked with it (docs/PLAN_WEB_FULL.md, *Parked for later*).
 
 ## Deploy sketch
 

@@ -6,11 +6,11 @@ Basis: a read-only audit of the working tree on 2026-09-30 — product version
 `webapp/`.
 
 **Goal.** The web app (FastAPI `webapp/vvweb/` + SolidJS `webapp/frontend/`)
-is the single UI. It reaches feature parity with the CLI's single-page
-workflows — the document tab completely, the photo studio behind an explicit
-opt-in — with one shared pipeline, no duplicated logic, and honest resource
-caps. The repo stays cloneable and locally runnable, and nothing that is
-unused stays in the product path.
+is the single UI for the product: offline **document** restoration. It
+matches the CLI's single-page document workflows with one shared pipeline,
+no duplicated logic, and honest resource caps. The photo upscaler is a
+parked, CLI-only extra (see *Parked for later*) — not part of the product
+path, not a web target. The repo stays cloneable and locally runnable.
 
 ## Status ledger
 
@@ -19,9 +19,9 @@ unused stays in the product path.
 | Gradio removal (user decision) | **done** 2026-09-30 | `app.py` + its tests deleted; gradio dep, `vectovecto-studio` script, Docker, CI, packaging and docs updated |
 | Markdown export (user request) | **near-finished** 2026-09-30 | `<stem>.md` in export/CLI/web, tests green; web smoke on a PDF passed (23 tokens → `transcript.md`) |
 | P0 Repo truth & hygiene | **done** 2026-09-30 | frontend CI job, first `webapp` tests, Docker web image, docs pass; `webapp/` committed and pushed (`04d4eb2`) |
-| P1 Diet & broken-path fixes | **done** 2026-09-30 | legacy + kaggle/vlm_eval removed (w1_train kept); fidelity removed; rrdbnet/deva_reader shipped; dead ONNX deleted; `--workers` removed; deps split (scipy stays — skimage). Held: CLI grain unify (P3) |
+| P1 Diet & broken-path fixes | **done** 2026-09-30 | legacy + kaggle/vlm_eval removed (w1_train kept); fidelity removed; rrdbnet/deva_reader shipped; dead ONNX deleted; `--workers` removed; deps split (scipy stays — skimage). CLI-grain unification: moot (parked with the photo stack) |
 | P2 Web document parity | **done** 2026-09-30 | engine choice, output toggles, auto-rotate, all-pages + combined PDF/TXT/MD (cap 10), resized/pages notes; API tests + live smoke |
-| P3 Web photo studio | not started | the remaining feature gap (CLI-only today) |
+| P3 Web photo studio | **parked** 2026-09-30 | document-first decision: photo stack stays CLI-only (license-gated, orthogonal to documents); kept for later |
 | P4 Efficiency & deploy | partially done | Docker now builds the web app; dependency split pending (P1) |
 | P5 Verification | not started | |
 
@@ -34,9 +34,17 @@ unused stays in the product path.
 | Document pipeline (en/ne/hi), review queue, multi-page PDF | stable |
 | Web document studio, Markdown export | beta |
 | Photo upscale (CLI) | beta |
-| Web photo studio | planned |
+| Web photo studio | parked with the photo stack |
 | Mixed-page router, Devanagari line reader, digit verifier (bodhan) | experimental |
 | Fidelity (deep-SR) mode | not shipped (checkpoint never published) |
+
+**Parked for later (2026-09-30, document-first decision).** The photo
+upscaling stack (`smart_upscaler.py`, `sr_engine.py`, `vector_raster_hybrid.py`,
+`rrdbnet.py`, `sr_engine`'s ONNX/ncnn engines, CLI `--mode photo`) stays in
+the repo but outside the product path: its weights are non-commercial and no
+measured document use case needs it. The planned web photo studio (P3 in
+earlier revisions of this document) is parked with it. Revisit only with a
+commercial license and a product case.
 
 ---
 
@@ -58,7 +66,7 @@ Sizes measured on this machine 2026-09-30.
 | 8 | `deva_reader.py` + `deva_crnn/` were not in the wheel/PyInstaller lists, so the documented `--deva-lines` recipe could not work from a build | paths above | **Done 2026-09-30**: shipped in wheel + PyInstaller lists; the web image stays document-only by design (no CLI there) |
 | 9 | `.dockerignore` excluded `calibration/` while the code shipped → `cal_conf` was silently inert in the image | `tests/test_document_flags.py:84-85` | **Done 2026-09-30**: the image ships `calibration/` |
 | 10 | `cli.py --workers` was declared and never read | `cli.py` (removed) | **Done 2026-09-30**: flag and docstring claim removed |
-| 11 | CLI grain is a flat per-pixel formula; `SmartUpscaler` grain is luminance-conditioned — same flag, two looks | `cli.py` vs `smart_upscaler.py` | **Held for P3**: the web photo studio will use `SmartUpscaler`; the CLI keeps its own flag |
+| 11 | CLI grain is a flat per-pixel formula; `SmartUpscaler` grain is luminance-conditioned — same flag, two looks | `cli.py` vs `smart_upscaler.py` | **Moot / parked** with the photo stack: the CLI keeps its own flag; revisit with the photo studio |
 | 12 | Runtime list carried dev-only deps: `torchvision`, `onnx`, `transformers` (legacy/eval only). `scipy` looked dev-only but **stays** (scikit-image imports it transitively); `torch`/`huggingface_hub` back the photo/verifier features | import audit + the blocked-import check | **Done 2026-09-30**: split into `requirements.txt` (full), `requirements-doc.txt` (lean web/CLI-document), dev extras |
 | 13 | Local disk weight (git-ignored): `data/` 4.55 GB, `out/` 1.47 GB, `deva_crnn/` 1.16 GB, `upscayl-repo/` 231 MB, `weights/` 116 MB, `node_modules/` 109 MB, `brag-output/` 69 MB, `webapp/runs` 28 MB, `webapp/shots` 17 MB, `web_outputs/` 17 MB. The distributed repo itself is only ~11.8 MB (`.git`) / ~3.8 MiB tracked | measured 2026-09-30 | **The GitHub repo is already lean** — the weight is local data and generated output; clean the generated part, keep user data (P0) |
 | 14 | `brag-output/` is untracked *and* un-ignored; `scripts/build_digit_crop_sheet.py` is untracked though functional; `webapp/shots/` (26 screenshots) is referenced by no code | `git status`; grep | gitignore `brag-output/`; track the script; delete `shots/` local (P0) |
@@ -89,14 +97,11 @@ fidelity, tv_refinement, a dead ONNX file — all removed 2026-09-30),
 ### 0.3 Where the web stands vs. the CLI (the parity target)
 
 The gap is almost entirely API fields + controls — `run_document_pipeline`
-already has every document knob. The photo studio is the only large lift, and
-it is license-gated. Current web: language (default `ne`) + deskew, first PDF
-page only, fixed artifact set (`webapp/vvweb/api.py:109-123`,
-`webapp/vvweb/pipeline.py:33-69`, `webapp/frontend/src/lib/studio-state.ts:11`).
-Notable details: the startup warm-up runs with `lang=None` (`api.py:65`) while
-the UI defaults to `ne` — so the first visitor pays the Devanagari model
-download; `meta.resized` is returned but not shown. (Until 2026-09-30 the
-comparison point was `app.py`, the Gradio studio; it was removed by user
+already has every document knob, and P2 closed the document set. The photo
+studio was the only large lift and is now parked with the photo stack.
+Notable details already handled: the startup warm-up warms the UI's default
+language, and `meta.resized` / the page count are shown. (Until 2026-09-30
+the comparison point was `app.py`, the Gradio studio; it was removed by user
 decision — the web app is now the only UI and the CLI keeps every feature.)
 
 ---
@@ -110,23 +115,23 @@ web needs; all pipeline kwargs already exist unless noted.
 |---|---|---|---|---|---|
 | Image upload, drag/drop/paste, EXIF | A | A | A | — | — |
 | PDF input, first page | A | A | A | — | — |
-| Multi-page PDF + combined PDF/TXT | A | A (`--max-pages 0`) | — | `all_pages` form field + loop + `write_searchable_pdf_pages` + page cap | P2 |
-| OCR engine choice (auto/rapidocr/tesseract) | A | A | — | `ocr` form field | P2 |
-| Language en/ne/hi | A (default en) | A | A (default ne) | align defaults; pre-warm the configured default | P2/P4 |
+| Multi-page PDF + combined PDF/TXT/MD | A | A (`--max-pages 0`) | **A** (cap 10) | — | **done** |
+| OCR engine choice (auto/rapidocr/tesseract) | A | A | **A** | — | **done** |
+| Language en/ne/hi | A (default en) | A | A (default ne) | pre-warm the configured default | **done** |
 | Deskew | A | A | A | — | — |
-| Auto-rotate toggle | implicit on | A | implicit on | optional toggle (`auto_rotate`) | P2 |
-| Output toggles (overlay/pdf/txt) | A | A | always on | form booleans → `make_*` | P2 |
-| Downscale + device notes | A | P | P (`meta.resized` ignored) | render `resized`, add `device` to meta | P2 |
+| Auto-rotate toggle | implicit on | A | **A** | — | **done** |
+| Output toggles (overlay/pdf/txt/md) | A | A | **A** | — | **done** |
+| Downscale + device notes | A | P | P (resized shown; device missing) | add `device` to meta | later |
 | Review queue UI (flags, alt readings, risk) | P | P | **A** (best of the three) | — | — |
 | Markdown transcript export (transcript + review queue) | (removed) | A (`<stem>.md`) | A (`transcript.md`) | — | **done 2026-09-30** |
-| Digit re-pass policy | implicit (language policy) | A toggle | implicit | optional toggle (`repass_digits`) | P2 |
-| Mixed router (opt-in) | — | A | — | form bool + toggle, with the honesty note | P2 |
-| Deva line reader (opt-in) | — | A | — | form enum + server ckpt path (after #8) | P2/P3 |
+| Digit re-pass policy | implicit (language policy) | A toggle | implicit | optional toggle (`repass_digits`) | held — experimental |
+| Mixed router (opt-in) | — | A | — | form bool + toggle, with the honesty note | held — experimental |
+| Deva line reader (opt-in) | — | A | — | form enum + server ckpt path | held — experimental (checkpoint not distributed) |
 | Digit verifier (bodhan) | — | A | — | **not exposed** — 1.9 GB, self-host license; CLI only | — |
-| Photo: scale 2/4, mode, model, TTA, grain, SVG, mask | A | P | — | new `/api/upscale` + route, gated + capped | P3 |
+| Photo: scale 2/4, mode, model, TTA, grain, SVG, mask | A | P | — | not a web target | **parked** |
 | Batch folders, report, skip-existing | — | A | — | **not planned** — CLI workflow | — |
-| Rate limit, TTL, auth, queue shedding | — | — | **A** | keep; share the worker with photo | P3 |
-| Device/model info in health | P | P | — | extend `/api/health` (`features`, `device`, model availability) | P2/P3 |
+| Rate limit, TTL, auth, queue shedding | — | — | **A** | — | — |
+| Device/model info in health | P | P | — | `device` info only (no model management) | later (optional) |
 
 > The Gradio column is historical: `app.py` was removed on 2026-09-30 (user
 > decision — one UI). The Web column is the product target; the CLI keeps
@@ -134,8 +139,9 @@ web needs; all pipeline kwargs already exist unless noted.
 >
 > Web column updated 2026-09-30 (P2): multi-page PDFs with combined outputs,
 > OCR engine choice, output toggles, an auto-rotate toggle and the downscale
-> note are live. The remaining gaps are the photo studio (P3) and the
-> experimental CLI-only readers (mixed router, line reader, digit verifier).
+> note are live. The remaining gaps are the experimental CLI-only readers
+> (mixed router, line reader, digit verifier); the photo studio is parked
+> with the photo stack (see *Parked for later*).
 
 ---
 
@@ -206,7 +212,15 @@ install runs the photo tab; suite green; license gate green.
 **Acceptance:** every document row of the §1 matrix marked A; tests +
 frontend build green in CI.
 
-### P3 — Web photo studio, gated (L)
+### P3 — Web photo studio (parked 2026-09-30)
+
+Parked by the document-first decision; the sketch below is kept for later.
+The photo stack stays CLI-only, license-gated and out of the product path
+(see *Parked for later*). Do not start this without a commercial license and
+a product case.
+
+<details>
+<summary>Original scope (kept for reference)</summary>
 
 1. Config: `VECTOVECTO_WEB_PHOTO=1` opt-in (default off; `/api/health`
    advertises `features`). Document the licensing gate: the photo stack uses
@@ -217,17 +231,13 @@ frontend build green in CI.
    `mask.png`, `meta.json`; caps: input ≤ 4 MP, output ≤ 64 MP, SVG ≤ 20 MB,
    shared worker semaphore with the document path, 300 s timeout.
 3. Efficiency: `import smart_upscaler` lazily inside the handler; engine
-   cache keyed by spec (same pattern as `app.py:_ENGINE_CACHE`); warm only
-   when photo is enabled; document-only servers never import torch.
-4. Frontend: lazy `/upscale` route; controls mirror the Gradio photo tab;
-   comparison = browser-scaled original vs server result; downloads; SVG and
-   semantic map.
+   cache keyed by spec; the document-only server never imports torch.
+4. Frontend: lazy `/upscale` route; comparison = browser-scaled original vs
+   server result; downloads; SVG and semantic map.
 5. Weights: read from local `weights/` only (no downloads); `auto` fallback
    to bicubic surfaced honestly in `meta`.
 
-**Acceptance:** with photo enabled + weights present, upload → 4× → downloads
-work end to end; with the default config the endpoint is disabled and torch
-is not imported at startup.
+</details>
 
 ### P4 — Efficiency & deploy (M)
 
@@ -235,9 +245,11 @@ is not imported at startup.
    2026-09-30**: the root `Dockerfile` is the web image; CI builds it and
    checks `/api/health`; calibration included.
 2. Warm-up correctness: warm the configured default language (`ne` for the
-   web UI) instead of `lang=None`; photo engine warmed only if enabled.
+   web UI) instead of `lang=None` — **done 2026-09-30**
+   (`VECTOVECTO_WEB_WARM_LANG`, default `ne`).
 3. Offline guarantee, honestly: optional image layer that pre-downloads the
-   Devanagari model (baked cache), otherwise document the one-time download.
+   Devanagari model (baked cache); otherwise the startup warm-up handles it
+   and docs state the one-time download. (Pre-baked layer: deferred, optional.)
 4. Docs: rewrite `webapp/README.md` (features, knobs, deploy, license gate),
    add the web app to the root README quickstart.
 
@@ -273,7 +285,7 @@ a single uvicorn process — deployment simplicity is the product.
 
 | Risk | Mitigation |
 |---|---|
-| Photo weights are non-commercial; enabling them on a hosted demo is a license violation | Default off; explicit env opt-in; warning in README + startup log; license table gains the ncnn/upscayl entries it currently misses |
+| Photo weights are non-commercial | Parked with the photo stack: CLI-only, never in the web image; the license table still gains the missing ncnn/upscayl entries |
 | Devanagari first run needs network (contradicts the offline pitch if not handled) | Warm the UI default at startup; optional pre-baked image layer; honest copy |
 | Multi-page PDF memory on the single worker | Page cap + per-page timeout + existing 2500 px fit |
 | Removing `legacy/`//`kaggle/` breaks someone's workflow | History preserves everything; CHANGELOG note with recovery command (`git show <rev>:legacy/...`) |
@@ -285,6 +297,7 @@ a single uvicorn process — deployment simplicity is the product.
 ## 5. Explicit non-goals
 
 - Batch/folder processing over the web (CLI keeps it).
+- The photo upscaling studio on the web (parked with the photo stack).
 - Hosting the bodhan digit verifier or auto-downloading any multi-GB model.
 - ncnn/upscayl (AGPL + non-commercial labels) in the product path.
 - Eval-only knobs in the UI (`primary_stream`, `conf_threshold`), except the
@@ -297,8 +310,8 @@ a single uvicorn process — deployment simplicity is the product.
       the CLI works from the same install.
 - [ ] Fresh clone → web app quickstart (backend deps + `npm ci && npm run build`
       + server) works; document tab reaches the §1 matrix.
-- [ ] Photo studio works locally via the web when enabled and weights exist;
-      disabled by default; never imports torch in document-only mode.
+- [ ] Document-only promise holds: the web server never imports torch; the
+      photo stack stays CLI-only (parked with the photo studio).
 - [ ] Multi-page PDF: combined PDF/TXT equals the CLI's `--max-pages 0` output.
 - [ ] `python -m pytest tests -q` + license gate + frontend build + docker
       smoke all green in CI.

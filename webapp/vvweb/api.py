@@ -65,9 +65,18 @@ async def _periodic_prune() -> None:
         limiter.prune()
 
 
+def _warm_lang() -> Optional[str]:
+    """Language to warm at startup, mapped like a request (`en` → default)."""
+    lang = (settings.warm_lang or "ne").strip().lower()
+    if lang not in MAX_LANG:
+        lang = "ne"
+    return None if lang == "en" else lang
+
+
 def _warm_pipeline() -> None:
     """Load the OCR engine in the background so the first visitor does not pay
-    the model warm-up. Best-effort; failures are non-fatal."""
+    the model warm-up (including the one-time Devanagari model download).
+    Best-effort; failures are non-fatal."""
     try:
         import tempfile
 
@@ -76,7 +85,8 @@ def _warm_pipeline() -> None:
 
         page, _gt = doc_data.render_synthetic_invoice(seed=1, dpi=110)
         with tempfile.TemporaryDirectory(prefix="vv_warm_") as td:
-            run_document_pipeline(page, backend=None, lang=None, out_dir=td,
+            run_document_pipeline(page, backend=None, lang=_warm_lang(),
+                                  out_dir=td,
                                   stem="warm", make_pdf=False, make_overlay=False,
                                   make_txt=False, make_json=False)
     except Exception:  # noqa: BLE001 - warm-up only
@@ -86,6 +96,7 @@ def _warm_pipeline() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     store.prune()
+    _LOG.info("warming OCR in the background (lang=%s)", _warm_lang() or "default")
     threading.Thread(target=_warm_pipeline, daemon=True, name="vv-warmup").start()
     task = asyncio.create_task(_periodic_prune())
     try:

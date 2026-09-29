@@ -52,11 +52,14 @@ out; no services, no queue, no network.
 | `doc_metrics.py` | CER/WER/bagCER, digit-string metrics, `devanagari_validity`, queue stats, bootstrap CIs |
 | `degradation_document.py` | deterministic page degradations (mild/medium/heavy) used by proxies and tests |
 
-### Photo/vector stack (shared CLI/app)
+### Photo/vector stack (parked; CLI photo mode only)
 
 `smart_upscaler.py` (content analysis + routing), `sr_engine.py` (ONNX/torch
-model runner), `srvggnet.py` (SRVGG architecture), `tv_refinement.py` (TV
-post-processing), `vector_raster_hybrid.py` (raster→vector hybrid output).
+model runner), `srvggnet.py` (SRVGG architecture), `rrdbnet.py` (RRDBNet,
+x4plus), `vector_raster_hybrid.py` (raster→vector hybrid output). Not part of
+the document product path — the weights are non-commercial and no measured
+document use case needs it (see [PLAN_WEB_FULL.md](PLAN_WEB_FULL.md),
+*Parked for later*).
 
 ### Evidence and research (not part of the shipped runtime)
 

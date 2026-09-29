@@ -45,7 +45,7 @@ const STEPS = [
   },
   {
     title: "Recognition",
-    body: "RapidOCR (PP-OCRv6) reads Devanagari, Hindi and English by default; Tesseract 5 is an optional second engine. No network access is used — the models ship with the app.",
+    body: "RapidOCR (PP-OCRv6) reads Devanagari, Hindi and English by default; Tesseract 5 is an optional second engine. The Latin model ships with the app; the Devanagari model downloads once on first use, then everything runs offline.",
   },
   {
     title: "Risk ranking",

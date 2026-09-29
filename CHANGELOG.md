@@ -32,6 +32,14 @@ All notable changes to this project are documented here. The format follows
   SolidJS app under `webapp/` is the single UI — the root `Dockerfile`
   builds and serves it (`/api/health`, port 8000), and the server-side error
   logging now lives in `webapp/vvweb/api.py` (`vectovecto.web`).
+- **Scope note — document-first.** The photo upscaling stack is parked
+  (CLI-only, license-gated); the planned web photo studio is deferred, see
+  `docs/PLAN_WEB_FULL.md` (*Parked for later*).
+- Web warm-up now warms the UI's default language
+  (`VECTOVECTO_WEB_WARM_LANG`, default `ne`) so the first visitor does not
+  pay the Devanagari model init; `webapp/server.py` configures the shared
+  logger (`VECTOVECTO_LOG_LEVEL`), and the landing copy states the one-time
+  Devanagari download instead of claiming all models ship with the app.
 - `docs/DEPLOY.md`, `docs/ARCHITECTURE.md` and the READMEs describe the web
   studio; `docs/LICENSES.md` drops gradio.
 - **Dependencies split**: `requirements.txt` is the full local product,

@@ -83,8 +83,8 @@ python webapp/server.py                       # http://127.0.0.1:8000
 Hosted deployments (Docker, basic auth, HF Spaces/Render/Fly) are covered in
 [docs/DEPLOY.md](docs/DEPLOY.md). The server binds to localhost by default;
 the pipeline, models and any training artifacts stay server-side. The photo
-upscaler is CLI-only for now (its weights are non-commercial); a web photo
-studio is planned in [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md).
+upscaler is CLI-only (its weights are non-commercial); the web studio is
+document-only — see [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md).
 
 ### Outputs (per page)
 
@@ -129,7 +129,7 @@ cli.py                    command-line entry point (document + photo)
 webapp/                   the studio: FastAPI backend (vvweb/) + SolidJS frontend
 document_*.py, doc_*.py   pipeline: OCR, layout, orientation, restore, export, router, verifier
 calibration.py            isotonic confidence calibration
-smart_upscaler.py, sr_engine.py, ...   photo/vector restore stack
+smart_upscaler.py, sr_engine.py, ...   photo/vector stack (parked; CLI photo mode)
 deva_crnn/                Devanagari line reader (CRNN+CTC), opt-in via --deva-lines
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets

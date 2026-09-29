@@ -21,6 +21,7 @@ FastAPI backend. Environment knobs:
 |---|---|---|
 | `VECTOVECTO_WEB_HOST` | `0.0.0.0` (image) | bind address |
 | `VECTOVECTO_WEB_PORT` | `8000` | port (also the healthcheck) |
+| `VECTOVECTO_WEB_WARM_LANG` | `ne` | OCR language warmed at startup (covers the one-time Devanagari model download; set `en` to warm Latin only) |
 | `VECTOVECTO_WEB_USER` / `VECTOVECTO_WEB_PASSWORD` | unset | when both are set, `/api/*` requires HTTP basic auth |
 | `VECTOVECTO_WEB_MAX_UPLOAD_MB` | `12` | upload cap per page |
 | `VECTOVECTO_WEB_MAX_MP` | `30` | image megapixel cap |
@@ -67,12 +68,12 @@ on `/api/health`.
 | Cold start | ~40–90 s (torch + ONNX warm-up) |
 | Throughput | ~1 s/page for clean scans; letterpress ~2–4 s/page with the digit re-pass |
 
-## Not in the web studio (yet)
+## Not in the web studio
 
 The digit verifier (`--digit-verifier bodhan`), the Devanagari line reader
-(`--deva-lines`) and the mixed-page router stay opt-in CLI features. The photo
-upscaler is CLI-only while its weights are non-commercial; exposing it on the
-web is planned in [PLAN_WEB_FULL.md](PLAN_WEB_FULL.md) (P3).
+(`--deva-lines`) and the mixed-page router stay opt-in CLI features. The
+photo upscaler is CLI-only (its weights are non-commercial) and its planned
+web studio is parked — see [PLAN_WEB_FULL.md](PLAN_WEB_FULL.md).
 
 ## What is deliberately not hosted
 
