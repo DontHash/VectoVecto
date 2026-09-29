@@ -17,7 +17,7 @@ export function createStudioState() {
   const [wantPdf, setWantPdf] = createSignal(true);
   const [wantTxt, setWantTxt] = createSignal(true);
   const [wantMd, setWantMd] = createSignal(true);
-  const [advancedOpen, setAdvancedOpen] = createSignal(false);
+  const [advancedOpen, setAdvancedOpen] = createSignal(true);
   const [phase, setPhase] = createSignal<StudioPhase>("idle");
   const [result, setResult] = createSignal<RunPayload | null>(null);
   const [error, setError] = createSignal<string | null>(null);
