@@ -50,8 +50,10 @@ python webapp/tools/export_queue_sample.py  # real review queue -> frontend data
 | Uploads | extension + magic bytes, Pillow decode check, ≤ 12 MB, ≤ 30 MP, streamed to disk with a hard cap (headers are never trusted) |
 | Abuse | per-IP sliding-window rate limit (default 6 runs / 2 min), one heavy worker, bounded queue (25 s) then 503 + `Retry-After` |
 | Run time | hard timeout (180 s) per page; failed runs are deleted immediately |
-| Data | runs live under `webapp/runs/<random-16-hex>/`; files are deleted after the retention window (default 60 min) by a periodic sweep; nothing is logged about page content |
+| Data | runs live under `webapp/runs/<random-16-hex>/`; files are deleted after the retention window (default 60 min) by a periodic sweep; owner-only permissions (0700 dirs / 0600 manifests) on POSIX; nothing is logged about page content |
 | Files | artifact names are a fixed whitelist; run ids are validated against `^[0-9a-f]{16}$`, so traversal is impossible |
+| Proxy | real client IP only when `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` names the proxy (uvicorn proxy headers); otherwise the proxy IP is the rate-limit key |
+| Cost | text-only gzip (≥ 1 KiB); hashed assets cached `immutable`, fonts/examples 1 week, HTML revalidates; no torch in the web image |
 | Transport | security headers on every response (CSP without inline script/style, `nosniff`, `frame-ancestors 'none'`, referrer policy, COOP/CORP); API responses are `no-store` |
 | Auth | optional HTTP Basic for `/api/*` — set `VECTOVECTO_WEB_USER` + `VECTOVECTO_WEB_PASSWORD` |
 

@@ -19,6 +19,12 @@ All notable changes to this project are documented here. The format follows
   combined `combined.pdf` / `combined.txt` / `combined.md` outputs; the
   results view shows the page count, the downscale note and the combined
   downloads.
+- **Hosting hardening (cost-first)**: selective gzip for text-like responses
+  only (PNG/PDF untouched); immutable cache headers for hashed assets and
+  1-week for fonts/examples; real-client-IP proxy opt-in
+  (`VECTOVECTO_WEB_FORWARDED_ALLOW_IPS`); the rate-limiter table is bounded
+  (20k keys); run dirs/manifests get owner-only permissions on POSIX; a
+  hosting hardening & cost checklist lives in `docs/DEPLOY.md`.
 
 ### Fixed
 

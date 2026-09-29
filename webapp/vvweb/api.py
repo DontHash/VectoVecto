@@ -19,9 +19,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .compression import SelectiveGZipMiddleware
 from .pipeline import PAGE_CAP, PipelineError, process_page
-from .security import (RateLimiter, client_key, http_exception_handler,
-                       new_run_id, require_auth, security_headers_middleware,
+from .security import (RateLimiter, SecurityHeadersMiddleware, client_key,
+                       http_exception_handler, new_run_id, require_auth,
                        validate_upload)
 from .storage import PUBLIC_FILES, RunStore
 
@@ -110,7 +111,9 @@ def create_app() -> FastAPI:
                   docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=_lifespan)
 
-    app.middleware("http")(security_headers_middleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024,
+                       compresslevel=6)
     app.add_exception_handler(HTTPException, http_exception_handler)
 
     # -- meta --------------------------------------------------------------

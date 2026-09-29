@@ -17,6 +17,18 @@ import time
 from typing import Dict, Optional
 
 RUN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+
+
+def _harden(path: str, mode: int) -> None:
+    """Best-effort owner-only permissions on POSIX (no-op on Windows)."""
+    if os.name != "posix":
+        return
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
+
+
 PUBLIC_FILES = {
     "restored.png": {"media": "image/png", "download": "restored.png"},
     "overlay.png": {"media": "image/png", "download": "overlay.png"},
@@ -35,6 +47,7 @@ class RunStore:
         self.root = os.path.abspath(root)
         self.ttl_seconds = ttl_seconds
         os.makedirs(self.root, exist_ok=True)
+        _harden(self.root, 0o700)
 
     # -- lifecycle ---------------------------------------------------------
     def run_dir(self, run_id: str) -> str:
@@ -45,14 +58,16 @@ class RunStore:
     def create(self, run_id: str) -> str:
         path = self.run_dir(run_id)
         os.makedirs(path, exist_ok=False)
+        _harden(path, 0o700)
         return path
 
     def write_manifest(self, run_id: str, manifest: Dict) -> None:
         manifest = dict(manifest)
         manifest["expires_at"] = int(time.time()) + self.ttl_seconds
-        with open(os.path.join(self.run_dir(run_id), "manifest.json"), "w",
-                  encoding="utf-8") as f:
+        path = os.path.join(self.run_dir(run_id), "manifest.json")
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=1)
+        _harden(path, 0o600)
 
     def read_manifest(self, run_id: str) -> Optional[Dict]:
         try:

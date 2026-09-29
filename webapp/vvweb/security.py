@@ -9,6 +9,8 @@ from typing import Deque, Dict, Optional, Tuple
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .config import settings
 
@@ -87,9 +89,12 @@ def new_run_id() -> str:
 
 
 class RateLimiter:
-    def __init__(self, window_s: int, max_in_window: int) -> None:
+    def __init__(self, window_s: int, max_in_window: int,
+                 max_keys: int = 20_000) -> None:
         self.window_s = window_s
         self.max_in_window = max_in_window
+        # Bounded so an IP spray cannot grow memory without limit.
+        self.max_keys = max_keys
         self._hits: Dict[str, Deque[float]] = defaultdict(deque)
 
     def check(self, key: str) -> Tuple[bool, int]:
@@ -102,21 +107,37 @@ class RateLimiter:
             retry = int(self.window_s - (now - q[0])) + 1
             return False, max(retry, 1)
         q.append(now)
+        if len(self._hits) > self.max_keys:
+            self._evict()
         return True, 0
 
     def prune(self) -> None:
+        self._evict()
+
+    def tracked_keys(self) -> int:
+        """Number of client keys currently held (bounded by `max_keys`)."""
+        return len(self._hits)
+
+    def _evict(self) -> None:
+        """Drop stale keys; if still over the cap, drop the least recent."""
         now = time.monotonic()
-        for key in list(self._hits.keys()):
-            q = self._hits[key]
-            while q and now - q[0] > self.window_s:
-                q.popleft()
-            if not q:
-                del self._hits[key]
+        for key in [k for k, q in self._hits.items()
+                    if not q or now - q[-1] > self.window_s]:
+            self._hits.pop(key, None)
+        if len(self._hits) > self.max_keys:
+            by_last = sorted(self._hits.items(),
+                             key=lambda kv: kv[1][-1] if kv[1] else 0.0)
+            for key, _q in by_last[: len(self._hits) - self.max_keys]:
+                self._hits.pop(key, None)
 
 
 def client_key(request: Request) -> str:
-    """Best-effort client identity. Behind a proxy this is the proxy IP unless
-    the deployment sets X-Forwarded-For handling; documented in README."""
+    """Best-effort client identity for rate limiting.
+
+    Behind a reverse proxy this is the proxy IP unless the deployment enables
+    proxy headers (uvicorn `proxy_headers=True` + `forwarded_allow_ips`, wired
+    by `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS`); see docs/DEPLOY.md.
+    """
     return request.client.host if request.client else "unknown"
 
 
@@ -178,13 +199,52 @@ SECURITY_HEADERS = {
 }
 
 
-async def security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
-    for key, value in SECURITY_HEADERS.items():
-        response.headers.setdefault(key, value)
-    if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-    return response
+def cache_control_for_path(path: str) -> str | None:
+    """Cache policy for the static site. Hashed build assets are immutable;
+    fonts/examples cache for a week; everything else is left alone (HTML is
+    handled by content type in the middleware, /api/ gets no-store)."""
+    if path.startswith("/assets/"):
+        return "public, max-age=31536000, immutable"
+    if path.startswith(("/fonts/", "/examples/")):
+        return "public, max-age=604800"
+    return None
+
+
+class SecurityHeadersMiddleware:
+    """Security headers + cache policy on every response.
+
+    Pure ASGI (not `BaseHTTPMiddleware`): the stock base middleware re-streams
+    bodies in chunks, which would defeat the gzip middleware's minimum-size
+    rule (small JSON would get compressed) and adds a needless buffering hop.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive,
+                       send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(raw=message["headers"])
+                for key, value in SECURITY_HEADERS.items():
+                    headers.setdefault(key, value)
+                path = scope.get("path", "")
+                if path.startswith("/api/"):
+                    headers["Cache-Control"] = "no-store"
+                elif message["status"] == 200:
+                    if "text/html" in headers.get("content-type", ""):
+                        headers.setdefault("Cache-Control", "no-cache")
+                    else:
+                        policy = cache_control_for_path(path)
+                        if policy:
+                            headers.setdefault("Cache-Control", policy)
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

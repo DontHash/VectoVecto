@@ -32,6 +32,11 @@ class Settings:
     # model init / one-time Devanagari download (the UI defaults to Nepali).
     warm_lang: str = field(default_factory=lambda: os.environ.get("VECTOVECTO_WEB_WARM_LANG", "ne"))
 
+    # Trusted reverse proxy for real client IPs (rate limiting). Uvicorn
+    # `proxy_headers` + `forwarded_allow_ips`; empty = off. See docs/DEPLOY.md.
+    forwarded_allow_ips: str = field(default_factory=lambda: os.environ.get(
+        "VECTOVECTO_WEB_FORWARDED_ALLOW_IPS", "").strip())
+
     # Retention
     run_ttl_minutes: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_TTL_MINUTES", 60))
     prune_interval_s: int = field(default_factory=lambda: _env_int("VECTOVECTO_WEB_PRUNE_S", 600))

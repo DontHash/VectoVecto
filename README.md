@@ -134,7 +134,7 @@ deva_crnn/                Devanagari line reader (CRNN+CTC), opt-in via --deva-l
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    325 tests
+tests/                    the test suite (pytest counts them; ~336)
 docs/                     architecture, evaluation, deployment, licensing, plan
 ```
 
@@ -156,7 +156,7 @@ docs/                     architecture, evaluation, deployment, licensing, plan
 python -m pytest tests/ -q
 ```
 
-325 tests: OCR/export/routing/CLI/web, layout, orientation, language plumbing,
+The suite (≈336 collected) covers: OCR/export/routing/CLI/web, layout, orientation, language plumbing,
 frozen-manifest and CI guards, GT-validity audits, error taxonomy, anchor
 harness, queue metrics, Unicode-path IO, Devanagari line synthesis, CRNN
 plumbing (height/width round-trip, beam search, cosine fine-tune), the

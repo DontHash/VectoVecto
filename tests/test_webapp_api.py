@@ -101,6 +101,14 @@ def test_health(client):
     assert payload["ok"] is True and payload["version"]
     assert payload["limits"]["max_upload_mb"] > 0
     assert payload["limits"]["max_pages"] > 0
+    # hosting hardening
+    assert r.headers["cache-control"] == "no-store"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert "content-security-policy" in r.headers
+    # small responses must not be gzipped (minimum-size rule holds even
+    # through the real middleware stack)
+    gz = client.get("/api/health", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in gz.headers
 
 
 def test_restore_rejects_unsupported_file(client):

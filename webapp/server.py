@@ -25,9 +25,27 @@ configure_logging()
 app = create_app()
 
 
+def _uvicorn_extra(allow: str) -> dict:
+    """Proxy-header kwargs for uvicorn, or {} when disabled.
+
+    Opt-in via `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` = the proxy address(es)
+    (`127.0.0.1`, a subnet, or `*`). Left unset, forwarded headers are
+    ignored and the proxy IP is rate-limited (safe but coarse).
+    """
+    allow = (allow or "").strip()
+    if not allow:
+        return {}
+    return {"proxy_headers": True, "forwarded_allow_ips": allow}
+
+
 def main() -> None:
     import uvicorn
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+    extra = _uvicorn_extra(settings.forwarded_allow_ips)
+    if extra:
+        print(f"[server] proxy headers enabled (allow: "
+              f"{extra['forwarded_allow_ips']})")
+    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info",
+                **extra)
 
 
 if __name__ == "__main__":
