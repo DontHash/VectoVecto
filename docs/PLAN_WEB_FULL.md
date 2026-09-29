@@ -22,8 +22,8 @@ path, not a web target. The repo stays cloneable and locally runnable.
 | P1 Diet & broken-path fixes | **done** 2026-09-30 | legacy + kaggle/vlm_eval removed (w1_train kept); fidelity removed; rrdbnet/deva_reader shipped; dead ONNX deleted; `--workers` removed; deps split (scipy stays — skimage). CLI-grain unification: moot (parked with the photo stack) |
 | P2 Web document parity | **done** 2026-09-30 | engine choice, output toggles, auto-rotate, all-pages + combined PDF/TXT/MD (cap 10), resized/pages notes; API tests + live smoke |
 | P3 Web photo studio | **parked** 2026-09-30 | document-first decision: photo stack stays CLI-only (license-gated, orthogonal to documents); kept for later |
-| P4 Efficiency & deploy | partially done | Docker now builds the web app; dependency split pending (P1) |
-| P5 Verification | not started | |
+| P4 Efficiency & deploy | **done** 2026-09-30 | Docker web image + CI health check; warm-up warms the UI default (`VECTOVECTO_WEB_WARM_LANG=ne`); shared logger wired into `server.py`; README/webapp/ARCHITECTURE/DEPLOY updated. Optional pre-baked offline image layer: deferred |
+| P5 Verification | **done** 2026-09-30 (document scope) | 332 tests + license gate + frontend build green; live smokes: markdown, multi-page combined outputs, toggles, warm-up; docker image is verified in CI (not locally). Device info in meta: optional-later |
 
 **Feature maturity labels** used in docs and later in the UI: `stable` ·
 `beta` (works, still changing) · `experimental` (opt-in, may change) ·
