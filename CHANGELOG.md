@@ -13,6 +13,12 @@ All notable changes to this project are documented here. The format follows
   table; CLI knob `--no-md`, download link in the web studio.
 - CI: a frontend build job (Node 22) and the first `webapp` tests
   (`tests/test_webapp_api.py`).
+- **Web document parity (P2)**: the studio exposes the OCR engine choice
+  (auto/rapidocr/tesseract), output toggles (overlay / PDF / transcript /
+  Markdown), an auto-rotate toggle and "all pages" for PDFs (cap 10) with
+  combined `combined.pdf` / `combined.txt` / `combined.md` outputs; the
+  results view shows the page count, the downscale note and the combined
+  downloads.
 
 ### Fixed
 

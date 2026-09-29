@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .pipeline import PipelineError, process_page
+from .pipeline import PAGE_CAP, PipelineError, process_page
 from .security import (RateLimiter, client_key, http_exception_handler,
                        new_run_id, require_auth, security_headers_middleware,
                        validate_upload)
@@ -35,6 +35,16 @@ FRONTEND_DIST = os.path.join(WEBAPP_DIR, "frontend", "dist")
 RUNS_DIR = os.path.join(WEBAPP_DIR, "runs")
 
 MAX_LANG = {"en", "ne", "hi"}
+OCR_BACKENDS = {"auto", "rapidocr", "tesseract"}
+
+
+def _flag(value: str, default: bool = True) -> bool:
+    text = (value or "").strip().lower()
+    if text in ("1", "true", "on", "yes"):
+        return True
+    if text in ("0", "false", "off", "no"):
+        return False
+    return default
 
 store = RunStore(RUNS_DIR, settings.run_ttl_seconds)
 limiter = RateLimiter(settings.rate_window_s, settings.rate_max_in_window)
@@ -102,6 +112,7 @@ def create_app() -> FastAPI:
             "limits": {
                 "max_upload_mb": settings.max_upload_mb,
                 "max_image_megapixels": settings.max_image_megapixels,
+                "max_pages": PAGE_CAP,
                 "ttl_minutes": settings.run_ttl_minutes,
                 "rate_max": settings.rate_max_in_window,
                 "rate_window_s": settings.rate_window_s,
@@ -114,7 +125,14 @@ def create_app() -> FastAPI:
     async def restore(request: Request,
                       file: UploadFile = File(...),
                       lang: str = Form("ne"),
-                      deskew: str = Form("0")) -> JSONResponse:
+                      deskew: str = Form("0"),
+                      ocr: str = Form("auto"),
+                      overlay: str = Form("1"),
+                      pdf: str = Form("1"),
+                      txt: str = Form("1"),
+                      md: str = Form("1"),
+                      all_pages: str = Form("0"),
+                      auto_rotate: str = Form("1")) -> JSONResponse:
         allowed, retry_after = limiter.check(client_key(request))
         if not allowed:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -124,7 +142,11 @@ def create_app() -> FastAPI:
         lang = (lang or "ne").strip().lower()
         if lang not in MAX_LANG:
             lang = "ne"
-        deskew_flag = str(deskew).strip() in ("1", "true", "on", "yes")
+        ocr = (ocr or "auto").strip().lower()
+        if ocr not in OCR_BACKENDS:
+            _LOG.warning("unknown OCR engine %r; using auto", ocr)
+            ocr = "auto"
+        deskew_flag = _flag(deskew, default=False)
 
         # Stream the upload to disk with a hard cap (never trust the header).
         run_id = new_run_id()
@@ -175,7 +197,11 @@ def create_app() -> FastAPI:
                 loop.run_in_executor(None, lambda: process_page(
                     upload_path, run_dir, run_id,
                     lang=None if lang == "en" else lang, deskew=deskew_flag,
-                    kind=kind)),
+                    kind=kind, ocr=ocr,
+                    make_overlay=_flag(overlay), make_pdf=_flag(pdf),
+                    make_txt=_flag(txt), make_md=_flag(md),
+                    all_pages=_flag(all_pages, default=False),
+                    auto_rotate=_flag(auto_rotate))),
                 timeout=settings.process_timeout_s)
         except asyncio.TimeoutError:
             _LOG.warning("restore timed out after %.0fs (run=%s)",

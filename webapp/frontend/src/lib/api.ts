@@ -1,5 +1,5 @@
 /** Typed API client. Same-origin; the dev server proxies /api to :8000. */
-import type { Health, Lang, RunPayload } from "./types";
+import type { Health, Lang, OcrEngine, RunPayload } from "./types";
 
 class ApiError extends Error {
   constructor(
@@ -29,15 +29,31 @@ export async function fetchHealth(): Promise<Health> {
   return (await res.json()) as Health;
 }
 
+export interface RestoreOptions {
+  lang: Lang;
+  deskew: boolean;
+  ocr: OcrEngine;
+  allPages: boolean;
+  autoRotate: boolean;
+  outputs: { overlay: boolean; pdf: boolean; txt: boolean; md: boolean };
+}
+
 export async function runRestore(
   file: File | Blob,
-  opts: { lang: Lang; deskew: boolean },
+  opts: RestoreOptions,
 ): Promise<RunPayload> {
   const body = new FormData();
   const name = file instanceof File ? file.name : "example.png";
   body.append("file", file, name);
   body.append("lang", opts.lang);
   body.append("deskew", opts.deskew ? "1" : "0");
+  body.append("ocr", opts.ocr);
+  body.append("all_pages", opts.allPages ? "1" : "0");
+  body.append("auto_rotate", opts.autoRotate ? "1" : "0");
+  body.append("overlay", opts.outputs.overlay ? "1" : "0");
+  body.append("pdf", opts.outputs.pdf ? "1" : "0");
+  body.append("txt", opts.outputs.txt ? "1" : "0");
+  body.append("md", opts.outputs.md ? "1" : "0");
 
   const res = await fetch("/api/restore", { method: "POST", body });
   if (!res.ok) throw await parseError(res);

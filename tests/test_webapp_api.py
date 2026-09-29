@@ -1,10 +1,11 @@
 """
 test_webapp_api.py — the FastAPI studio: health, upload validation, restore
-plumbing, artifact serving, and server-side failure logging.
+plumbing, artifact serving, output toggles, multi-page runs, and server-side
+failure logging.
 
 The OCR pipeline itself is stubbed (it is covered by its own tests); these
 tests exercise the web layer: request validation, run lifecycle, the PDF vs
-image loader choice, the artifact whitelist and the response payload.
+image loader choice, option threading, the artifact whitelist and the payload.
 """
 from __future__ import annotations
 
@@ -43,7 +44,8 @@ def client(tmp_path, monkeypatch):
 
 
 def _fake_pipeline(captured: dict | None = None):
-    """Stand-in for run_document_pipeline: writes .md/.txt into out_dir."""
+    """Stand-in for run_document_pipeline: honours the make_* flags and writes
+    the artifacts the web layer copies to canonical names."""
     import numpy as np
 
     from document_ocr import OCRResult, Token
@@ -62,16 +64,31 @@ def _fake_pipeline(captured: dict | None = None):
 
     def fake(img, **kw):
         if captured is not None:
-            captured["shape"] = getattr(img, "shape", None)
+            captured.setdefault("calls", []).append(dict(kw))
         out_dir, stem = kw["out_dir"], kw["stem"]
-        md_path = os.path.join(out_dir, f"{stem}.md")
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write("# Transcript\n\nHELLO\n")
-        txt_path = os.path.join(out_dir, f"{stem}.txt")
-        with open(txt_path, "w", encoding="utf-8") as f:
-            f.write("HELLO\n")
+        outputs = {}
+        if kw.get("make_txt", True):
+            path = os.path.join(out_dir, f"{stem}.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("HELLO\n")
+            outputs["txt"] = path
+        if kw.get("make_md", True):
+            path = os.path.join(out_dir, f"{stem}.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("# Transcript\n\nHELLO\n")
+            outputs["md"] = path
+        if kw.get("make_overlay", True):
+            from PIL import Image
+            path = os.path.join(out_dir, f"{stem}_overlay.png")
+            Image.new("RGB", (8, 8), (255, 255, 255)).save(path)
+            outputs["overlay"] = path
+        if kw.get("make_pdf", True):
+            path = os.path.join(out_dir, f"{stem}.pdf")
+            with open(path, "wb") as f:
+                f.write(b"%PDF-1.4 fake")
+            outputs["pdf"] = path
         result = _FakeResult()
-        result.outputs = {"md": md_path, "txt": txt_path}
+        result.outputs = outputs
         return result
 
     return fake
@@ -83,6 +100,7 @@ def test_health(client):
     payload = r.json()
     assert payload["ok"] is True and payload["version"]
     assert payload["limits"]["max_upload_mb"] > 0
+    assert payload["limits"]["max_pages"] > 0
 
 
 def test_restore_rejects_unsupported_file(client):
@@ -121,6 +139,38 @@ def test_restore_happy_path_serves_the_markdown(client, monkeypatch):
     assert bad.status_code in (404, 400)
 
 
+def test_restore_threads_engine_and_options(client, monkeypatch):
+    import document_pipeline
+
+    captured: dict = {}
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        _fake_pipeline(captured))
+    r = client.post("/api/restore",
+                    files={"file": ("page.png", _png_bytes(), "image/png")},
+                    data={"ocr": "tesseract", "auto_rotate": "off",
+                          "lang": "en", "deskew": "1"})
+    assert r.status_code == 200, r.text
+    call = captured["calls"][0]
+    assert call["backend"] == "tesseract"
+    assert call["auto_rotate"] is False
+    assert call["deskew"] is True
+    assert r.json()["meta"]["auto_rotate"] is False
+
+
+def test_output_toggles_hide_artifacts(client, monkeypatch):
+    import document_pipeline
+
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        _fake_pipeline())
+    r = client.post("/api/restore",
+                    files={"file": ("page.png", _png_bytes(), "image/png")},
+                    data={"pdf": "0", "md": "0", "overlay": "0"})
+    assert r.status_code == 200, r.text
+    files = r.json()["files"]
+    assert "pdf" not in files and "md" not in files and "overlay" not in files
+    assert "txt" in files, "the transcript fallback still serves the text"
+
+
 def test_pdf_upload_is_loaded_as_a_pdf(client, tmp_path, monkeypatch):
     """Regression: streamed uploads have no extension; the validator's kind
     must decide the loader, not the filename on disk."""
@@ -140,9 +190,40 @@ def test_pdf_upload_is_loaded_as_a_pdf(client, tmp_path, monkeypatch):
                     files={"file": ("one.pdf", pdf.read_bytes(),
                                     "application/pdf")})
     assert r.status_code == 200, r.text
-    assert captured.get("shape") is not None, \
-        "a page image must be rendered from the PDF"
-    assert r.json()["meta"]["input_kind"] == "pdf"
+    assert captured["calls"][0]["backend"] is None
+    payload = r.json()
+    assert payload["meta"]["input_kind"] == "pdf"
+    assert payload["meta"]["pages_processed"] == 1
+
+
+def test_all_pages_writes_combined_outputs(client, tmp_path, monkeypatch):
+    import document_pipeline
+    from reportlab.pdfgen import canvas
+
+    pdf = tmp_path / "three.pdf"
+    c = canvas.Canvas(str(pdf), pagesize=(240, 200))
+    for i in range(3):
+        c.drawString(20, 170, f"PAGE {i}")
+        c.showPage()
+    c.save()
+
+    captured: dict = {}
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        _fake_pipeline(captured))
+    r = client.post("/api/restore",
+                    files={"file": ("three.pdf", pdf.read_bytes(),
+                                    "application/pdf")},
+                    data={"all_pages": "1", "lang": "en"})
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["meta"]["pages_processed"] == 3
+    assert len(captured["calls"]) == 3
+
+    files = payload["files"]
+    assert {"combined_pdf", "combined_txt", "combined_md"} <= set(files)
+    md = client.get(files["combined_md"])
+    assert md.status_code == 200
+    assert "## Page 1" in md.text and "## Page 3" in md.text
 
 
 def test_restore_failure_is_logged(client, monkeypatch, caplog):

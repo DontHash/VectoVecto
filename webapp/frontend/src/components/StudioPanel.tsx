@@ -1,7 +1,7 @@
 import { For, Show } from "solid-js";
 import { DropZone } from "./DropZone";
 import { EXAMPLE_FILES, limitsLine, type StudioState } from "../lib/studio-state";
-import type { Lang } from "../lib/types";
+import type { Lang, OcrEngine } from "../lib/types";
 
 /** The studio controls: drop a page, pick an example, set options, run.
  *  `compact` is the homepage hero treatment. */
@@ -63,7 +63,102 @@ export function StudioPanel(props: { state: StudioState; compact?: boolean }) {
           />
           <span>Deskew small rotations</span>
         </label>
+
+        <button
+          class="btn btn--ghost btn--small"
+          type="button"
+          disabled={running()}
+          onClick={() => s.setAdvancedOpen(!s.advancedOpen())}
+        >
+          {s.advancedOpen() ? "hide options" : "more options"}
+        </button>
       </div>
+
+      <Show when={s.advancedOpen()}>
+        <div class="stack-16">
+          <div class="field">
+            <label
+              class="field__label"
+              for={`ocr-${props.compact ? "hero" : "page"}`}
+            >
+              OCR engine
+            </label>
+            <select
+              id={`ocr-${props.compact ? "hero" : "page"}`}
+              class="select"
+              value={s.ocr()}
+              disabled={running()}
+              onChange={(e) => s.setOcr(e.currentTarget.value as OcrEngine)}
+            >
+              <option value="auto">Auto (best available)</option>
+              <option value="rapidocr">RapidOCR (recommended)</option>
+              <option value="tesseract">Tesseract (optional install)</option>
+            </select>
+          </div>
+
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              checked={s.autoRotate()}
+              disabled={running()}
+              onChange={(e) => s.setAutoRotate(e.currentTarget.checked)}
+            />
+            <span>Auto-rotate sideways / upside-down pages</span>
+          </label>
+
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              checked={s.allPages()}
+              disabled={running()}
+              onChange={(e) => s.setAllPages(e.currentTarget.checked)}
+            />
+            <span>All pages of a PDF (first page by default)</span>
+          </label>
+
+          <div class="field">
+            <span class="field__label">Files to write</span>
+            <div class="example-chips">
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.wantOverlay()}
+                  disabled={running()}
+                  onChange={(e) => s.setWantOverlay(e.currentTarget.checked)}
+                />
+                <span>overlay</span>
+              </label>
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.wantPdf()}
+                  disabled={running()}
+                  onChange={(e) => s.setWantPdf(e.currentTarget.checked)}
+                />
+                <span>searchable PDF</span>
+              </label>
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.wantTxt()}
+                  disabled={running()}
+                  onChange={(e) => s.setWantTxt(e.currentTarget.checked)}
+                />
+                <span>transcript</span>
+              </label>
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.wantMd()}
+                  disabled={running()}
+                  onChange={(e) => s.setWantMd(e.currentTarget.checked)}
+                />
+                <span>markdown</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       <Show when={!props.compact}>
         <p class="field__hint">

@@ -23,6 +23,9 @@ PUBLIC_FILES = {
     "searchable.pdf": {"media": "application/pdf", "download": "searchable.pdf"},
     "transcript.txt": {"media": "text/plain; charset=utf-8", "download": "transcript.txt"},
     "transcript.md": {"media": "text/markdown; charset=utf-8", "download": "transcript.md"},
+    "combined.pdf": {"media": "application/pdf", "download": "combined.pdf"},
+    "combined.txt": {"media": "text/plain; charset=utf-8", "download": "combined.txt"},
+    "combined.md": {"media": "text/markdown; charset=utf-8", "download": "combined.md"},
     "ocr.json": {"media": "application/json", "download": "ocr.json"},
 }
 

@@ -14,7 +14,7 @@ export function StudioResults(props: { state: StudioState }) {
   const afterUrl = createMemo(() => {
     const p = s.result();
     if (!p) return null;
-    return s.showBoxes() ? p.files.overlay : p.files.restored;
+    return s.showBoxes() && p.files.overlay ? p.files.overlay : p.files.restored;
   });
 
   const tabs = createMemo<[Tab, string][]>(() => {
@@ -52,7 +52,26 @@ export function StudioResults(props: { state: StudioState }) {
               <div class="stat__label">digit conflicts</div>
               <div class="stat__value">{result().meta.digit_conflicts}</div>
             </div>
+            <Show when={result().meta.pages_processed > 1}>
+              <div>
+                <div class="stat__label">pages</div>
+                <div class="stat__value">{result().meta.pages_processed}</div>
+              </div>
+            </Show>
           </div>
+
+          <Show when={result().meta.resized}>
+            <p class="field__hint">
+              Large page: downscaled to 2500 px before processing; the review boxes
+              match the processed size.
+            </p>
+          </Show>
+          <Show when={result().meta.pages_capped}>
+            <p class="field__hint">
+              Only the first {result().meta.page_cap} pages were processed — split
+              larger PDFs into parts.
+            </p>
+          </Show>
 
           <div class="tabs" role="tablist">
             <For each={tabs()}>
@@ -85,7 +104,7 @@ export function StudioResults(props: { state: StudioState }) {
                   <div class="card card--flush">
                     <img
                       class="compare__img"
-                      src={result().files.overlay}
+                      src={result().files.overlay ?? result().files.restored}
                       alt="Restored page with review overlay"
                     />
                   </div>
@@ -120,9 +139,11 @@ export function StudioResults(props: { state: StudioState }) {
                 <ReviewTable rows={result().review} />
               </Show>
               <div class="results__actions">
-                <a class="download" href={`${result().files.json}?download=1`}>
-                  ↓ ocr.json
-                </a>
+                <Show when={result().files.json}>
+                  <a class="download" href={`${result().files.json}?download=1`}>
+                    ↓ ocr.json
+                  </a>
+                </Show>
               </div>
             </div>
           </Show>
@@ -140,21 +161,46 @@ export function StudioResults(props: { state: StudioState }) {
                 <a class="download" href={`${result().files.restored}?download=1`}>
                   ↓ restored.png
                 </a>
-                <a class="download" href={`${result().files.overlay}?download=1`}>
-                  ↓ overlay.png
-                </a>
-                <a class="download" href={`${result().files.pdf}?download=1`}>
-                  ↓ searchable.pdf
-                </a>
-                <a class="download" href={`${result().files.txt}?download=1`}>
-                  ↓ transcript.txt
-                </a>
-                <a class="download" href={`${result().files.md}?download=1`}>
-                  ↓ transcript.md
-                </a>
-                <a class="download" href={`${result().files.json}?download=1`}>
-                  ↓ ocr.json
-                </a>
+                <Show when={result().files.overlay}>
+                  <a class="download" href={`${result().files.overlay}?download=1`}>
+                    ↓ overlay.png
+                  </a>
+                </Show>
+                <Show when={result().files.pdf}>
+                  <a class="download" href={`${result().files.pdf}?download=1`}>
+                    ↓ searchable.pdf
+                  </a>
+                </Show>
+                <Show when={result().files.combined_pdf}>
+                  <a class="download" href={`${result().files.combined_pdf}?download=1`}>
+                    ↓ combined.pdf
+                  </a>
+                </Show>
+                <Show when={result().files.txt}>
+                  <a class="download" href={`${result().files.txt}?download=1`}>
+                    ↓ transcript.txt
+                  </a>
+                </Show>
+                <Show when={result().files.md}>
+                  <a class="download" href={`${result().files.md}?download=1`}>
+                    ↓ transcript.md
+                  </a>
+                </Show>
+                <Show when={result().files.combined_txt}>
+                  <a class="download" href={`${result().files.combined_txt}?download=1`}>
+                    ↓ combined.txt
+                  </a>
+                </Show>
+                <Show when={result().files.combined_md}>
+                  <a class="download" href={`${result().files.combined_md}?download=1`}>
+                    ↓ combined.md
+                  </a>
+                </Show>
+                <Show when={result().files.json}>
+                  <a class="download" href={`${result().files.json}?download=1`}>
+                    ↓ ocr.json
+                  </a>
+                </Show>
               </div>
               <p class="field__hint">
                 run <span class="mono">{result().run_id}</span> · {result().status_line} · files

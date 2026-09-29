@@ -20,7 +20,7 @@ unused stays in the product path.
 | Markdown export (user request) | **near-finished** 2026-09-30 | `<stem>.md` in export/CLI/web, tests green; web smoke on a PDF passed (23 tokens → `transcript.md`) |
 | P0 Repo truth & hygiene | **done** 2026-09-30 | frontend CI job, first `webapp` tests, Docker web image, docs pass; `webapp/` committed and pushed (`04d4eb2`) |
 | P1 Diet & broken-path fixes | **done** 2026-09-30 | legacy + kaggle/vlm_eval removed (w1_train kept); fidelity removed; rrdbnet/deva_reader shipped; dead ONNX deleted; `--workers` removed; deps split (scipy stays — skimage). Held: CLI grain unify (P3) |
-| P2 Web document parity | not started | engine choice, output toggles, all-pages, meta |
+| P2 Web document parity | **done** 2026-09-30 | engine choice, output toggles, auto-rotate, all-pages + combined PDF/TXT/MD (cap 10), resized/pages notes; API tests + live smoke |
 | P3 Web photo studio | not started | the remaining feature gap (CLI-only today) |
 | P4 Efficiency & deploy | partially done | Docker now builds the web app; dependency split pending (P1) |
 | P5 Verification | not started | |
@@ -131,6 +131,11 @@ web needs; all pipeline kwargs already exist unless noted.
 > The Gradio column is historical: `app.py` was removed on 2026-09-30 (user
 > decision — one UI). The Web column is the product target; the CLI keeps
 > every feature, including the photo stack and the batch workflow.
+>
+> Web column updated 2026-09-30 (P2): multi-page PDFs with combined outputs,
+> OCR engine choice, output toggles, an auto-rotate toggle and the downscale
+> note are live. The remaining gaps are the photo studio (P3) and the
+> experimental CLI-only readers (mixed router, line reader, digit verifier).
 
 ---
 

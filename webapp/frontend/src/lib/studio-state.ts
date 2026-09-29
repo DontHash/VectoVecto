@@ -2,7 +2,7 @@
  *  page, so the product behaves identically wherever it is embedded. */
 import { createSignal, onCleanup } from "solid-js";
 import { fetchHealth, runRestore } from "./api";
-import type { Health, Lang, RunPayload } from "./types";
+import type { Health, Lang, OcrEngine, RunPayload } from "./types";
 
 export type StudioPhase = "idle" | "running" | "done" | "error";
 
@@ -10,6 +10,14 @@ export function createStudioState() {
   const [file, setFile] = createSignal<File | null>(null);
   const [lang, setLang] = createSignal<Lang>("ne");
   const [deskew, setDeskew] = createSignal(false);
+  const [ocr, setOcr] = createSignal<OcrEngine>("auto");
+  const [allPages, setAllPages] = createSignal(false);
+  const [autoRotate, setAutoRotate] = createSignal(true);
+  const [wantOverlay, setWantOverlay] = createSignal(true);
+  const [wantPdf, setWantPdf] = createSignal(true);
+  const [wantTxt, setWantTxt] = createSignal(true);
+  const [wantMd, setWantMd] = createSignal(true);
+  const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const [phase, setPhase] = createSignal<StudioPhase>("idle");
   const [result, setResult] = createSignal<RunPayload | null>(null);
   const [error, setError] = createSignal<string | null>(null);
@@ -68,7 +76,19 @@ export function createStudioState() {
     const startedAt = performance.now();
     timer = window.setInterval(() => setElapsed((performance.now() - startedAt) / 1000), 100);
     try {
-      const payload = await runRestore(f, { lang: lang(), deskew: deskew() });
+      const payload = await runRestore(f, {
+        lang: lang(),
+        deskew: deskew(),
+        ocr: ocr(),
+        allPages: allPages(),
+        autoRotate: autoRotate(),
+        outputs: {
+          overlay: wantOverlay(),
+          pdf: wantPdf(),
+          txt: wantTxt(),
+          md: wantMd(),
+        },
+      });
       setResult(payload);
       setPhase("done");
     } catch (e) {
@@ -85,6 +105,22 @@ export function createStudioState() {
     setLang,
     deskew,
     setDeskew,
+    ocr,
+    setOcr,
+    allPages,
+    setAllPages,
+    autoRotate,
+    setAutoRotate,
+    wantOverlay,
+    setWantOverlay,
+    wantPdf,
+    setWantPdf,
+    wantTxt,
+    setWantTxt,
+    wantMd,
+    setWantMd,
+    advancedOpen,
+    setAdvancedOpen,
     phase,
     result,
     error,
@@ -110,5 +146,5 @@ export const EXAMPLE_FILES = [
 
 export function limitsLine(health: Health | null): string {
   if (!health) return "≤ 12 MB · first page of PDFs · 60-min retention";
-  return `≤ ${health.limits.max_upload_mb} MB · first page of PDFs · ${health.limits.ttl_minutes}-min retention`;
+  return `≤ ${health.limits.max_upload_mb} MB · up to ${health.limits.max_pages} PDF pages · ${health.limits.ttl_minutes}-min retention`;
 }

@@ -30,6 +30,23 @@ export interface RunMeta {
   lang: string;
   input_kind: string;
   deskew: boolean;
+  auto_rotate: boolean;
+  all_pages: boolean;
+  pages_processed: number;
+  pages_capped: boolean;
+  page_cap: number;
+}
+
+export interface RunFiles {
+  restored: string;
+  overlay?: string;
+  pdf?: string;
+  txt?: string;
+  md?: string;
+  json?: string;
+  combined_pdf?: string;
+  combined_txt?: string;
+  combined_md?: string;
 }
 
 export interface RunPayload {
@@ -39,14 +56,7 @@ export interface RunPayload {
   review: QueueItem[];
   transcript: string;
   status_line: string;
-  files: {
-    restored: string;
-    overlay: string;
-    pdf: string;
-    txt: string;
-    md: string;
-    json: string;
-  };
+  files: RunFiles;
   expires_in: number;
 }
 
@@ -57,6 +67,7 @@ export interface Health {
   limits: {
     max_upload_mb: number;
     max_image_megapixels: number;
+    max_pages: number;
     ttl_minutes: number;
     rate_max: number;
     rate_window_s: number;
@@ -65,3 +76,4 @@ export interface Health {
 }
 
 export type Lang = "ne" | "hi" | "en";
+export type OcrEngine = "auto" | "rapidocr" | "tesseract";
