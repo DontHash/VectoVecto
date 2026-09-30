@@ -118,7 +118,7 @@ the raw arm is 0 by construction.
 
 ### Reading
 
-- **bagCER is tied across all four arms (0.360–0.380).** Glyph recognition
+- **bagCER is tied across all five arms (0.360–0.400).** Glyph recognition
   is effectively identical; the entire page-CER spread comes from ordering,
   structure and digit handling. The commodity is the recognizer; the delta
   is order + trust — now measured, not asserted.
