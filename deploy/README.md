@@ -51,6 +51,41 @@ Using Cloudflare in front (free tier) adds DDoS/WAF protection; uncomment the
 trusted-proxy block in `Caddyfile` so per-IP limits see the real visitor
 instead of the Cloudflare edge.
 
+## Cloudflare in front (free tier)
+
+Standard practice for a public demo on a VPS: hides the origin IP, absorbs
+L3/L4 and basic L7 DDoS, terminates TLS at the edge and adds WAF/bot rules —
+without changing the app.
+
+Setup:
+
+1. Add the domain to Cloudflare, point the registrar's nameservers at it, and
+   create a proxied (orange-cloud) `A` record to the server IP.
+2. In `Caddyfile`, uncomment the `trusted_proxies` + `client_ip_headers`
+   block and paste the current ranges from <https://www.cloudflare.com/ips/>
+   — without it the app rate limit keys the Cloudflare edge IP, not the
+   visitor.
+3. SSL/TLS mode: **Full (strict)** once Caddy has its certificate. On the
+   very first deploy, leave DNS-only until Caddy got the cert, then switch
+   the record to proxied.
+4. Cache rule: **bypass** `https://<your-domain>/api/*` (the app already
+   sends `no-store`; this is belt-and-braces).
+5. Optional: enable Bot Fight Mode.
+
+What it does **not** replace:
+
+- The app's own guards stay primary. Free-plan rate-limiting rules are
+  limited, so the per-IP window + the daily budget are still the real limits.
+- The free plan cuts origin responses at ~100 s (error 524). Our worst case
+  is a 25 s queue plus a 180 s page timeout, so for a Cloudflare-fronted demo
+  set `VERISCRIPT_WEB_TIMEOUT_S: "95"` in `docker-compose.yml` and keep PDF
+  runs short — otherwise a very long run gets a Cloudflare error while the
+  origin is still finishing.
+
+If you host on Google Cloud Run instead, this layer is optional: Google's
+edge already provides TLS and baseline DDoS protection; Cloudflare would only
+add WAF/bot rules and a custom domain setup.
+
 ## Tuning
 
 All knobs are `VERISCRIPT_*` env vars (see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)):

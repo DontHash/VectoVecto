@@ -20,6 +20,7 @@ services:
       # One heavy worker + a hard daily budget: the billing kill-switch.
       VERISCRIPT_WEB_CONCURRENCY: "1"
       VERISCRIPT_WEB_QUEUE_WAIT_S: "25"
+      # Behind Cloudflare's free plan, lower this to "95" (their ~100 s limit).
       VERISCRIPT_WEB_TIMEOUT_S: "180"
       VERISCRIPT_WEB_DAILY_RUNS: "300"
       VERISCRIPT_WEB_RATE_MAX: "6"
