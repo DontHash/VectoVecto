@@ -126,6 +126,29 @@ def test_daily_quota_zero_disables():
     assert q.state() == {"limit": 0, "used": 0}
 
 
+# -- client IP mode --------------------------------------------------------
+
+def _request(headers, client=("10.0.0.1", 1234)):
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "POST", "path": "/",
+                    "headers": headers, "client": client})
+
+
+def test_client_key_direct_by_default(monkeypatch):
+    import vvweb.security as sec
+    from types import SimpleNamespace
+    monkeypatch.setattr(sec, "settings", SimpleNamespace(client_ip_mode="direct"))
+    assert sec.client_key(_request([(b"x-forwarded-for", b"1.2.3.4")])) == "10.0.0.1"
+
+
+def test_client_key_xff_last(monkeypatch):
+    import vvweb.security as sec
+    from types import SimpleNamespace
+    monkeypatch.setattr(sec, "settings", SimpleNamespace(client_ip_mode="xff-last"))
+    assert sec.client_key(_request([(b"x-forwarded-for", b"1.2.3.4, 9.9.9.9")])) == "9.9.9.9"
+    assert sec.client_key(_request([])) == "10.0.0.1"
+
+
 # -- proxy opt-in ----------------------------------------------------------
 
 def test_uvicorn_proxy_opt_in():

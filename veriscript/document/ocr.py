@@ -165,6 +165,11 @@ class RapidOCRBackend(OCRBackend):
 
     def _base_params(self) -> Dict:
         params: Dict = {"Global.log_level": os.environ.get("RAPIDOCR_LOG_LEVEL", "error")}
+        # Writable model cache (containers bake models into /app/models and
+        # keep the dir writable so an unbaked language can still download).
+        model_dir = os.environ.get("RAPIDOCR_MODEL_DIR")
+        if model_dir:
+            params["Global.model_root_dir"] = model_dir
         self.using_dml = _dml_enabled()
         if self.using_dml:
             params["EngineConfig.onnxruntime.use_dml"] = True

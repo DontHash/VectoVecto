@@ -33,6 +33,13 @@ class Settings:
     max_concurrent: int = field(default_factory=lambda: _env_int("WEB_CONCURRENCY", 1))
     queue_wait_s: int = field(default_factory=lambda: _env_int("WEB_QUEUE_WAIT_S", 25))
 
+    # Real client IP for rate limiting: "direct" (default) or "xff-last".
+    # "xff-last" trusts the last X-Forwarded-For entry — correct for managed
+    # edges that append the client IP (Cloud Run; Cloudflare/Caddy with the
+    # Caddyfile's client_ip_headers). Never use it with an untrusted proxy.
+    client_ip_mode: str = field(default_factory=lambda: branding.env(
+        "WEB_CLIENT_IP_MODE", "direct").strip().lower())
+
     # Transport: uvicorn sheds connections beyond this (slowloris/flood guard).
     max_connections: int = field(default_factory=lambda: _env_int("WEB_MAX_CONNECTIONS", 32))
 

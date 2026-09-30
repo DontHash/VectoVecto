@@ -11,6 +11,10 @@
 # Optional basic auth for /api/*:
 #   docker run -p 8000:8000 -e VERISCRIPT_WEB_USER=me \
 #     -e VERISCRIPT_WEB_PASSWORD=secret veriscript
+#
+# Bake the OCR models into the image (offline first run; required on
+# ephemeral filesystems such as Cloud Run):
+#   docker build --build-arg PRELOAD_MODELS=1 -t veriscript .
 
 # -- frontend: build the studio once ------------------------------------------
 FROM node:22-slim AS frontend
@@ -27,6 +31,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     VERISCRIPT_WEB_HOST=0.0.0.0 \
     VERISCRIPT_WEB_PORT=8000 \
+    RAPIDOCR_MODEL_DIR=/app/models \
     OMP_NUM_THREADS=2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -58,9 +63,21 @@ COPY webapp/vvweb/ webapp/vvweb/
 COPY --from=frontend /web/dist webapp/frontend/dist
 
 RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p webapp/runs \
+    && mkdir -p models webapp/runs \
     && chown -R appuser:appuser /app
 USER appuser
+
+# Optional model pre-bake (build with --build-arg PRELOAD_MODELS=1): runs the
+# default and Devanagari pipelines once so the models land in /app/models.
+ARG PRELOAD_MODELS=0
+RUN if [ "$PRELOAD_MODELS" = "1" ]; then python -c "\
+from veriscript.core import data; \
+from veriscript.document.pipeline import run_document_pipeline as run; \
+import tempfile; \
+page, _ = data.render_synthetic_invoice(seed=7, dpi=110); \
+td = tempfile.mkdtemp(); \
+[run(page, backend=None, lang=lang, out_dir=td, stem='warm', make_pdf=False, make_overlay=False, make_txt=False, make_json=False) for lang in (None, 'ne')]; \
+print('models preloaded under /app/models')"; fi
 
 EXPOSE 8000
 

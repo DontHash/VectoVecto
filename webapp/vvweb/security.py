@@ -135,11 +135,18 @@ class RateLimiter:
 def client_key(request: Request) -> str:
     """Best-effort client identity for rate limiting.
 
-    Behind a reverse proxy this is the proxy IP unless the deployment enables
-    proxy headers (uvicorn `proxy_headers=True` + `forwarded_allow_ips`, wired
-    by `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS`; legacy `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` also
-    accepted); see docs/DEPLOY.md.
+    Direct deployments use the peer address; managed edges (Cloud Run,
+    Cloudflare, Caddy) append the real client IP to `X-Forwarded-For`, so
+    `VERISCRIPT_WEB_CLIENT_IP_MODE=xff-last` keys on the last entry — the one
+    written by the trusted edge. Without it, uvicorn's proxy handling (via
+    `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS`; legacy `VECTOVECTO_...` accepted)
+    rewrites the peer instead; see docs/DEPLOY.md.
     """
+    if settings.client_ip_mode == "xff-last":
+        forwarded = request.headers.get("x-forwarded-for", "")
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
 
 
