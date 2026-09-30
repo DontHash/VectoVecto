@@ -1,7 +1,9 @@
 # Deploying VeriScript cheaply (and safely)
 
 Fixed-cost VPS + Caddy. One heavy worker, a hard daily budget, no
-autoscaling and no metered surprises.
+autoscaling and no metered surprises. Prefer serverless? See
+[gcp-cloudrun.md](gcp-cloudrun.md) — Cloud Run, scale-to-zero,
+`--max-instances 1`, same app-level guards.
 
 ## Quick start
 
@@ -42,6 +44,7 @@ the worst case is CPU contention — not a bill.
 | Option | Fixed cost | Notes |
 |---|---|---|
 | Small VPS (Hetzner / DO / Contabo / …) | ~$4–7/month | **recommended** — fixed bill, 2–4 GB RAM |
+| Google Cloud Run | ~$0–2/month | scale-to-zero, `--max-instances 1` + daily budget; free tier covers typical demo traffic — [gcp-cloudrun.md](gcp-cloudrun.md) |
 | Oracle Cloud Always Free (ARM) | $0 | if you can get capacity; 24 GB is overkill but fine |
 | Hugging Face Spaces (free CPU) | $0 | sleeps when idle; enough RAM; needs `app_port: 8000` in the Space README metadata |
 | Render free web service | $0 | 512 MB RAM — too small for the OCR models |

@@ -7,6 +7,10 @@ out — with honest flags on the numbers it is not sure about. Devanagari
 
 Everything runs on your machine. No cloud calls, no telemetry, no account.
 
+**Live demo:** <https://veriscript-demo-byr4wxwy4a-uc.a.run.app> — one page at
+a time, no signup; demo uploads are deleted after the 60-minute retention
+window.
+
 ```
 photo/scan/PDF ──▶ orientation ──▶ layout ──▶ OCR ──▶ risk flags ──▶ searchable PDF
                                                                   ├─ overlay.png (review boxes)

@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Public demo on GCP Cloud Run** (`veriscript-demo`, us-central1): the live
+  URL is linked from the README. Runs the exact app guards with
+  `--max-instances 1` + `--min-instances 0` + `VERISCRIPT_WEB_DAILY_RUNS=200`
+  and a $5 billing budget alert. Runbook: `deploy/gcp-cloudrun.md`.
+  Supporting fixes: `RAPIDOCR_MODEL_DIR` (writable model cache for
+  containers), Dockerfile `PRELOAD_MODELS=1` (bakes the default + Devanagari
+  models into the image), and `VERISCRIPT_WEB_CLIENT_IP_MODE=xff-last`
+  (spoof-safe real client IP behind managed edges).
 - **Markdown output**: every document run writes `<stem>.md` (web:
   `transcript.md`) — the reading-order transcript plus the review queue as a
   table; CLI knob `--no-md`, download link in the web studio.
