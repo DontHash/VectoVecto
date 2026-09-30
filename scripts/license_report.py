@@ -95,6 +95,7 @@ KNOWN_LICENSES = {
     "pyside6": "LGPL-3.0 (Qt for Python)",
     "jiwer": "Apache-2.0",
     "google-genai": "Apache-2.0",
+    "httpx": "BSD-3-Clause",
 }
 
 _COPYRIGHT_RE = re.compile(r"^\s*Copyright", re.IGNORECASE)
