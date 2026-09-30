@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Per-visitor demo limit: 20 pages/day.** Page-based accounting (a 10-page
+  PDF costs 10, not 1) with a per-visitor daily budget
+  (`VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT`), a global daily page ceiling
+  (`VERISCRIPT_WEB_DAILY_PAGES`), and the existing run budget — the
+  free-demo limit without accounts. `/api/health` reports the new limits and
+  the landing page shows the visitor limit. The 429 explains the limit and
+  carries `Retry-After` (UTC reset).
+- **CI auto-deploy to Cloud Run** (`.github/workflows/deploy.yml`): on every
+  push to `main`, GitHub Actions builds the image (`PRELOAD_MODELS=1`) and
+  deploys `veriscript-demo` via Workload Identity Federation — no service
+  account keys. Setup + manual update workflow: `deploy/gcp-cloudrun.md`.
 - **Public demo on GCP Cloud Run** (`veriscript-demo`, us-central1): the live
   URL is linked from the README. Runs the exact app guards with
   `--max-instances 1` + `--min-instances 0` + `VERISCRIPT_WEB_DAILY_RUNS=200`

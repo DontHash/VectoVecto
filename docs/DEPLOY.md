@@ -33,6 +33,8 @@ Environment knobs:
 | `VERISCRIPT_WEB_TIMEOUT_S` | `180` | per-page processing timeout |
 | `VERISCRIPT_WEB_CONCURRENCY` / `VERISCRIPT_WEB_QUEUE_WAIT_S` | `1` / `25` | single heavy worker; queue beyond it, then 503 |
 | `VERISCRIPT_WEB_DAILY_RUNS` | `300` | hard daily run budget across all clients (UTC reset); `0` disables — the billing kill-switch |
+| `VERISCRIPT_WEB_DAILY_PAGES` | `500` | global daily page budget across all clients (UTC reset); `0` disables |
+| `VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT` | `20` | per-visitor (client IP) daily page budget; a 10-page PDF costs 10; `0` disables |
 | `VERISCRIPT_WEB_MAX_CONNECTIONS` | `32` | uvicorn connection cap (excess connections are shed) |
 | `VERISCRIPT_WEB_TTL_MINUTES` | `60` | artifact retention before the periodic sweep |
 | `VERISCRIPT_WEB_RATE_MAX` / `VERISCRIPT_WEB_RATE_WINDOW_S` | `6` / `120` | per-IP sliding window |
@@ -80,9 +82,14 @@ What the app already does:
   worker with a bounded queue (503 + `Retry-After`), per-run timeout; the
   limiter table is capped at 20k keys so an IP spray cannot grow memory.
 - **Spend ceiling**: a hard daily run budget (`VERISCRIPT_WEB_DAILY_RUNS`,
-  default 300/day, UTC reset) counts every accepted attempt across all
-  clients, so a distributed flood cannot exceed it; the uvicorn connection
-  cap (`VERISCRIPT_WEB_MAX_CONNECTIONS`, default 32) sheds excess sockets.
+  default 300/day) and a global daily **page** budget
+  (`VERISCRIPT_WEB_DAILY_PAGES`, default 500/day, UTC reset) count every
+  accepted attempt across all clients, so a distributed flood cannot exceed
+  them. Each visitor (client IP) is capped separately
+  (`VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT`, default 20 pages/day; a 10-page
+  PDF costs 10) — the free-demo limit without accounts. The uvicorn
+  connection cap (`VERISCRIPT_WEB_MAX_CONNECTIONS`, default 32) sheds excess
+  sockets.
 - **Data**: runs under `webapp/runs/<16-hex>/`, deleted by TTL (default
   60 min); failed runs deleted immediately; owner-only permissions (0700
   dirs / 0600 manifests) on POSIX; nothing is logged about page content.

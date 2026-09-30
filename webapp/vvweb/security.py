@@ -174,24 +174,73 @@ class DailyQuota:
     def _utc_day() -> int:
         return int(time.time() // 86400)
 
-    def check(self) -> Tuple[bool, int]:
-        """Return (allowed, retry_after_seconds); counts the run when allowed."""
+    def check(self, n: int = 1) -> Tuple[bool, int]:
+        """Return (allowed, retry_after_seconds); charges `n` when allowed."""
+        n = max(1, int(n))
         if self.limit == 0:
             return True, 0
         with self._lock:
             day = self._utc_day()
             if day != self._day:
                 self._day, self._used = day, 0
-            if self._used >= self.limit:
+            if self._used + n > self.limit:
                 reset = (self._day + 1) * 86400 - int(time.time())
                 return False, max(reset, 1)
-            self._used += 1
+            self._used += n
             return True, 0
 
     def state(self) -> Dict[str, int]:
         with self._lock:
             used = 0 if self._utc_day() != self._day else self._used
         return {"limit": self.limit, "used": used}
+
+
+class DailyKeyedQuota:
+    """Per-key daily page budget — the per-visitor limit.
+
+    Keyed by client IP (stable without accounts). Bounded table so an IP spray
+    cannot grow memory. `limit == 0` disables it.
+    """
+
+    def __init__(self, limit: int, max_keys: int = 20_000) -> None:
+        self.limit = max(0, int(limit))
+        self.max_keys = max_keys
+        self._lock = threading.Lock()
+        self._day = DailyQuota._utc_day()
+        self._counts: Dict[str, int] = {}
+
+    def check(self, key: str, n: int = 1) -> Tuple[bool, int]:
+        """(allowed, retry_after_seconds); charges `n` pages when allowed."""
+        n = max(1, int(n))
+        if self.limit == 0:
+            return True, 0
+        with self._lock:
+            day = DailyQuota._utc_day()
+            if day != self._day:
+                self._day, self._counts = day, {}
+            used = self._counts.get(key, 0)
+            if used + n > self.limit:
+                reset = (self._day + 1) * 86400 - int(time.time())
+                return False, max(reset, 1)
+            self._counts[key] = used + n
+            if len(self._counts) > self.max_keys:
+                self._evict()
+            return True, 0
+
+    def used(self, key: str) -> int:
+        with self._lock:
+            if DailyQuota._utc_day() != self._day:
+                return 0
+            return self._counts.get(key, 0)
+
+    def tracked_keys(self) -> int:
+        with self._lock:
+            return len(self._counts)
+
+    def _evict(self) -> None:
+        excess = len(self._counts) - self.max_keys
+        for key, _ in sorted(self._counts.items(), key=lambda kv: kv[1])[:excess]:
+            self._counts.pop(key, None)
 
 
 # --------------------------------------------------------------------------

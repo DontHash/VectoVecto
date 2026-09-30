@@ -19,7 +19,8 @@ from fastapi.responses import Response  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from vvweb.compression import SelectiveGZipMiddleware, is_compressible  # noqa: E402
-from vvweb.security import DailyQuota, RateLimiter, cache_control_for_path  # noqa: E402
+from vvweb.security import (DailyKeyedQuota, DailyQuota, RateLimiter,
+                            cache_control_for_path)  # noqa: E402
 
 
 # -- gzip policy -----------------------------------------------------------
@@ -124,6 +125,42 @@ def test_daily_quota_zero_disables():
     for _ in range(5):
         assert q.check()[0] is True
     assert q.state() == {"limit": 0, "used": 0}
+
+
+def test_daily_quota_charges_pages():
+    q = DailyQuota(5)
+    assert q.check(4) == (True, 0)
+    assert q.check(2)[0] is False           # 4 + 2 > 5
+    assert q.check(1) == (True, 0)          # exactly fills the budget
+    assert q.state() == {"limit": 5, "used": 5}
+    assert q.check(1)[0] is False
+
+
+# -- per-visitor daily pages ------------------------------------------------
+
+def test_daily_keyed_quota_is_per_key():
+    q = DailyKeyedQuota(3)
+    assert q.check("a", 2) == (True, 0)
+    assert q.check("b", 3) == (True, 0)
+    assert q.check("a", 1) == (True, 0)
+    allowed, retry = q.check("a")
+    assert allowed is False and retry >= 1
+    assert q.check("b")[0] is False
+    assert q.used("a") == 3 and q.used("b") == 3
+
+
+def test_daily_keyed_quota_zero_disables():
+    q = DailyKeyedQuota(0)
+    for _ in range(3):
+        assert q.check("x", 10)[0] is True
+    assert q.used("x") == 0
+
+
+def test_daily_keyed_quota_bounds_its_table():
+    q = DailyKeyedQuota(10, max_keys=2)
+    for i in range(5):
+        assert q.check(f"ip-{i}")[0] is True
+    assert q.tracked_keys() <= 2
 
 
 # -- client IP mode --------------------------------------------------------

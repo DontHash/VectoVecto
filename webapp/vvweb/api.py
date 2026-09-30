@@ -21,9 +21,10 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .compression import SelectiveGZipMiddleware
 from .pipeline import PAGE_CAP, PipelineError, process_page
-from .security import (DailyQuota, RateLimiter, SecurityHeadersMiddleware,
-                       client_key, http_exception_handler, new_run_id,
-                       require_auth, validate_upload)
+from .security import (DailyKeyedQuota, DailyQuota, RateLimiter,
+                       SecurityHeadersMiddleware, client_key,
+                       http_exception_handler, new_run_id, require_auth,
+                       validate_upload)
 from .storage import PUBLIC_FILES, RunStore
 
 from veriscript.logging_setup import get_logger
@@ -47,9 +48,28 @@ def _flag(value: str, default: bool = True) -> bool:
         return False
     return default
 
+
+def _count_pages(kind: str, path: str, all_pages: bool) -> int:
+    """Quota units for one request: a 10-page PDF costs 10 pages, not 1 run."""
+    if kind != "pdf" or not all_pages:
+        return 1
+    try:
+        import pypdfium2 as pdfium
+
+        doc = pdfium.PdfDocument(path)
+        try:
+            return max(1, min(len(doc), PAGE_CAP))
+        finally:
+            doc.close()
+    except Exception:  # noqa: BLE001 - best-effort count; validation handles bad files
+        return PAGE_CAP
+
+
 store = RunStore(RUNS_DIR, settings.run_ttl_seconds)
 limiter = RateLimiter(settings.rate_window_s, settings.rate_max_in_window)
 quota = DailyQuota(settings.daily_runs)
+page_quota = DailyQuota(settings.daily_pages)
+client_pages = DailyKeyedQuota(settings.pages_per_client)
 _worker_sem = threading.Semaphore(settings.max_concurrent)
 _worker_busy = threading.Event()
 
@@ -135,6 +155,9 @@ def create_app() -> FastAPI:
                 "max_connections": settings.max_connections,
                 "daily_runs": quota.state()["limit"],
                 "daily_used": quota.state()["used"],
+                "daily_pages": page_quota.state()["limit"],
+                "daily_pages_used": page_quota.state()["used"],
+                "pages_per_client": settings.pages_per_client,
             },
         }
 
@@ -157,13 +180,6 @@ def create_app() -> FastAPI:
                                 detail="Rate limit reached. Try again shortly.",
                                 headers={"Retry-After": str(retry_after)})
 
-        allowed, retry_after = quota.check()
-        if not allowed:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="The demo's daily budget is used up. Try again after midnight UTC.",
-                headers={"Retry-After": str(retry_after)})
-
         lang = (lang or "ne").strip().lower()
         if lang not in MAX_LANG:
             lang = "ne"
@@ -172,6 +188,7 @@ def create_app() -> FastAPI:
             _LOG.warning("unknown OCR engine %r; using auto", ocr)
             ocr = "auto"
         deskew_flag = _flag(deskew, default=False)
+        all_pages_flag = _flag(all_pages, default=False)
 
         # Stream the upload to disk with a hard cap (never trust the header).
         run_id = new_run_id()
@@ -207,6 +224,35 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                                 detail="Upload failed.")
 
+        # Quotas are charged in pages (a 10-page PDF costs 10), now that the
+        # upload is validated. Per-visitor first so a blocked visitor does not
+        # consume the global budget.
+        pages = _count_pages(kind, upload_path, all_pages_flag)
+        allowed, retry_after = client_pages.check(client_key(request), pages)
+        if not allowed:
+            shutil.rmtree(run_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"You've reached the free demo limit "
+                       f"({settings.pages_per_client} pages per visitor per "
+                       f"day). Try again after midnight UTC.",
+                headers={"Retry-After": str(retry_after)})
+        allowed, retry_after = page_quota.check(pages)
+        if not allowed:
+            shutil.rmtree(run_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The demo's daily page budget is used up. Try again "
+                       "after midnight UTC.",
+                headers={"Retry-After": str(retry_after)})
+        allowed, retry_after = quota.check()
+        if not allowed:
+            shutil.rmtree(run_dir, ignore_errors=True)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The demo's daily budget is used up. Try again after midnight UTC.",
+                headers={"Retry-After": str(retry_after)})
+
         # Single heavy worker: wait briefly, then shed load.
         acquired = _worker_sem.acquire(timeout=settings.queue_wait_s)
         if not acquired:
@@ -225,7 +271,7 @@ def create_app() -> FastAPI:
                     kind=kind, ocr=ocr,
                     make_overlay=_flag(overlay), make_pdf=_flag(pdf),
                     make_txt=_flag(txt), make_md=_flag(md),
-                    all_pages=_flag(all_pages, default=False),
+                    all_pages=all_pages_flag,
                     auto_rotate=_flag(auto_rotate))),
                 timeout=settings.process_timeout_s)
         except asyncio.TimeoutError:

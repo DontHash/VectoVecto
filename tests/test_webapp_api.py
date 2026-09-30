@@ -101,6 +101,8 @@ def test_health(client):
     assert payload["ok"] is True and payload["version"]
     assert payload["limits"]["max_upload_mb"] > 0
     assert payload["limits"]["max_pages"] > 0
+    assert payload["limits"]["daily_pages"] > 0
+    assert payload["limits"]["pages_per_client"] > 0
     # hosting hardening
     assert r.headers["cache-control"] == "no-store"
     assert r.headers["x-content-type-options"] == "nosniff"
@@ -232,6 +234,49 @@ def test_all_pages_writes_combined_outputs(client, tmp_path, monkeypatch):
     md = client.get(files["combined_md"])
     assert md.status_code == 200
     assert "## Page 1" in md.text and "## Page 3" in md.text
+
+
+def test_per_visitor_page_quota_blocks(client, monkeypatch):
+    from veriscript.document import pipeline as document_pipeline
+    from vvweb.security import DailyKeyedQuota
+
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        _fake_pipeline())
+    monkeypatch.setattr(api_mod, "client_pages", DailyKeyedQuota(2))
+
+    for _ in range(2):
+        r = client.post("/api/restore",
+                        files={"file": ("page.png", _png_bytes(), "image/png")},
+                        data={"lang": "en"})
+        assert r.status_code == 200, r.text
+
+    r = client.post("/api/restore",
+                    files={"file": ("page.png", _png_bytes(), "image/png")},
+                    data={"lang": "en"})
+    assert r.status_code == 429
+    assert "free demo limit" in r.text
+    assert r.headers.get("retry-after")
+
+
+def test_pdf_pages_are_charged_to_the_quota(client, tmp_path, monkeypatch):
+    """A 2-page PDF costs 2 pages of the visitor's daily budget."""
+    from reportlab.pdfgen import canvas
+    from vvweb.security import DailyKeyedQuota
+
+    pdf = tmp_path / "two.pdf"
+    c = canvas.Canvas(str(pdf), pagesize=(240, 200))
+    for i in range(2):
+        c.drawString(20, 170, f"PAGE {i}")
+        c.showPage()
+    c.save()
+
+    monkeypatch.setattr(api_mod, "client_pages", DailyKeyedQuota(1))
+    r = client.post("/api/restore",
+                    files={"file": ("two.pdf", pdf.read_bytes(),
+                                    "application/pdf")},
+                    data={"all_pages": "1", "lang": "en"})
+    assert r.status_code == 429
+    assert "free demo limit" in r.text
 
 
 def test_restore_failure_is_logged(client, monkeypatch, caplog):

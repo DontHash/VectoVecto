@@ -27,7 +27,8 @@ docker compose up -d --build
 |---|---|---|
 | Edge | TLS, request-body cap 13 MB, dial/read/write timeouts, hides `Server` | `deploy/Caddyfile` |
 | App | per-IP rate limit: 6 runs / 2 min | `webapp/vvweb/security.py` |
-| App | **hard daily budget: 300 runs/day (UTC), all clients** | `DailyQuota`, same file |
+| App | **hard daily budget: 300 runs + 500 pages/day (UTC), all clients** | `DailyQuota`, same file |
+| App | **per-visitor limit: 20 pages/day** (a 10-page PDF costs 10) | `DailyKeyedQuota`, same file |
 | App | 1 heavy worker; 25 s queue wait, then 503 | `webapp/vvweb/api.py` |
 | App | per-run timeout 180 s | `webapp/vvweb/api.py` |
 | App | uploads: 12 MB, 30 MP, magic bytes, decode check, 10 PDF pages | `security.py` / `pipeline.py` |
@@ -94,6 +95,8 @@ add WAF/bot rules and a custom domain setup.
 All knobs are `VERISCRIPT_*` env vars (see [`../docs/DEPLOY.md`](../docs/DEPLOY.md)):
 
 - `VERISCRIPT_WEB_DAILY_RUNS` — your spend ceiling (`0` disables the quota).
+- `VERISCRIPT_WEB_DAILY_PAGES` — global pages/day ceiling (default 500).
+- `VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT` — per-visitor pages/day (default 20).
 - `VERISCRIPT_WEB_USER` / `VERISCRIPT_WEB_PASSWORD` — make the demo private.
 - `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS` — set to your proxy address(es) when
   not using this Compose file.

@@ -1,8 +1,8 @@
 # Deploying the demo on Google Cloud Run
 
 Serverless, scale-to-zero, one instance max. The bill is bounded by
-`--max-instances 1` + the app's hard daily run budget; a $5 budget alert is
-part of the setup. Region used here: `us-central1`.
+`--max-instances 1` + the app's hard daily run and page budgets; a $5 budget
+alert is part of the setup. Region used here: `us-central1`.
 
 ## Current deployment
 
@@ -12,7 +12,7 @@ part of the setup. Region used here: `us-central1`.
 | URL | <https://veriscript-demo-byr4wxwy4a-uc.a.run.app> |
 | Image | `us-central1-docker.pkg.dev/theproject-sr/veriscript/app:v1` (442 MB) |
 | Runtime | 1 vCPU / 2 GiB, concurrency 1, min 0 / max 1 instance, port 8000 |
-| Env | `CLIENT_IP_MODE=xff-last`, `DAILY_RUNS=200`, `RATE_MAX=6`, `RATE_WINDOW_S=120`, `MAX_CONNECTIONS=32`, `WARM_LANG=ne` |
+| Env | `CLIENT_IP_MODE=xff-last`, `DAILY_RUNS=200`, `DAILY_PAGES=500`, `DAILY_PAGES_PER_CLIENT=20`, `RATE_MAX=6`, `RATE_WINDOW_S=120`, `MAX_CONNECTIONS=32`, `WARM_LANG=ne` |
 | Guards verified | health reports the limits; a real page restored in ≈8–10 s warm / 25–45 s cold (2 vCPU measured *slower* — see Performance notes) |
 
 Update with: rebuild (`PRELOAD_MODELS=1`), push the same tag, then
@@ -57,6 +57,8 @@ gcloud run deploy veriscript-demo \
   --set-env-vars "VERISCRIPT_WEB_HOST=0.0.0.0,\
 VERISCRIPT_WEB_CLIENT_IP_MODE=xff-last,\
 VERISCRIPT_WEB_DAILY_RUNS=200,\
+VERISCRIPT_WEB_DAILY_PAGES=500,\
+VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT=20,\
 VERISCRIPT_WEB_RATE_MAX=6,VERISCRIPT_WEB_RATE_WINDOW_S=120,\
 VERISCRIPT_WEB_MAX_CONNECTIONS=32,\
 VERISCRIPT_WEB_WARM_LANG=ne"
@@ -91,6 +93,40 @@ regardless, because the OCR models load and warm then. Keep 1 vCPU and the
 image's `OMP_NUM_THREADS=2`; if you change either, re-measure with a few warm
 runs (the rate limit allows 6 / 2 min).
 
+## Auto-deploy (GitHub Actions)
+
+Every push to `main` that passes CI builds the image and deploys a new
+revision — `.github/workflows/deploy.yml`. Manual runs: Actions → *Deploy demo
+(Cloud Run)* → Run workflow. Auth is keyless (Workload Identity Federation);
+one-time setup, already done for this project:
+
+```bash
+# deployer service account
+gcloud iam service-accounts create veriscript-deployer --project theproject-sr
+SA=veriscript-deployer@theproject-sr.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding theproject-sr \
+  --member="serviceAccount:$SA" --role=roles/run.developer
+gcloud projects add-iam-policy-binding theproject-sr \
+  --member="serviceAccount:$SA" --role=roles/artifactregistry.writer
+gcloud iam service-accounts add-iam-policy-binding \
+  1066484194377-compute@developer.gserviceaccount.com --project=theproject-sr \
+  --member="serviceAccount:$SA" --role=roles/iam.serviceAccountUser
+
+# GitHub OIDC pool, restricted to this repository
+gcloud iam workload-identity-pools create github --project=theproject-sr --location=global
+gcloud iam workload-identity-pools providers create-oidc veriscript \
+  --project=theproject-sr --location=global --workload-identity-pool=github \
+  --issuer-uri=https://token.actions.githubusercontent.com \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='DontHash/VeriScript'"
+gcloud iam service-accounts add-iam-policy-binding $SA --project=theproject-sr \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/1066484194377/locations/global/workloadIdentityPools/github/attribute.repository/DontHash/VeriScript"
+```
+
+The workflow tags each image with the commit SHA and `latest`, deploys the SHA
+tag, then polls `/api/health` until the new revision answers.
+
 ## Update workflow
 
 1. Change code, run the suite: `python -m pytest tests/ -q`.
@@ -120,9 +156,9 @@ curl -F "file=@webapp/frontend/public/examples/invoice-hero.jpg" \
 ## Cost expectations
 
 - **Cloud Run**: free tier covers 180k vCPU-s + 360k GiB-s + 2M requests per
-  month. At the daily budget (200 runs) with typical 5–15 s pages this stays
-  inside the free tier; `--max-instances 1` bounds the worst case even if
-  someone floods the demo.
+  month. At the daily budget (200 runs / 500 pages) with typical 5–15 s pages
+  this stays inside the free tier; `--max-instances 1` bounds the worst case
+  even if someone floods the demo.
 - **Artifact Registry**: ~$0.10/GB/month beyond the 0.5 GB free tier; the
   image is 442 MB, so storage sits inside the free tier (~$0).
 - A $5 budget alert notifies at 50/90/100% of $5.

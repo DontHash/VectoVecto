@@ -1,0 +1,74 @@
+name: Deploy demo (Cloud Run)
+
+# Deploys only after CI passes on main, so a red build never reaches the live
+# demo. Manual runs: Actions → Deploy demo → Run workflow.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation — no service-account keys
+
+concurrency:
+  group: deploy-cloudrun
+  cancel-in-progress: false
+
+env:
+  PROJECT: theproject-sr
+  REGION: us-central1
+  SERVICE: veriscript-demo
+  IMAGE: us-central1-docker.pkg.dev/theproject-sr/veriscript/app
+
+jobs:
+  deploy:
+    if: >
+      github.repository == 'DontHash/VeriScript' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1066484194377/locations/global/workloadIdentityPools/github/providers/veriscript
+          service_account: veriscript-deployer@theproject-sr.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push the image (models baked in)
+        run: |
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build --build-arg PRELOAD_MODELS=1 \
+            -t "${IMAGE}:${SHA}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${SHA}"
+          docker push "${IMAGE}:latest"
+
+      - name: Deploy the revision (service settings persist)
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}:${SHA}" \
+            --region "${REGION}" --project "${PROJECT}" --quiet
+
+      - name: Verify the live service
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" --region "${REGION}" \
+            --project "${PROJECT}" --format "value(status.url)")
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/health" || true)
+            if [ "$code" = "200" ]; then echo "healthy after ${i} tries"; exit 0; fi
+            sleep 6
+          done
+          echo "no healthy revision; recent logs:"
+          gcloud run services logs read "${SERVICE}" --region "${REGION}" \
+            --project "${PROJECT}" --limit 50 || true
+          exit 1

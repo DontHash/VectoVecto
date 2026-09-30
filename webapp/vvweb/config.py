@@ -47,6 +47,13 @@ class Settings:
     # kill-switch: even a distributed flood cannot exceed this many pages/day.
     daily_runs: int = field(default_factory=lambda: _env_int("WEB_DAILY_RUNS", 300))
 
+    # Page accounting (a 10-page PDF costs 10):
+    #   per visitor/IP per day — the free-demo limit
+    #   global per day — the overall spend ceiling
+    pages_per_client: int = field(default_factory=lambda: _env_int(
+        "WEB_DAILY_PAGES_PER_CLIENT", 20))
+    daily_pages: int = field(default_factory=lambda: _env_int("WEB_DAILY_PAGES", 500))
+
     # OCR language warmed at startup so the first visitor does not pay the
     # model init / one-time Devanagari download (the UI defaults to Nepali).
     warm_lang: str = field(default_factory=lambda: branding.env("WEB_WARM_LANG", "ne"))

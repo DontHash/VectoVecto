@@ -1,6 +1,17 @@
-import { For } from "solid-js";
+import { createResource, For, Show } from "solid-js";
 import { CodeBlock } from "../components/CodeBlock";
 import { CompareSlider } from "../components/CompareSlider";
+
+async function fetchLimits() {
+  try {
+    const r = await fetch("/api/health");
+    if (!r.ok) return null;
+    const data = await r.json();
+    return data?.limits ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const EXAMPLES = [
   {
@@ -30,6 +41,8 @@ const EXAMPLES = [
 ];
 
 export function Landing() {
+  const [limits] = createResource(fetchLimits);
+
   return (
     <>
       {/* ------------------------------------------------ hero */}
@@ -49,6 +62,9 @@ export function Landing() {
             <div class="hero__meta">
               <span>no signup</span>
               <span>no account</span>
+              <Show when={limits()?.pages_per_client}>
+                <span>{limits().pages_per_client} pages/day free</span>
+              </Show>
               <span>files deleted after the demo</span>
               <span>mit licensed</span>
             </div>
