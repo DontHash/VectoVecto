@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import threading
 import time
 from collections import defaultdict, deque
 from typing import Deque, Dict, Optional, Tuple
@@ -140,6 +141,50 @@ def client_key(request: Request) -> str:
     accepted); see docs/DEPLOY.md.
     """
     return request.client.host if request.client else "unknown"
+
+
+# --------------------------------------------------------------------------
+# Daily run budget (the billing kill-switch)
+# --------------------------------------------------------------------------
+
+
+class DailyQuota:
+    """Hard per-day run budget, shared by all clients (single process).
+
+    Counts every accepted run attempt and resets at UTC midnight. This is the
+    cost ceiling that survives a distributed flood: even many IPs cannot make
+    the demo process more than ``limit`` pages per day. ``limit == 0``
+    disables the quota (self-hosted/private deployments).
+    """
+
+    def __init__(self, limit: int) -> None:
+        self.limit = max(0, int(limit))
+        self._lock = threading.Lock()
+        self._day = self._utc_day()
+        self._used = 0
+
+    @staticmethod
+    def _utc_day() -> int:
+        return int(time.time() // 86400)
+
+    def check(self) -> Tuple[bool, int]:
+        """Return (allowed, retry_after_seconds); counts the run when allowed."""
+        if self.limit == 0:
+            return True, 0
+        with self._lock:
+            day = self._utc_day()
+            if day != self._day:
+                self._day, self._used = day, 0
+            if self._used >= self.limit:
+                reset = (self._day + 1) * 86400 - int(time.time())
+                return False, max(reset, 1)
+            self._used += 1
+            return True, 0
+
+    def state(self) -> Dict[str, int]:
+        with self._lock:
+            used = 0 if self._utc_day() != self._day else self._used
+        return {"limit": self.limit, "used": used}
 
 
 # --------------------------------------------------------------------------

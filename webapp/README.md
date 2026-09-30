@@ -48,7 +48,7 @@ python webapp/tools/export_queue_sample.py  # real review queue -> frontend data
 | Surface | Guard |
 |---|---|
 | Uploads | extension + magic bytes, Pillow decode check, ≤ 12 MB, ≤ 30 MP, streamed to disk with a hard cap (headers are never trusted) |
-| Abuse | per-IP sliding-window rate limit (default 6 runs / 2 min), one heavy worker, bounded queue (25 s) then 503 + `Retry-After` |
+| Abuse | per-IP sliding-window rate limit (default 6 runs / 2 min), one heavy worker, bounded queue (25 s) then 503 + `Retry-After`, and a hard daily budget (`VERISCRIPT_WEB_DAILY_RUNS`, default 300/day) so a distributed flood cannot exceed your spend ceiling; uvicorn sheds connections beyond `VERISCRIPT_WEB_MAX_CONNECTIONS` (default 32) |
 | Run time | hard timeout (180 s) per page; failed runs are deleted immediately |
 | Data | runs live under `webapp/runs/<random-16-hex>/`; files are deleted after the retention window (default 60 min) by a periodic sweep; owner-only permissions (0700 dirs / 0600 manifests) on POSIX; nothing is logged about page content |
 | Files | artifact names are a fixed whitelist; run ids are validated against `^[0-9a-f]{16}$`, so traversal is impossible |

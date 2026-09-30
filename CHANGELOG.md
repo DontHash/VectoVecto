@@ -38,6 +38,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Hosting guardrails for cheap deployment.** A hard daily run budget
+  (`VERISCRIPT_WEB_DAILY_RUNS`, default 300/day, UTC reset) counts every
+  accepted attempt across all clients — the billing kill-switch that survives
+  a distributed flood; uvicorn now also caps connections
+  (`VERISCRIPT_WEB_MAX_CONNECTIONS`, default 32). A one-command fixed-cost
+  VPS stack lives in [`deploy/`](deploy/README.md) (Docker Compose + Caddy:
+  automatic TLS, 13 MB request-body cap, timeouts, no published app port),
+  with a host cost comparison and abuse runbook; `docs/DEPLOY.md` documents
+  the new knobs and the managed-host notes.
 - **Landing page simplified.** The site is now hero + real examples + the
   offline/install story, with a **Try it** call to action into `/studio`
   (no signup, no account; demo files deleted after the retention window).

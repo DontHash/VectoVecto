@@ -46,7 +46,8 @@ def main() -> None:
         print(f"[server] proxy headers enabled (allow: "
               f"{extra['forwarded_allow_ips']})")
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info",
-                **extra)
+                limit_concurrency=settings.max_connections,
+                timeout_keep_alive=10, **extra)
 
 
 if __name__ == "__main__":

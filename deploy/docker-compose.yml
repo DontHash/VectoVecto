@@ -1,0 +1,60 @@
+# VeriScript — fixed-cost VPS deployment (app + Caddy edge).
+#
+#   cd deploy
+#   cp .env.example .env      # set SITE_ADDRESS / ACME_EMAIL
+#   docker compose up -d --build
+#
+# Only Caddy publishes ports (80/443). The app sits on the internal network,
+# which is why VERISCRIPT_WEB_FORWARDED_ALLOW_IPS=* is safe here: nothing but
+# Caddy can reach it, and Caddy passes the real client IP for rate limiting.
+services:
+  app:
+    build:
+      context: ..
+    restart: unless-stopped
+    environment:
+      VERISCRIPT_WEB_HOST: 0.0.0.0
+      VERISCRIPT_WEB_PORT: "8000"
+      VERISCRIPT_WEB_FORWARDED_ALLOW_IPS: "*"
+      VERISCRIPT_WEB_WARM_LANG: ne
+      # One heavy worker + a hard daily budget: the billing kill-switch.
+      VERISCRIPT_WEB_CONCURRENCY: "1"
+      VERISCRIPT_WEB_QUEUE_WAIT_S: "25"
+      VERISCRIPT_WEB_TIMEOUT_S: "180"
+      VERISCRIPT_WEB_DAILY_RUNS: "300"
+      VERISCRIPT_WEB_RATE_MAX: "6"
+      VERISCRIPT_WEB_RATE_WINDOW_S: "120"
+      VERISCRIPT_WEB_MAX_CONNECTIONS: "32"
+      # Private demo? Uncomment both:
+      # VERISCRIPT_WEB_USER: demo
+      # VERISCRIPT_WEB_PASSWORD: change-me
+    expose:
+      - "8000"
+    volumes:
+      - runs:/app/webapp/runs
+      - model-cache:/home/appuser/.cache
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  runs:
+  model-cache:
+  caddy-data:
+  caddy-config:

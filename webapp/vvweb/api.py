@@ -21,9 +21,9 @@ from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .compression import SelectiveGZipMiddleware
 from .pipeline import PAGE_CAP, PipelineError, process_page
-from .security import (RateLimiter, SecurityHeadersMiddleware, client_key,
-                       http_exception_handler, new_run_id, require_auth,
-                       validate_upload)
+from .security import (DailyQuota, RateLimiter, SecurityHeadersMiddleware,
+                       client_key, http_exception_handler, new_run_id,
+                       require_auth, validate_upload)
 from .storage import PUBLIC_FILES, RunStore
 
 from veriscript.logging_setup import get_logger
@@ -49,6 +49,7 @@ def _flag(value: str, default: bool = True) -> bool:
 
 store = RunStore(RUNS_DIR, settings.run_ttl_seconds)
 limiter = RateLimiter(settings.rate_window_s, settings.rate_max_in_window)
+quota = DailyQuota(settings.daily_runs)
 _worker_sem = threading.Semaphore(settings.max_concurrent)
 _worker_busy = threading.Event()
 
@@ -131,6 +132,9 @@ def create_app() -> FastAPI:
                 "rate_max": settings.rate_max_in_window,
                 "rate_window_s": settings.rate_window_s,
                 "auth": settings.auth_enabled,
+                "max_connections": settings.max_connections,
+                "daily_runs": quota.state()["limit"],
+                "daily_used": quota.state()["used"],
             },
         }
 
@@ -152,6 +156,13 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                                 detail="Rate limit reached. Try again shortly.",
                                 headers={"Retry-After": str(retry_after)})
+
+        allowed, retry_after = quota.check()
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="The demo's daily budget is used up. Try again after midnight UTC.",
+                headers={"Retry-After": str(retry_after)})
 
         lang = (lang or "ne").strip().lower()
         if lang not in MAX_LANG:

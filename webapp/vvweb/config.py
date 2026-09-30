@@ -33,6 +33,13 @@ class Settings:
     max_concurrent: int = field(default_factory=lambda: _env_int("WEB_CONCURRENCY", 1))
     queue_wait_s: int = field(default_factory=lambda: _env_int("WEB_QUEUE_WAIT_S", 25))
 
+    # Transport: uvicorn sheds connections beyond this (slowloris/flood guard).
+    max_connections: int = field(default_factory=lambda: _env_int("WEB_MAX_CONNECTIONS", 32))
+
+    # Hard daily run budget across all clients (0 disables). The billing
+    # kill-switch: even a distributed flood cannot exceed this many pages/day.
+    daily_runs: int = field(default_factory=lambda: _env_int("WEB_DAILY_RUNS", 300))
+
     # OCR language warmed at startup so the first visitor does not pay the
     # model init / one-time Devanagari download (the UI defaults to Nepali).
     warm_lang: str = field(default_factory=lambda: branding.env("WEB_WARM_LANG", "ne"))

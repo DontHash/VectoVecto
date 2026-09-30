@@ -15,7 +15,11 @@ docker run --rm -p 8000:8000 veriscript
 ```
 
 The image builds the SolidJS studio in a Node stage and serves it from the
-FastAPI backend. Environment knobs:
+FastAPI backend. One-command VPS deployment (app + Caddy with automatic TLS,
+request-body cap and timeouts) lives in [`../deploy/`](../deploy/README.md):
+`docker compose up -d --build`.
+
+Environment knobs:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -28,6 +32,8 @@ FastAPI backend. Environment knobs:
 | `VERISCRIPT_WEB_MAX_MP` | `30` | image megapixel cap |
 | `VERISCRIPT_WEB_TIMEOUT_S` | `180` | per-page processing timeout |
 | `VERISCRIPT_WEB_CONCURRENCY` / `VERISCRIPT_WEB_QUEUE_WAIT_S` | `1` / `25` | single heavy worker; queue beyond it, then 503 |
+| `VERISCRIPT_WEB_DAILY_RUNS` | `300` | hard daily run budget across all clients (UTC reset); `0` disables — the billing kill-switch |
+| `VERISCRIPT_WEB_MAX_CONNECTIONS` | `32` | uvicorn connection cap (excess connections are shed) |
 | `VERISCRIPT_WEB_TTL_MINUTES` | `60` | artifact retention before the periodic sweep |
 | `VERISCRIPT_WEB_RATE_MAX` / `VERISCRIPT_WEB_RATE_WINDOW_S` | `6` / `120` | per-IP sliding window |
 | `VERISCRIPT_LEXICON` | `data/lexicon/nepali_lexicon_v1.txt` | optional `unknown_word` lexicon; not in the image (see `scripts/fetch_nepali_lexicon.py`) |
@@ -52,8 +58,10 @@ on `/api/health`.
 ## Managed platforms
 
 - **Hugging Face Spaces (Docker SDK):** create a Space, push this repo, set the
-  Space to use the existing `Dockerfile` (port `8000`), add the auth secrets in
-  the Space settings. The free tier is CPU-only, which matches the image.
+  Space to use the existing `Dockerfile` (port `8000`; if the Space insists on
+  `7860`, set `app_port: 8000` in the Space README metadata or
+  `VERISCRIPT_WEB_PORT=7860`), add the auth secrets in the Space settings. The
+  free tier is CPU-only, which matches the image.
 - **Render / Railway / Fly.io:** point the service at the `Dockerfile`, expose
   port `8000` (or set `VERISCRIPT_WEB_PORT` to the one the platform expects),
   add the same environment variables. Give the first request ~60–90 s of
@@ -71,6 +79,10 @@ What the app already does:
 - **Abuse**: per-IP sliding-window limit (429 + `Retry-After`), one heavy
   worker with a bounded queue (503 + `Retry-After`), per-run timeout; the
   limiter table is capped at 20k keys so an IP spray cannot grow memory.
+- **Spend ceiling**: a hard daily run budget (`VERISCRIPT_WEB_DAILY_RUNS`,
+  default 300/day, UTC reset) counts every accepted attempt across all
+  clients, so a distributed flood cannot exceed it; the uvicorn connection
+  cap (`VERISCRIPT_WEB_MAX_CONNECTIONS`, default 32) sheds excess sockets.
 - **Data**: runs under `webapp/runs/<16-hex>/`, deleted by TTL (default
   60 min); failed runs deleted immediately; owner-only permissions (0700
   dirs / 0600 manifests) on POSIX; nothing is logged about page content.

@@ -19,7 +19,7 @@ from fastapi.responses import Response  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from vvweb.compression import SelectiveGZipMiddleware, is_compressible  # noqa: E402
-from vvweb.security import RateLimiter, cache_control_for_path  # noqa: E402
+from vvweb.security import DailyQuota, RateLimiter, cache_control_for_path  # noqa: E402
 
 
 # -- gzip policy -----------------------------------------------------------
@@ -106,6 +106,24 @@ def test_rate_limiter_bounds_its_table():
     for i in range(10):
         assert rl.check(f"ip-{i}")[0] is True
     assert rl.tracked_keys() <= 3
+
+
+# -- daily quota (the billing kill-switch) ---------------------------------
+
+def test_daily_quota_enforced():
+    q = DailyQuota(2)
+    assert q.check() == (True, 0)
+    assert q.check() == (True, 0)
+    allowed, retry = q.check()
+    assert allowed is False and retry >= 1
+    assert q.state() == {"limit": 2, "used": 2}
+
+
+def test_daily_quota_zero_disables():
+    q = DailyQuota(0)
+    for _ in range(5):
+        assert q.check()[0] is True
+    assert q.state() == {"limit": 0, "used": 0}
 
 
 # -- proxy opt-in ----------------------------------------------------------
