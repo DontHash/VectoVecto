@@ -10,10 +10,10 @@ alert is part of the setup. Region used here: `us-central1`.
 |---|---|
 | Service | `veriscript-demo` (us-central1, project `theproject-sr`) |
 | URL | <https://veriscript-demo-byr4wxwy4a-uc.a.run.app> |
-| Image | `us-central1-docker.pkg.dev/theproject-sr/veriscript/app:v1` (442 MB) |
+| Image | `us-central1-docker.pkg.dev/theproject-sr/veriscript/app:latest` (sha-tagged per build) |
 | Runtime | 1 vCPU / 2 GiB, concurrency 1, min 0 / max 1 instance, port 8000 |
 | Env | `CLIENT_IP_MODE=xff-last`, `DAILY_RUNS=200`, `DAILY_PAGES=500`, `DAILY_PAGES_PER_CLIENT=20`, `RATE_MAX=6`, `RATE_WINDOW_S=120`, `MAX_CONNECTIONS=32`, `WARM_LANG=ne` |
-| Guards verified | health reports the limits; a real page restored in ≈8–10 s warm / 25–45 s cold (2 vCPU measured *slower* — see Performance notes) |
+| Guards verified | health reports the limits; a real page restored in ≈8–10 s warm / 25–45 s cold (2 vCPU measured *slower* — see Performance notes); the per-visitor page cap was verified live (the run over the limit returns 429 + `Retry-After` with the limit message) |
 
 Update with: rebuild (`PRELOAD_MODELS=1`), push the same tag, then
 `gcloud run deploy veriscript-demo --image <tag> --region us-central1 --project theproject-sr`.
