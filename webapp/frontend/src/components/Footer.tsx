@@ -22,6 +22,14 @@ export function Footer() {
           <a class="footer__link" href="/studio">
             Try the studio
           </a>
+          <a
+            class="footer__link"
+            href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md"
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            Benchmark — Devanagari head-to-head
+          </a>
         </div>
 
         <div class="footer__col">
@@ -35,7 +43,7 @@ export function Footer() {
             GitHub — DontHash/VeriScript
           </a>
           <span class="eyebrow">Docs</span>
-          <span class="footer__link">docs/EVALUATION.md · docs/DEPLOY.md</span>
+          <span class="footer__link">docs/BENCHMARK.md · docs/EVALUATION.md · docs/DEPLOY.md</span>
           <span class="footer__link">MIT · third-party models keep their licenses</span>
         </div>
       </div>

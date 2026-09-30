@@ -146,8 +146,9 @@ Known limitations are listed with their evidence in
 
 Head-to-head on the frozen Devanagari hard-10 (the table-heavy hardest 10 of
 the 41-page `nepali_pdf_v2` set, Gemini-2.5-Pro anchor GT; every arm scored by
-the same metric code — full tables and reproduction commands in
-[evals/bakeoff_results.md](evals/bakeoff_results.md)):
+the same metric code — canonical write-up in
+[docs/BENCHMARK.md](docs/BENCHMARK.md), raw lab notes and reproduction
+commands in [evals/bakeoff_results.md](evals/bakeoff_results.md)):
 
 | Engine | CER (mean [95% CI]) | Median CER | bagCER | Speed (s/page) | Runs on CPU |
 |---|---|---|---|---|---|

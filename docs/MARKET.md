@@ -162,4 +162,7 @@ falling; VLM inference costs collapsing — the moat is *not* the recognizer.
 - PaddleOCR PP-OCRv5 multilingual — paddleocr.ai (devanagari rec 84.96% on their set)
 - ABBYY FineReader pricing — pdf.abbyy.com/pricing; PCMag review 2026
 - Repository evidence — [EVALUATION.md](EVALUATION.md), [PLAN.md](PLAN.md), `evals/bakeoff_results.md`
-- Phase-2 head-to-head (2026-09-30) — `evals/bakeoff_results.md` Phase 2; raw JSON: `evals/headtohead_nepali_pdf_hard10.json`, `evals/headtohead_heidata69.json`, `evals/surya_nepali_pdf_hard10.json`
+- Phase-2 head-to-head (2026-09-30) — [BENCHMARK.md](BENCHMARK.md) (canonical
+  write-up) and `evals/bakeoff_results.md` Phase 2; raw JSON:
+  `evals/headtohead_nepali_pdf_hard10.json`, `evals/headtohead_heidata69.json`,
+  `evals/surya_nepali_pdf_hard10.json`

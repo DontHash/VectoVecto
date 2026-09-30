@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Published benchmark** — [`docs/BENCHMARK.md`](docs/BENCHMARK.md): the
+  canonical head-to-head (shipped pipeline vs raw RapidOCR, PaddleOCR 3.x,
+  Surya OCR 2 and Qwen3-VL-8B) on the frozen hard-10 and letterpress sets,
+  with bootstrap CIs, the review-queue numbers (digit R@10 0.73 → 0.88
+  letterpress / 0.15 → 0.38 PDFs), honest limitations and reproduction
+  commands. Linked from the README and the site footer.
 - **Per-visitor demo limit: 20 pages/day.** Page-based accounting (a 10-page
   PDF costs 10, not 1) with a per-visitor daily budget
   (`VERISCRIPT_WEB_DAILY_PAGES_PER_CLIENT`), a global daily page ceiling
