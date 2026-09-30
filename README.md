@@ -142,28 +142,37 @@ the 41-page `nepali_pdf_v2` set, Gemini-2.5-Pro anchor GT; every arm scored by
 the same metric code — full tables and reproduction commands in
 [evals/bakeoff_results.md](evals/bakeoff_results.md)):
 
-| Engine | CER (mean [95% CI]) | Median CER | bagCER | Invented* | Speed (s/page) | Class |
-|---|---|---|---|---|---|---|
-| Surya OCR 2 | 0.166 [0.100–0.258] | 0.107 | 0.360 | 82 | 172.0 | Heavy — 650M VLM + llama.cpp, 4 GB GPU |
-| Qwen3-VL-8B NF4 | 0.176 [0.129–0.235] | 0.141 | 0.369 | 224 | 152.7 | Heavy — 8B VLM, T4-class GPU |
-| **VectoVecto pipeline (default)** | **0.255 [0.202–0.329]** | **0.227** | 0.376 | **35** | **7.3** | **Lightweight — CPU-first, 4 GB GPU enough** |
-| raw RapidOCR engine | 0.530 [0.463–0.585] | 0.543 | 0.380 | 0 | 3.8 | Lightweight — CPU-first |
-| PaddleOCR 3.x full pipeline | 0.662 [0.585–0.713] | 0.687 | 0.400 | 186 | 21.8 | Heavy — Paddle runtime, CPU-only in practice |
+| Engine | CER (mean [95% CI]) | Median CER | bagCER | Speed (s/page) | Runs on CPU |
+|---|---|---|---|---|---|
+| Surya OCR 2 | 0.166 [0.100–0.258] | 0.107 | 0.360 | 172.0 | ✗ |
+| Qwen3-VL-8B NF4 | 0.176 [0.129–0.235] | 0.141 | 0.369 | 152.7 | ✗ |
+| **VectoVecto pipeline (default)** | **0.255 [0.202–0.329]** | **0.227** | 0.376 | **7.3** | ✓ |
+| raw RapidOCR engine | 0.530 [0.463–0.585] | 0.543 | 0.380 | 3.8 | ✓ |
+| PaddleOCR 3.x full pipeline | 0.662 [0.585–0.713] | 0.687 | 0.400 | 21.8 | ✓ |
 
-\* Tokens in neither the ground truth nor the raw-engine pass (peer rule); the
-raw arm is 0 by construction. Speeds are per page on the harness hardware —
-ours, raw and Surya on an RTX 2050 4 GB (Surya via llama.cpp/Vulkan), Qwen on
-a T4 (NF4), PaddleOCR on CPU. Class = deployment footprint: Lightweight is
-CPU-first, small bundled models, one process on a laptop; Heavy is
-VLM/framework-class, > 20 s/page in practice.
+Speeds are per page on the harness hardware — ours, raw and Surya on an
+RTX 2050 4 GB (Surya via llama.cpp/Vulkan), Qwen on a T4 (NF4), PaddleOCR on
+**CPU**. Runs on CPU: ✓ = CPU-first (PaddleOCR was measured CPU-only here;
+VectoVecto and RapidOCR ship CPU-first); ✗ = GPU-class in practice — a GPU was
+used and CPU would be far slower.
+
+**Metrics.** **CER** (character error rate) is the edit distance between the
+OCR output and the ground truth (insertions + deletions + substitutions)
+divided by the number of ground-truth characters: order-sensitive, 0 is
+perfect, lower is better. **bagCER** is the same character distance after
+alphabetically sorting the tokens on both sides — it ignores reading order, so
+it isolates glyph recognition from layout (a page with perfect words in the
+wrong order still scores 0). **Median CER** is the middle page's CER, robust
+to a single catastrophic page; **s/page** is seconds per page.
 
 **Reading.** bagCER is tied across every arm (0.360–0.400): glyph recognition
 is a commodity, and the page-CER spread is reading order, table structure and
 digit handling — which is where this pipeline earns its keep (0.530 → 0.255
 over the raw engine on the same frozen pages, while staying CPU-first,
 offline and Apache-2.0). Surya 2 reads best by median at ~23× our page time
-and OpenRAIL-M weights; the VLM arms invent 82–224 tokens and PaddleOCR 186.
-Only this stack ships an alternative-reading digit review queue.
+and OpenRAIL-M weights, and the GPU arms invent text the source never
+contained (82–224 tokens over the 10 pages); only this stack ships an
+alternative-reading digit review queue.
 
 ## Project layout
 
