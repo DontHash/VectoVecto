@@ -13,7 +13,7 @@ part of the setup. Region used here: `us-central1`.
 | Image | `us-central1-docker.pkg.dev/theproject-sr/veriscript/app:v1` (442 MB) |
 | Runtime | 1 vCPU / 2 GiB, concurrency 1, min 0 / max 1 instance, port 8000 |
 | Env | `CLIENT_IP_MODE=xff-last`, `DAILY_RUNS=200`, `RATE_MAX=6`, `RATE_WINDOW_S=120`, `MAX_CONNECTIONS=32`, `WARM_LANG=ne` |
-| Guards verified | health reports the limits; a real page restored in 8.6 s warm / 24.8 s cold |
+| Guards verified | health reports the limits; a real page restored in ≈8–10 s warm / 25–45 s cold (2 vCPU measured *slower* — see Performance notes) |
 
 Update with: rebuild (`PRELOAD_MODELS=1`), push the same tag, then
 `gcloud run deploy veriscript-demo --image <tag> --region us-central1 --project theproject-sr`.
@@ -74,6 +74,39 @@ Notes:
 - For a private demo, drop `--allow-unauthenticated` (Cloud Run IAM) **or**
   set `VERISCRIPT_WEB_USER` / `VERISCRIPT_WEB_PASSWORD`.
 
+## Performance notes (measured on the live service)
+
+Single invoice page (`invoice-hero.jpg`), warm instance:
+
+| Config | Warm total | Processing |
+|---|---|---|
+| **1 vCPU, `OMP_NUM_THREADS=2` (image default) — current** | ≈8–10 s | ≈8–9 s |
+| 2 vCPU, `OMP_NUM_THREADS=2` | 12.7–13.5 s | ≈11.9 s |
+| 1 vCPU, `OMP_NUM_THREADS=1` | 9.9–10.2 s | ≈9.2 s |
+
+Counter-intuitive but measured: **more vCPU is slower** for this workload —
+the page is largely single-stream ONNX inference, so extra threads contend
+instead of parallelising. Cold start (first request after idle) is ~25–45 s
+regardless, because the OCR models load and warm then. Keep 1 vCPU and the
+image's `OMP_NUM_THREADS=2`; if you change either, re-measure with a few warm
+runs (the rate limit allows 6 / 2 min).
+
+## Update workflow
+
+1. Change code, run the suite: `python -m pytest tests/ -q`.
+2. Build with a **new tag** (keeps rollback trivial) and push:
+   `docker build --build-arg PRELOAD_MODELS=1 -t …/app:v2 . && docker push …/app:v2`.
+3. Deploy the new image — every other setting (env vars, CPU, limits,
+   concurrency) persists on the service:
+   `gcloud run deploy veriscript-demo --image …/app:v2 --region us-central1 --project theproject-sr`.
+4. Verify: `curl $URL/api/health` and one warm `/api/restore`.
+5. Roll back: `gcloud run revisions list --service veriscript-demo --region us-central1
+   --project theproject-sr`, then
+   `gcloud run services update-traffic veriscript-demo --to-revisions <REV>=100
+   --region us-central1 --project theproject-sr`.
+   Revisions pin their image digest, so rollback works even if a tag was
+   overwritten; revisions themselves cost nothing.
+
 ## Verify
 
 ```bash
@@ -82,19 +115,6 @@ URL=$(gcloud run services describe veriscript-demo --region us-central1 \
 curl "$URL/api/health"
 curl -F "file=@webapp/frontend/public/examples/invoice-hero.jpg" \
      -F "lang=en" "$URL/api/restore"
-```
-
-## Update / rollback
-
-```bash
-docker build --build-arg PRELOAD_MODELS=1 -t <same-tag> .
-docker push <same-tag>
-gcloud run deploy veriscript-demo --image <same-tag> --region us-central1 \
-  --project theproject-sr          # create a new revision
-gcloud run revisions list --service veriscript-demo --region us-central1 \
-  --project theproject-sr          # roll back:
-gcloud run services update-traffic veriscript-demo --to-revisions <REV>=100 \
-  --region us-central1 --project theproject-sr
 ```
 
 ## Cost expectations
