@@ -22,7 +22,7 @@ Update with: rebuild (`PRELOAD_MODELS=1`), push the same tag, then
 
 ```bash
 gcloud services enable run.googleapis.com artifactregistry.googleapis.com \
-  --project theproject-sr
+  iamcredentials.googleapis.com --project theproject-sr
 gcloud artifacts repositories create veriscript --repository-format=docker \
   --location=us-central1 --project=theproject-sr
 gcloud billing budgets create --billing-account <BILLING_ACCOUNT> \
@@ -101,6 +101,9 @@ revision — `.github/workflows/deploy.yml`. Manual runs: Actions → *Deploy de
 one-time setup, already done for this project:
 
 ```bash
+# one-time project APIs (iamcredentials powers WIF token minting)
+gcloud services enable iamcredentials.googleapis.com --project=theproject-sr
+
 # deployer service account
 gcloud iam service-accounts create veriscript-deployer --project theproject-sr
 SA=veriscript-deployer@theproject-sr.iam.gserviceaccount.com
