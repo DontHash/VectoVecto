@@ -10,6 +10,7 @@ alert is part of the setup. Region used here: `us-central1`.
 |---|---|
 | Service | `veriscript-demo` (us-central1, project `theproject-sr`) |
 | URL | <https://veriscript-demo-byr4wxwy4a-uc.a.run.app> |
+| Custom domain | `veriscript.live` + `www.veriscript.live` (Cloud Run domain mappings, Namecheap DNS, Google-managed certificates) |
 | Image | `us-central1-docker.pkg.dev/theproject-sr/veriscript/app:latest` (sha-tagged per build) |
 | Runtime | 1 vCPU / 2 GiB, concurrency 1, min 0 / max 1 instance, port 8000 |
 | Env | `CLIENT_IP_MODE=xff-last`, `DAILY_RUNS=200`, `DAILY_PAGES=500`, `DAILY_PAGES_PER_CLIENT=20`, `RATE_MAX=6`, `RATE_WINDOW_S=120`, `MAX_CONNECTIONS=32`, `WARM_LANG=ne` |
@@ -215,6 +216,10 @@ gcloud monitoring policies list --project=theproject-sr
    beta install entirely.
 4. **DNS**: add the records the command returns — A/AAAA for the apex,
    CNAME to `ghs.googlehosted.com` for subdomains.
+
+Done for this service (2026-09-30): both `veriscript.live` (4×A + 4×AAAA) and
+`www.veriscript.live` (CNAME) are mapped; the mappings were created through
+the Cloud Run Admin API, so no `beta` component was needed.
 
 Domain mapping is free and fine for a demo. For a production setup, prefer a
 global external Application Load Balancer + serverless NEG (health checks,
