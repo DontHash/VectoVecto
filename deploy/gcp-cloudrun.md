@@ -194,16 +194,31 @@ gcloud monitoring policies list --project=theproject-sr
 
 ## Custom domain
 
-`veriscript.dev` was unregistered when checked (2026-09-30). After registering
-it at any registrar, use **Cloud Run domain mapping**:
+`veriscript.dev` was unregistered when checked (2026-09-30). The order matters:
 
-```bash
-# 1. Verify ownership of the domain in Google Search Console first.
-gcloud run domain-mappings create --service veriscript-demo \
-  --domain veriscript.dev --region us-central1 --project theproject-sr
-# 2. Add the DNS records it prints (CNAME to ghs.googlehosted.com for
-#    subdomains; A/AAAA for the apex).
-```
+1. **Register the domain** at any registrar (≈$10–12/year).
+2. **Verify ownership** with Google: in the Cloud Console open *Cloud Run →
+   veriscript-demo → Manage custom domains* (the flow creates the Search
+   Console TXT record for you), or add the TXT record manually in
+   [Search Console](https://search.google.com/search-console).
+3. **Create the mapping.** Fully managed Cloud Run needs the **beta** command
+   — the GA `gcloud run domain-mappings create` is the Anthos (Knative)
+   variant and rejects `--region`:
+
+   ```bash
+   gcloud components install beta   # needs an elevated shell: the SDK lives in Program Files
+   gcloud beta run domain-mappings create --service veriscript-demo \
+     --domain veriscript.dev --region us-central1 --project theproject-sr
+   ```
+
+   Or do step 3 from the Console UI (*Manage custom domains*), which skips the
+   beta install entirely.
+4. **DNS**: add the records the command returns — A/AAAA for the apex,
+   CNAME to `ghs.googlehosted.com` for subdomains.
+
+Domain mapping is free and fine for a demo. For a production setup, prefer a
+global external Application Load Balancer + serverless NEG (health checks,
+CDN, managed certificates).
 
 Cloudflare in front is possible but needs care: with Cloudflare proxying to
 Cloud Run, Google's front end appends the *Cloudflare edge* IP to
