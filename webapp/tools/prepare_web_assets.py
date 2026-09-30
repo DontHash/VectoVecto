@@ -1,4 +1,4 @@
-"""Prepare web assets for the VectoVecto studio frontend.
+"""Prepare web assets for the VeriScript studio frontend.
 
 - Downloads the latin woff2 subsets of Instrument Serif + IBM Plex Mono from
   Google Fonts (both OFL) into frontend/public/fonts/.

@@ -31,7 +31,7 @@ ITEMS = [
     "goldennewspkr_gmail_20151010",
 ]
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VectoVecto-Research/1.0 "
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VeriScript-Research/1.0 "
       "(internal OCR evaluation)")
 
 

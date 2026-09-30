@@ -1,4 +1,4 @@
-# VectoVecto — Faithful Document Restore (research log)
+# VeriScript — Faithful Document Restore (research log)
 
 **Status:** Product plan v2 (researched). Execute in order. Do not skip the eval harness.
 **Decision date:** 2026-09-20 (v2 revisions same day)
@@ -2165,4 +2165,27 @@ digit verifier and no verifier ships from this track. The digit residual
 needs a better model (N3: reader improvements) or more real digit ground
 truth (N5), not a second opinion from this reader. No production code was
 changed; the measurement is reproducible from this appendix's numbers.
+
+## Appendix AD - project rename: VectoVecto -> VeriScript (2026-09-30)
+
+**Why.** The former name was unsearchable and hard to say; the product needs
+a name that states its differentiator (faithful text, honest flags) and that
+is free to use. Candidates were checked against PyPI / npm / GitHub / `.dev`:
+Scripta (all four taken; 4,430 GitHub repos plus academic journals), Lekhani
+and Devalipi (GitHub username taken), Syahi (GitHub username taken; also a
+known band), Rescripta (clean but Latin-only flavour), and **VeriScript**
+(PyPI / npm / `veriscript.dev` free; 18 trivial repos). VeriScript wins:
+*veri* (truth) + *script* (writing system) - and "script" is the domain word
+for Devanagari.
+
+**Scope of the rename (2026-09-30).**
+- User-visible: README, docs, web-studio titles/copy, package metadata
+  (`veriscript`; legacy `vectovecto` console script kept), Docker image/tag,
+  PyInstaller spec (`packaging/veriscript.spec`), project URLs.
+- Environment variables: `VERISCRIPT_*` is the current prefix; `VECTOVECTO_*`
+  keeps working as a fallback through `branding.env()` (logging, lexicon,
+  line-reader checkpoint, web config).
+- Deliberately unchanged (internal / compatibility): the `vectovecto.*`
+  logger name, the `vvweb` web package, and the Kaggle dataset slugs
+  (`bhishmbhandari/vectovecto-*`) referenced by external kernels and evidence.
 

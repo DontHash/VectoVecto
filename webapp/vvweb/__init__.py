@@ -1,1 +1,1 @@
-"""VectoVecto Studio — web backend package."""
+"""VeriScript Studio — web backend package."""

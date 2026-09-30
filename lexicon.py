@@ -5,7 +5,8 @@ The word list is built by `scripts/fetch_nepali_lexicon.py` from two
 license-clean sources (Tesseract `nep/nep.wordlist`, Apache-2.0;
 `nepali-brihat-sabdakosh-json`, MIT) and is **not distributed in this
 repository** (`data/` is gitignored). Absence is not an error: the flag is
-simply not emitted. `VECTOVECTO_LEXICON` overrides the path.
+simply not emitted. `VERISCRIPT_LEXICON` (legacy `VECTOVECTO_LEXICON` still
+accepted) overrides the path.
 
 No heavy imports; safe for the shipped path.
 """
@@ -16,8 +17,10 @@ import re
 import unicodedata
 from typing import Collection, Dict, List, Optional
 
+import branding
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_VAR = "VECTOVECTO_LEXICON"
+ENV_VAR = "VERISCRIPT_LEXICON"
 DEFAULT_LEXICON = os.path.join(BASE_DIR, "data", "lexicon",
                                "nepali_lexicon_v1.txt")
 MIN_WORD_LEN = 2
@@ -61,7 +64,7 @@ def unknown_words(text: str, lexicon: Optional[Collection[str]]) -> List[str]:
 
 
 def resolve_path(path: Optional[str] = None) -> str:
-    return os.path.abspath(path or os.environ.get(ENV_VAR) or DEFAULT_LEXICON)
+    return os.path.abspath(path or branding.env("LEXICON") or DEFAULT_LEXICON)
 
 
 def load_lexicon(path: Optional[str] = None) -> Optional[Dict]:

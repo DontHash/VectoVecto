@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-vectovecto.spec — PyInstaller spec for the Pro desktop build (not built in
+veriscript.spec — PyInstaller spec for the Pro desktop build (not built in
 OSS releases; the OSS product is CLI + the web studio in `webapp/`).
 
 One executable from one tree:
-  * vectovecto  console -> cli.py  (document/photo modes)
+  * veriscript  console -> cli.py  (document/photo modes)
 
 The studio is the web app (`python webapp/server.py`), not a desktop window;
 package it separately if a desktop shell is ever wanted.
@@ -20,7 +20,7 @@ Known caveats:
     one-file is possible but slow to start.
 
 Build:
-    pyinstaller packaging/vectovecto.spec --noconfirm
+    pyinstaller packaging/veriscript.spec --noconfirm
 """
 import sys
 from pathlib import Path
@@ -44,7 +44,8 @@ PRODUCT_MODULES = [
     "doc_data", "doc_metrics", "document_export", "document_layout",
     "document_ocr", "document_orientation", "document_pipeline",
     "document_restore", "document_router", "document_verifier", "lexicon",
-    "logging_setup", "rrdbnet", "smart_upscaler", "sr_engine", "srvggnet",
+    "logging_setup", "branding", "rrdbnet", "smart_upscaler", "sr_engine",
+    "srvggnet",
     "vector_raster_hybrid",
 ]
 
@@ -62,7 +63,7 @@ pyz_cli = PYZ(a_cli.pure)
 exe_cli = EXE(
     pyz_cli, a_cli.scripts, [],
     exclude_binaries=True,
-    name="vectovecto",
+    name="veriscript",
     console=True,
     upx=False,
 )
@@ -71,5 +72,5 @@ coll = COLLECT(
     exe_cli, a_cli.binaries, a_cli.datas,
     strip=False,
     upx=False,
-    name="vectovecto",
+    name="veriscript",
 )

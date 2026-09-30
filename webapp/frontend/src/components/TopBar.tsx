@@ -7,8 +7,8 @@ export function TopBar() {
   return (
     <header class="topbar">
       <div class="container topbar__inner">
-        <A href="/" class="wordmark" aria-label="VectoVecto home">
-          Vecto<span>Vecto</span>
+        <A href="/" class="wordmark" aria-label="VeriScript home">
+          Veri<span>Script</span>
         </A>
 
         <nav class="topbar__nav" aria-label="Primary">
@@ -29,7 +29,7 @@ export function TopBar() {
         <div class="topbar__actions">
           <a
             class="nav-link topbar__gh"
-            href="https://github.com/DontHash/VectoVecto"
+            href="https://github.com/DontHash/VeriScript"
             rel="noreferrer noopener"
             target="_blank"
           >

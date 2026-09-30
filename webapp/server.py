@@ -1,10 +1,11 @@
 """Entry point.
 
     python webapp/server.py            # http://127.0.0.1:8000
-    VECTOVECTO_WEB_PORT=9000 python webapp/server.py
+    VERISCRIPT_WEB_PORT=9000 python webapp/server.py
 
-Env: see webapp/app/config.py. Optional auth:
-    VECTOVECTO_WEB_USER / VECTOVECTO_WEB_PASSWORD
+Env: see webapp/vvweb/config.py (`VERISCRIPT_*`; legacy `VECTOVECTO_*` still
+accepted). Optional auth:
+    VERISCRIPT_WEB_USER / VERISCRIPT_WEB_PASSWORD
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ app = create_app()
 def _uvicorn_extra(allow: str) -> dict:
     """Proxy-header kwargs for uvicorn, or {} when disabled.
 
-    Opt-in via `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` = the proxy address(es)
+    Opt-in via `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS` = the proxy address(es)
     (`127.0.0.1`, a subnet, or `*`). Left unset, forwarded headers are
     ignored and the proxy IP is rate-limited (safe but coarse).
     """

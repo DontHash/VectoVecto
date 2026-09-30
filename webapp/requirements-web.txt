@@ -1,4 +1,4 @@
-# VectoVecto web studio — backend dependencies.
+# VeriScript web studio — backend dependencies.
 # The document pipeline itself needs the repo's runtime requirements.txt; this
 # file only adds HTTP serving. (fastapi/uvicorn are already present in Gradio
 # installs, but pin them explicitly for the web app.)

@@ -1,4 +1,4 @@
-# VectoVecto Studio — web app
+# VeriScript Studio — web app
 
 A clean web front door for the document pipeline: **the homepage is the product**
 (the studio sits in the hero, and a run's results appear straight below it), with
@@ -52,10 +52,10 @@ python webapp/tools/export_queue_sample.py  # real review queue -> frontend data
 | Run time | hard timeout (180 s) per page; failed runs are deleted immediately |
 | Data | runs live under `webapp/runs/<random-16-hex>/`; files are deleted after the retention window (default 60 min) by a periodic sweep; owner-only permissions (0700 dirs / 0600 manifests) on POSIX; nothing is logged about page content |
 | Files | artifact names are a fixed whitelist; run ids are validated against `^[0-9a-f]{16}$`, so traversal is impossible |
-| Proxy | real client IP only when `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` names the proxy (uvicorn proxy headers); otherwise the proxy IP is the rate-limit key |
+| Proxy | real client IP only when `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS` names the proxy (uvicorn proxy headers; legacy `VECTOVECTO_` name also accepted); otherwise the proxy IP is the rate-limit key |
 | Cost | text-only gzip (≥ 1 KiB); hashed assets cached `immutable`, fonts/examples 1 week, HTML revalidates; no torch in the web image |
 | Transport | security headers on every response (CSP without inline script/style, `nosniff`, `frame-ancestors 'none'`, referrer policy, COOP/CORP); API responses are `no-store` |
-| Auth | optional HTTP Basic for `/api/*` — set `VECTOVECTO_WEB_USER` + `VECTOVECTO_WEB_PASSWORD` |
+| Auth | optional HTTP Basic for `/api/*` — set `VERISCRIPT_WEB_USER` + `VERISCRIPT_WEB_PASSWORD` |
 
 Configuration lives in `vvweb/config.py` (all env-driven). Nothing in the web
 app can reach a private network path; the only outbound work is none.
@@ -82,9 +82,9 @@ The server is a single uvicorn process; put it behind any reverse proxy that
 terminates TLS and **forwards the real client IP** (so rate limiting works):
 
 ```bash
-VECTOVECTO_WEB_HOST=0.0.0.0 \
-VECTOVECTO_WEB_USER=studio \
-VECTOVECTO_WEB_PASSWORD=… \
+VERISCRIPT_WEB_HOST=0.0.0.0 \
+VERISCRIPT_WEB_USER=studio \
+VERISCRIPT_WEB_PASSWORD=… \
 python webapp/server.py
 ```
 

@@ -18,7 +18,7 @@ python evals/harness/eval_freeze.py --check evals/manifests/nepali_pdf_v2.json
 python evals/harness/eval_freeze.py --check evals/manifests/cornell_real_v1.json
 
 # 3. Web image builds and answers (/api/health on port 8000)
-docker build -t vectovecto:$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])") .
+docker build -t veriscript:$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])") .
 
 # 4. Changelog + version bump, commit, tag, push
 git tag -a v1.1.0 -m "v1.1.0"
@@ -36,7 +36,7 @@ Code, tests, evaluation harnesses and frozen manifests. It deliberately does
 The OSS release is CLI + web app. A signed portable Windows build stays the
 Pro path; the infrastructure is prepared:
 
-- `packaging/vectovecto.spec` — PyInstaller spec (CLI-only one-folder build;
+- `packaging/veriscript.spec` — PyInstaller spec (CLI-only one-folder build;
   the studio is the web app, not a desktop window).
 - `scripts/build_release.ps1` — installs PyInstaller, builds, zips.
 

@@ -53,7 +53,7 @@ def test_write_lexicon_header_and_hash(tmp_path):
     path = str(tmp_path / "lex.txt")
     sha = fl.write_lexicon(["कुल", "नेपाल"], path)
     text = open(path, encoding="utf-8").read()
-    assert text.startswith("# VectoVecto Nepali lexicon v1")
+    assert text.startswith("# VeriScript Nepali lexicon v1")
     assert sha == hashlib.sha256(text.encode("utf-8")).hexdigest()
     assert text.rstrip().splitlines()[-2:] == ["कुल", "नेपाल"]
 

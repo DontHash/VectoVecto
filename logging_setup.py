@@ -1,19 +1,21 @@
 """
 logging_setup.py — one logging configuration for CLI, studio and library code.
 
-Product modules log under the `vectovecto` logger (`vectovecto.cli`,
-`vectovecto.web`, `vectovecto.document_export`, ...). `configure_logging()` is
-idempotent, is called by the entry points, and reads `VECTOVECTO_LOG_LEVEL`
-(default INFO). Server-side errors then reach container logs instead of only
-the HTTP response; the CLI keeps its user-facing prints.
+Product modules log under the `vectovecto.*` logger (internal name, kept from
+the former brand; `vectovecto.cli`, `vectovecto.web`, ...).
+`configure_logging()` is idempotent, is called by the entry points, and reads
+`VERISCRIPT_LOG_LEVEL` (legacy `VECTOVECTO_LOG_LEVEL` still accepted; default
+INFO). Server-side errors then reach container logs instead of only the HTTP
+response; the CLI keeps its user-facing prints.
 
 No heavy imports; safe for the shipped path.
 """
 from __future__ import annotations
 
 import logging
-import os
 import sys
+
+import branding
 
 ROOT_NAME = "vectovecto"
 DEFAULT_LEVEL = "INFO"
@@ -30,7 +32,7 @@ def configure_logging(level: str | None = None) -> logging.Logger:
         handler.setFormatter(logging.Formatter(_FORMAT, "%H:%M:%S"))
         logger.addHandler(handler)
         _CONFIGURED = True
-    name = (level or os.environ.get("VECTOVECTO_LOG_LEVEL", DEFAULT_LEVEL)).upper()
+    name = (level or branding.env("LOG_LEVEL", DEFAULT_LEVEL)).upper()
     logger.setLevel(getattr(logging, name, logging.INFO))
     return logger
 

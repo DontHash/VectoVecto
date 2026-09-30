@@ -8,8 +8,9 @@ Devanagari line boxes while RapidOCR keeps doing detection; every line falls
 back to the backend reading when the model output is empty or implausible.
 
 The weights are deliberately **not** part of this repository. Deployments
-provide them via `VECTOVECTO_DEVA_CKPT` or `weights/deva_crnn_h48w512.pt`
-(both git-ignored); without them the reader is simply inactive.
+provide them via `VERISCRIPT_DEVA_CKPT` (legacy `VECTOVECTO_DEVA_CKPT` still
+accepted) or `weights/deva_crnn_h48w512.pt` (both git-ignored); without them
+the reader is simply inactive.
 """
 from __future__ import annotations
 
@@ -20,8 +21,10 @@ from typing import Dict, List, Optional
 import cv2
 import numpy as np
 
+import branding
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_VAR = "VECTOVECTO_DEVA_CKPT"
+ENV_VAR = "VERISCRIPT_DEVA_CKPT"
 DEFAULT_CKPT = os.path.join(BASE_DIR, "weights", "deva_crnn_h48w512.pt")
 MIN_CHARS = 1
 MAX_CHARS = 64
@@ -29,7 +32,7 @@ MAX_CHARS = 64
 
 def resolve_ckpt(explicit: Optional[str] = None) -> Optional[str]:
     """First existing checkpoint: explicit path, env var, repo default."""
-    for cand in (explicit, os.environ.get(ENV_VAR), DEFAULT_CKPT):
+    for cand in (explicit, branding.env("DEVA_CKPT"), DEFAULT_CKPT):
         if cand and os.path.exists(cand):
             return cand
     return None

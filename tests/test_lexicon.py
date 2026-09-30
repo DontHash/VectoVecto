@@ -64,6 +64,15 @@ def test_load_lexicon_missing_or_malformed_is_none(tmp_path):
 def test_load_lexicon_env_override(tmp_path, monkeypatch):
     path = tmp_path / "env_lex.txt"
     path.write_text("नेपाल\n", encoding="utf-8")
+    monkeypatch.setenv("VERISCRIPT_LEXICON", str(path))
+    lex = load_lexicon()
+    assert lex is not None and lex["count"] == 1
+
+
+def test_load_lexicon_legacy_env_alias(tmp_path, monkeypatch):
+    path = tmp_path / "env_lex2.txt"
+    path.write_text("नेपाल\n", encoding="utf-8")
+    monkeypatch.delenv("VERISCRIPT_LEXICON", raising=False)
     monkeypatch.setenv("VECTOVECTO_LEXICON", str(path))
     lex = load_lexicon()
     assert lex is not None and lex["count"] == 1

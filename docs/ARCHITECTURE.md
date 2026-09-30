@@ -1,6 +1,6 @@
 # Architecture
 
-VectoVecto is a local, single-process pipeline. One page in, four artifacts
+VeriScript is a local, single-process pipeline. One page in, four artifacts
 out; no services, no queue, no network.
 
 ```
@@ -42,7 +42,7 @@ out; no services, no queue, no network.
 | `lexicon.py` | optional Devanagari word list (built by `scripts/fetch_nepali_lexicon.py`) behind the `unknown_word` review flag; absent = flag off |
 | `cli.py` | command line: `--mode document|photo`, batch folders, all knobs |
 | `webapp/` | the studio: FastAPI backend (`vvweb/`) + SolidJS frontend; web entry point for the document pipeline (photo studio planned) |
-| `logging_setup.py` | one stderr logger (`vectovecto.*`, `VECTOVECTO_LOG_LEVEL`, default INFO) configured by both entry points |
+| `logging_setup.py` | one stderr logger (`vectovecto.*` internal name, `VERISCRIPT_LOG_LEVEL` with legacy `VECTOVECTO_LOG_LEVEL` fallback, default INFO) configured by both entry points |
 
 ### Data and metrics
 

@@ -136,7 +136,8 @@ def client_key(request: Request) -> str:
 
     Behind a reverse proxy this is the proxy IP unless the deployment enables
     proxy headers (uvicorn `proxy_headers=True` + `forwarded_allow_ips`, wired
-    by `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS`); see docs/DEPLOY.md.
+    by `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS`; legacy `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` also
+    accepted); see docs/DEPLOY.md.
     """
     return request.client.host if request.client else "unknown"
 
@@ -153,7 +154,7 @@ def require_auth(request: Request) -> None:
     if not header.lower().startswith("basic "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Authentication required",
-                            headers={"WWW-Authenticate": 'Basic realm="VectoVecto"'})
+                            headers={"WWW-Authenticate": 'Basic realm="VeriScript"'})
     import base64
     try:
         decoded = base64.b64decode(header.split(" ", 1)[1]).decode("utf-8")
@@ -161,13 +162,13 @@ def require_auth(request: Request) -> None:
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Bad credentials",
-                            headers={"WWW-Authenticate": 'Basic realm="VectoVecto"'})
+                            headers={"WWW-Authenticate": 'Basic realm="VeriScript"'})
     ok = (secrets.compare_digest(user, settings.auth_user or "")
           and secrets.compare_digest(password, settings.auth_password or ""))
     if not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Bad credentials",
-                            headers={"WWW-Authenticate": 'Basic realm="VectoVecto"'})
+                            headers={"WWW-Authenticate": 'Basic realm="VeriScript"'})
 
 
 # --------------------------------------------------------------------------

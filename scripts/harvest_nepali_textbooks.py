@@ -46,7 +46,7 @@ MOEST_BASE = "http://elibrary.moest.gov.np:8080"
 MOEST_QUERIES = ["textbook", "curriculum", "teacher guide", "reading material"]
 CORNELL_API = "https://ecommons.cornell.edu/server/api"
 CORNELL_QUERY = "Nepali textbooks"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VectoVecto-Research/1.0 "
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VeriScript-Research/1.0 "
       "(internal OCR evaluation; contact: local)")
 
 _HANDLE_RE = re.compile(r'href="(/handle/\d+/\d+)"')

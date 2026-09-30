@@ -332,7 +332,7 @@ def main():
                           "only (default)")
     doc.add_argument("--deva-ckpt", default=None,
                      help="path to the line-reader checkpoint (defaults "
-                          "to $VECTOVECTO_DEVA_CKPT or weights/)")
+                          "to $VERISCRIPT_DEVA_CKPT or weights/)")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")

@@ -17,15 +17,15 @@ try {
     }
     python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])" |
         ForEach-Object { $version = $_.Trim() }
-    Write-Host "building vectovecto $version"
-    pyinstaller packaging/vectovecto.spec --noconfirm --clean
+    Write-Host "building veriscript $version"
+    pyinstaller packaging/veriscript.spec --noconfirm --clean
     if ($LASTEXITCODE -ne 0) { throw "pyinstaller failed" }
 
-    $zip = "dist/vectovecto-$version-win64.zip"
+    $zip = "dist/veriscript-$version-win64.zip"
     if (Test-Path $zip) { Remove-Item $zip }
-    Compress-Archive -Path "dist/vectovecto" -DestinationPath $zip
+    Compress-Archive -Path "dist/veriscript" -DestinationPath $zip
     Write-Host "wrote $zip"
-    Write-Host "smoke test: dist/vectovecto/vectovecto.exe --help"
+    Write-Host "smoke test: dist/veriscript/veriscript.exe --help"
 } finally {
     Pop-Location
 }

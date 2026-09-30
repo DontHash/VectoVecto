@@ -108,7 +108,7 @@ export function Landing() {
             <span class="eyebrow">Offline document restoration — Devanagari first</span>
             <h1 class="display hero__title">It will not invent the numbers on your bill.</h1>
             <p class="lede">
-              VectoVecto restores photos and scans into cleaned pages and searchable PDFs — and
+              VeriScript restores photos and scans into cleaned pages and searchable PDFs — and
               puts every uncertain digit in a measured review queue instead of guessing.
             </p>
             <a class="textlink" href="#examples">
@@ -298,7 +298,7 @@ export function Landing() {
             <h2 class="h2">This page is a demo. The product runs on your machine.</h2>
             <p class="lede">
               The studio processes your page on this server and deletes it after the retention
-              window. The real guarantee — and the reason VectoVecto exists — is that the pipeline
+              window. The real guarantee — and the reason VeriScript exists — is that the pipeline
               runs offline: no cloud calls, no telemetry, no account. Install it and it stays yours.
             </p>
           </div>

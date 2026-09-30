@@ -94,7 +94,7 @@ def naive_fft_upscale(lr_img, scale=2):
         return out_channels[0]
 
 if __name__ == "__main__":
-    print("VectoVecto Phase 0 & 1 Eval Harness initialized.")
+    print("VeriScript Phase 0 & 1 Eval Harness initialized.")
     print("Generating synthetic test image (Zone Plate)...")
     
     # Create a synthetic Zone Plate image (rich in all frequencies)

@@ -1,4 +1,4 @@
-"""FastAPI application: the VectoVecto web studio.
+"""FastAPI application: the VeriScript web studio.
 
 - Serves the built frontend (webapp/frontend/dist) when present.
 - POST /api/restore  → run the document pipeline on one uploaded page.
@@ -107,7 +107,7 @@ async def _lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="VectoVecto Studio", version=VERSION,
+    app = FastAPI(title="VeriScript Studio", version=VERSION,
                   docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=_lifespan)
 

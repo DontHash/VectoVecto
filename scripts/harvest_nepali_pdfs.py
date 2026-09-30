@@ -61,7 +61,7 @@ CANDIDATES = [
     "Some%20Landmark%20Decision%20-%20Vol.%203.pdf",
 ]
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VectoVecto-Research/1.0 "
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VeriScript-Research/1.0 "
       "(internal OCR evaluation; contact: local)")
 
 

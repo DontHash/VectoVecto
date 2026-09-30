@@ -2,7 +2,8 @@
 
 The shipped Devanagari recognizer (W1) is a small CRNN+CTC trained in this
 repository. The **weights are not part of the repository** — deployments
-provide them via `VECTOVECTO_DEVA_CKPT` or `weights/deva_crnn_h48w512.pt`.
+provide them via `VERISCRIPT_DEVA_CKPT` (legacy `VECTOVECTO_DEVA_CKPT` still
+accepted) or `weights/deva_crnn_h48w512.pt`.
 This document is the reproducible recipe, with the measured results that
 justify each choice.
 

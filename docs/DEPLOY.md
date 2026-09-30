@@ -9,8 +9,8 @@ models that come with the `rapidocr` wheel, and nothing else.
 ## Docker (any host)
 
 ```bash
-docker build -t vectovecto .
-docker run --rm -p 8000:8000 vectovecto
+docker build -t veriscript .
+docker run --rm -p 8000:8000 veriscript
 # → http://127.0.0.1:8000
 ```
 
@@ -19,19 +19,21 @@ FastAPI backend. Environment knobs:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `VECTOVECTO_WEB_HOST` | `0.0.0.0` (image) | bind address |
-| `VECTOVECTO_WEB_PORT` | `8000` | port (also the healthcheck) |
-| `VECTOVECTO_WEB_WARM_LANG` | `ne` | OCR language warmed at startup (covers the one-time Devanagari model download; set `en` to warm Latin only) |
-| `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` | unset | enable uvicorn proxy headers (real client IP for rate limiting) only behind a trusted reverse proxy; e.g. `127.0.0.1`, a subnet, or `*` |
-| `VECTOVECTO_WEB_USER` / `VECTOVECTO_WEB_PASSWORD` | unset | when both are set, `/api/*` requires HTTP basic auth |
-| `VECTOVECTO_WEB_MAX_UPLOAD_MB` | `12` | upload cap per page |
-| `VECTOVECTO_WEB_MAX_MP` | `30` | image megapixel cap |
-| `VECTOVECTO_WEB_TIMEOUT_S` | `180` | per-page processing timeout |
-| `VECTOVECTO_WEB_CONCURRENCY` / `VECTOVECTO_WEB_QUEUE_WAIT_S` | `1` / `25` | single heavy worker; queue beyond it, then 503 |
-| `VECTOVECTO_WEB_TTL_MINUTES` | `60` | artifact retention before the periodic sweep |
-| `VECTOVECTO_WEB_RATE_MAX` / `VECTOVECTO_WEB_RATE_WINDOW_S` | `6` / `120` | per-IP sliding window |
-| `VECTOVECTO_LEXICON` | `data/lexicon/nepali_lexicon_v1.txt` | optional `unknown_word` lexicon; not in the image (see `scripts/fetch_nepali_lexicon.py`) |
-| `VECTOVECTO_LOG_LEVEL` | `INFO` | stderr log level (`DEBUG`, `WARNING`, ...) |
+| `VERISCRIPT_WEB_HOST` | `0.0.0.0` (image) | bind address |
+| `VERISCRIPT_WEB_PORT` | `8000` | port (also the healthcheck) |
+| `VERISCRIPT_WEB_WARM_LANG` | `ne` | OCR language warmed at startup (covers the one-time Devanagari model download; set `en` to warm Latin only) |
+| `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS` | unset | enable uvicorn proxy headers (real client IP for rate limiting) only behind a trusted reverse proxy; e.g. `127.0.0.1`, a subnet, or `*` |
+| `VERISCRIPT_WEB_USER` / `VERISCRIPT_WEB_PASSWORD` | unset | when both are set, `/api/*` requires HTTP basic auth |
+| `VERISCRIPT_WEB_MAX_UPLOAD_MB` | `12` | upload cap per page |
+| `VERISCRIPT_WEB_MAX_MP` | `30` | image megapixel cap |
+| `VERISCRIPT_WEB_TIMEOUT_S` | `180` | per-page processing timeout |
+| `VERISCRIPT_WEB_CONCURRENCY` / `VERISCRIPT_WEB_QUEUE_WAIT_S` | `1` / `25` | single heavy worker; queue beyond it, then 503 |
+| `VERISCRIPT_WEB_TTL_MINUTES` | `60` | artifact retention before the periodic sweep |
+| `VERISCRIPT_WEB_RATE_MAX` / `VERISCRIPT_WEB_RATE_WINDOW_S` | `6` / `120` | per-IP sliding window |
+| `VERISCRIPT_LEXICON` | `data/lexicon/nepali_lexicon_v1.txt` | optional `unknown_word` lexicon; not in the image (see `scripts/fetch_nepali_lexicon.py`) |
+| `VERISCRIPT_LOG_LEVEL` | `INFO` | stderr log level (`DEBUG`, `WARNING`, ...) |
+
+Legacy `VECTOVECTO_*` names (the former brand) keep working as a fallback.
 
 Full list and defaults: [`webapp/vvweb/config.py`](../webapp/vvweb/config.py).
 
@@ -39,8 +41,8 @@ For a private demo, always set the auth pair:
 
 ```bash
 docker run --rm -p 8000:8000 \
-  -e VECTOVECTO_WEB_USER=demo -e VECTOVECTO_WEB_PASSWORD='change-me' \
-  vectovecto
+  -e VERISCRIPT_WEB_USER=demo -e VERISCRIPT_WEB_PASSWORD='change-me' \
+  veriscript
 ```
 
 The image runs as a non-root user, excludes `data/`, `weights/`, `artifacts/`
@@ -53,7 +55,7 @@ on `/api/health`.
   Space to use the existing `Dockerfile` (port `8000`), add the auth secrets in
   the Space settings. The free tier is CPU-only, which matches the image.
 - **Render / Railway / Fly.io:** point the service at the `Dockerfile`, expose
-  port `8000` (or set `VECTOVECTO_WEB_PORT` to the one the platform expects),
+  port `8000` (or set `VERISCRIPT_WEB_PORT` to the one the platform expects),
   add the same environment variables. Give the first request ~60–90 s of
   start-up budget (model warm-up).
 - **A VPS:** `docker compose` or plain `docker run` behind a TLS reverse proxy
@@ -82,8 +84,8 @@ What the app already does:
 What the deployment should add:
 
 - TLS with HSTS at the reverse proxy; **forward the real client IP** and set
-  `VECTOVECTO_WEB_FORWARDED_ALLOW_IPS` (rate limiting depends on it).
-- Set the `VECTOVECTO_WEB_USER`/`PASSWORD` pair for anything public; don't
+  `VERISCRIPT_WEB_FORWARDED_ALLOW_IPS` (rate limiting depends on it).
+- Set the `VERISCRIPT_WEB_USER`/`PASSWORD` pair for anything public; don't
   cache `/api/*` at the proxy (the app already sends `no-store`).
 - Keep one uvicorn process: the limiter, queue and run store are per-process.
   Scale out only with per-IP limits at the edge (or a shared limiter later).

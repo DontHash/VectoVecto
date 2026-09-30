@@ -1,4 +1,4 @@
-# VectoVecto
+# VeriScript
 
 **Offline document restoration.** A photo, scan or PDF goes in; a cleaned page
 with a **searchable PDF**, overlay, transcript, **Markdown** and OCR JSON comes
@@ -17,7 +17,7 @@ photo/scan/PDF ──▶ orientation ──▶ layout ──▶ OCR ──▶ ri
 
 ## Before / after
 
-![VectoVecto before and after: an aged letterpress page and a shadowed invoice photo, restored with the numbered review queue](docs/assets/before_after.png)
+![VeriScript before and after: an aged letterpress page and a shadowed invoice photo, restored with the numbered review queue](docs/assets/before_after.png)
 
 Real pipeline output. **Green** = accepted, **amber** = uncertain, **red** =
 digit conflict with the alternative reading kept. The letterpress page is from
@@ -146,14 +146,14 @@ the same metric code — full tables and reproduction commands in
 |---|---|---|---|---|---|
 | Surya OCR 2 | 0.166 [0.100–0.258] | 0.107 | 0.360 | 172.0 | ✗ |
 | Qwen3-VL-8B NF4 | 0.176 [0.129–0.235] | 0.141 | 0.369 | 152.7 | ✗ |
-| **VectoVecto pipeline (default)** | **0.255 [0.202–0.329]** | **0.227** | 0.376 | **7.3** | ✓ |
+| **VeriScript pipeline (default)** | **0.255 [0.202–0.329]** | **0.227** | 0.376 | **7.3** | ✓ |
 | raw RapidOCR engine | 0.530 [0.463–0.585] | 0.543 | 0.380 | 3.8 | ✓ |
 | PaddleOCR 3.x full pipeline | 0.662 [0.585–0.713] | 0.687 | 0.400 | 21.8 | ✓ |
 
 Speeds are per page on the harness hardware — ours, raw and Surya on an
 RTX 2050 4 GB (Surya via llama.cpp/Vulkan), Qwen on a T4 (NF4), PaddleOCR on
 **CPU**. Runs on CPU: ✓ = CPU-first (PaddleOCR was measured CPU-only here;
-VectoVecto and RapidOCR ship CPU-first); ✗ = GPU-class in practice — a GPU was
+VeriScript and RapidOCR ship CPU-first); ✗ = GPU-class in practice — a GPU was
 used and CPU would be far slower.
 
 **Metrics.** **CER** (character error rate) is the edit distance between the

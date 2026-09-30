@@ -38,6 +38,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Project renamed: VectoVecto → VeriScript.** Brand surfaces (README,
+  docs, studio UI, package metadata, Docker tags, repo links) use the new
+  name; `VERISCRIPT_*` env vars are the current prefix and `VECTOVECTO_*`
+  keeps working as a fallback (`branding.py`). Internal names that would
+  break compatibility are unchanged: the `vectovecto.*` logger, the `vvweb`
+  package and the Kaggle dataset slugs. The legacy `vectovecto` console
+  script is kept alongside `veriscript`.
 - **The web app is the studio.** `app.py` (Gradio) is removed; the FastAPI +
   SolidJS app under `webapp/` is the single UI — the root `Dockerfile`
   builds and serves it (`/api/health`, port 8000), and the server-side error

@@ -108,7 +108,7 @@ def main():
     args = ap.parse_args()
 
     if args.no_lexicon:
-        os.environ["VECTOVECTO_LEXICON"] = os.path.join(
+        os.environ["VERISCRIPT_LEXICON"] = os.path.join(
             BASE_DIR, "data", "lexicon", "__disabled__.txt")
 
     pdfs = sorted(f for f in os.listdir(args.data_dir)

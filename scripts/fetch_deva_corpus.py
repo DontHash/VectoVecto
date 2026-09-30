@@ -45,7 +45,7 @@ from doc_metrics import devanagari_validity, normalize_text  # noqa: E402
 CORPUS_URL = "https://data.statmt.org/cc-100/ne.txt.xz"
 CORPUS_NAME = "deva_sentences_v1.txt"
 MANIFEST_NAME = "deva_sentences_v1.manifest.json"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VectoVecto-Research/1.0 "
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) VeriScript-Research/1.0 "
       "(offline corpus build; contact: local)")
 MIN_CHARS = 10
 MAX_CHARS = 60

@@ -3,7 +3,7 @@ export function Footer() {
     <footer class="footer">
       <div class="container footer__grid">
         <div class="footer__col">
-          <span class="wordmark">VectoVecto</span>
+          <span class="wordmark">VeriScript</span>
           <p class="footer__note">
             Offline document restoration. Devanagari first, English too. Photo or scan in — cleaned
             page, searchable PDF, overlay, transcript and OCR JSON out, with every uncertain number
@@ -31,11 +31,11 @@ export function Footer() {
           <span class="eyebrow">Project</span>
           <a
             class="footer__link"
-            href="https://github.com/DontHash/VectoVecto"
+            href="https://github.com/DontHash/VeriScript"
             target="_blank"
             rel="noreferrer noopener"
           >
-            GitHub — DontHash/VectoVecto
+            GitHub — DontHash/VeriScript
           </a>
           <span class="eyebrow">Docs</span>
           <span class="footer__link">docs/EVALUATION.md · docs/DEPLOY.md</span>

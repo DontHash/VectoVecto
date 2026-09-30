@@ -175,7 +175,7 @@ def main():
     lex = load_lexicon()
     if lex is None:
         raise SystemExit("no lexicon - run scripts/fetch_nepali_lexicon.py "
-                         "first (or set VECTOVECTO_LEXICON)")
+                         "first (or set VERISCRIPT_LEXICON)")
     print(f"[tune] lexicon {lex['source']}: {lex['count']} words")
     pages = collect_pages(args.data_dir, args.lang, args.limit,
                           args.repass_digits)

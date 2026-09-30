@@ -136,7 +136,7 @@ def build() -> str:
         rows_img.append(canvas)
 
     header = np.full((PAD * 2 + 34, width, 3), 255, np.uint8)
-    cv2.putText(header, "VectoVecto document restore - before / after "
+    cv2.putText(header, "VeriScript document restore - before / after "
                         "(real pipeline output)", (PAD, PAD + 22),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.78, (20, 20, 20), 2, cv2.LINE_AA)
     foot = np.full((76, width, 3), 255, np.uint8)

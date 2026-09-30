@@ -1,9 +1,10 @@
 """
 test_logging_setup.py — one logging configuration for CLI/web/library (W5).
 
-Server-side failures must be logged (`vectovecto.web` in the web API is
-covered by `tests/test_webapp_api.py`); `configure_logging()` is idempotent
-and reads `VECTOVECTO_LOG_LEVEL`.
+Server-side failures must be logged (`vectovecto.web` — internal logger name,
+kept from the former brand — in the web API is covered by
+`tests/test_webapp_api.py`); `configure_logging()` is idempotent and reads
+`VERISCRIPT_LOG_LEVEL` with the legacy `VECTOVECTO_LOG_LEVEL` as fallback.
 """
 from __future__ import annotations
 
@@ -23,10 +24,16 @@ def test_get_logger_prefixes_root():
 
 
 def test_configure_logging_level_from_env(monkeypatch):
-    monkeypatch.setenv("VECTOVECTO_LOG_LEVEL", "debug")
+    monkeypatch.setenv("VERISCRIPT_LOG_LEVEL", "debug")
     assert configure_logging().level == logging.DEBUG
-    monkeypatch.setenv("VECTOVECTO_LOG_LEVEL", "not-a-level")
+    monkeypatch.setenv("VERISCRIPT_LOG_LEVEL", "not-a-level")
     assert configure_logging().level == logging.INFO
+
+
+def test_configure_logging_legacy_env_alias(monkeypatch):
+    monkeypatch.delenv("VERISCRIPT_LOG_LEVEL", raising=False)
+    monkeypatch.setenv("VECTOVECTO_LOG_LEVEL", "warning")
+    assert configure_logging().level == logging.WARNING
 
 
 def test_configure_logging_is_idempotent():
