@@ -47,7 +47,8 @@ jobs:
 
       - name: Build and push the image (models baked in)
         run: |
-          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          gcloud auth print-access-token | docker login \
+            -u oauth2accesstoken --password-stdin "https://${REGION}-docker.pkg.dev"
           docker build --build-arg PRELOAD_MODELS=1 \
             -t "${IMAGE}:${SHA}" -t "${IMAGE}:latest" .
           docker push "${IMAGE}:${SHA}"
