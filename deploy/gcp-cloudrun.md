@@ -172,3 +172,42 @@ curl -F "file=@webapp/frontend/public/examples/invoice-hero.jpg" \
 gcloud run services logs read veriscript-demo --region us-central1 \
   --project theproject-sr --limit 50
 ```
+
+## Monitoring & alerts
+
+Set up for this service (2026-09-30):
+
+- **Uptime check** `VeriScript demo /api/health` — HTTPS GET every 5 min from
+  USA / Europe / Asia-Pacific, 2xx expected, 10 s timeout.
+- **Alert policy** `VeriScript demo is down` — emails the account address when
+  any region reports a failed probe for 5 minutes (auto-closes 30 min after
+  recovery).
+- **Budget alerts** — `VeriScript demo - budget alert` ($5; 50/90/100%) and
+  the project-wide `theProject-SR cap 100usd`.
+
+Inspect or change:
+
+```bash
+gcloud monitoring uptime list-configs --project=theproject-sr
+gcloud monitoring policies list --project=theproject-sr
+```
+
+## Custom domain
+
+`veriscript.dev` was unregistered when checked (2026-09-30). After registering
+it at any registrar, use **Cloud Run domain mapping**:
+
+```bash
+# 1. Verify ownership of the domain in Google Search Console first.
+gcloud run domain-mappings create --service veriscript-demo \
+  --domain veriscript.dev --region us-central1 --project theproject-sr
+# 2. Add the DNS records it prints (CNAME to ghs.googlehosted.com for
+#    subdomains; A/AAAA for the apex).
+```
+
+Cloudflare in front is possible but needs care: with Cloudflare proxying to
+Cloud Run, Google's front end appends the *Cloudflare edge* IP to
+`X-Forwarded-For`, so the app's `xff-last` client-IP mode would key the rate
+limit and the per-visitor quota on the Cloudflare edge — not the visitor. Only
+add Cloudflare if you also add a `CF-Connecting-IP` client-IP mode to
+`webapp/vvweb/security.py`.
