@@ -194,7 +194,7 @@ gcloud monitoring policies list --project=theproject-sr
 
 ## Custom domain
 
-`veriscript.dev` was unregistered when checked (2026-09-30). The order matters:
+`veriscript.live` is registered at Namecheap (2026-09-30). The order matters:
 
 1. **Register the domain** at any registrar (≈$10–12/year).
 2. **Verify ownership** with Google: in the Cloud Console open *Cloud Run →
@@ -208,7 +208,7 @@ gcloud monitoring policies list --project=theproject-sr
    ```bash
    gcloud components install beta   # needs an elevated shell: the SDK lives in Program Files
    gcloud beta run domain-mappings create --service veriscript-demo \
-     --domain veriscript.dev --region us-central1 --project theproject-sr
+     --domain veriscript.live --region us-central1 --project theproject-sr
    ```
 
    Or do step 3 from the Console UI (*Manage custom domains*), which skips the
