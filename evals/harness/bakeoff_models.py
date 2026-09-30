@@ -487,11 +487,67 @@ class Qwen3VL4B4Bit(Qwen3VLCandidate):
     pre_quantized = True
 
 
+class SuryaCandidate(Candidate):
+    """Surya OCR 2 (datalab) — VLM-class full-page OCR.
+
+    Surya 2 dropped pure-torch inference: it talks to a local llama.cpp or
+    vLLM server. We use the llama.cpp backend (single binary, no Docker):
+      LLAMA_CPP_BINARY=<...>\llama-server.exe  (b11270 Vulkan build here)
+      SURYA_INFERENCE_BACKEND=llamacpp, SURYA_INFERENCE_PARALLEL=1
+    Weights: datalab-to/surya-ocr-2-gguf (1.2 GB + 195 MB mmproj).
+    Licence: code Apache-2.0; weights modified OpenRAIL-M (free for research,
+    personal use and startups under $5M) — evaluation only here.
+    """
+    name = "surya"
+    kind = "pages"
+    license = ("code Apache-2.0 / weights OpenRAIL-M "
+               "(free <$5M: research, personal, startups)")
+
+    def available(self):
+        try:
+            import surya  # noqa: F401
+        except Exception as e:  # noqa: BLE001
+            return False, f"surya not installed in this interpreter ({str(e)[:60]})"
+        if not (os.environ.get("LLAMA_CPP_BINARY") or shutil.which("llama-server")):
+            return False, "llama-server not found (set LLAMA_CPP_BINARY)"
+        return True, "llama.cpp backend"
+
+    def load(self, lang=None):
+        os.environ.setdefault("SURYA_INFERENCE_BACKEND", "llamacpp")
+        os.environ.setdefault("SURYA_INFERENCE_PARALLEL", "1")
+        from surya.recognition import RecognitionPredictor
+        return {"rec": RecognitionPredictor()}
+
+    def recognize_pages(self, ctx, images, lang=None):
+        import html as _html
+        import re
+
+        import cv2
+        from PIL import Image
+        from surya.recognition import clean_block_html
+
+        pils = [Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+                for img in images]
+        out: List[str] = []
+        for res in ctx["rec"](pils, full_page=True):
+            blocks = sorted(res.blocks, key=lambda b: b.reading_order)
+            parts = []
+            for b in blocks:
+                if getattr(b, "skipped", False):
+                    continue
+                raw = clean_block_html(getattr(b, "html", "") or "")
+                text = _html.unescape(re.sub(r"<[^>]+>", " ", raw))
+                if text.strip():
+                    parts.append(text.strip())
+            out.append("\n".join(parts))
+        return out
+
+
 REGISTRY: Dict[str, Candidate] = {
     c.name: c() for c in (RapidOCRCandidate, TesseractCandidate, TrOCRCandidate,
                           GLMOCRCandidate, BodhanCandidate, Qwen3VLCandidate,
                           Qwen3VL8B4Bit, Qwen3VL8B4BitRT, Qwen3VL4B,
-                          Qwen3VL4B4Bit)
+                          Qwen3VL4B4Bit, SuryaCandidate)
 }
 
 

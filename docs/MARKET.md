@@ -54,7 +54,7 @@ evidence missing from this market.
 | RapidOCR (8k, Apache-2.0) | ONNX Runtime wrapper for Paddle models | as Paddle | confidence only | our recognizer back-end |
 | Tesseract (77k, Apache-2.0) | engine | `nep`/`hin` traineddata | confidence only | our own bake-off: page CER **0.353** but **5,080 invented tokens** on 69 letterpress pages and 3× slower — fails the honesty gate |
 | OCRmyPDF (35k, MPL-2.0) | searchable PDF via Tesseract | inherits Tesseract | none | closest free analogue to our PDF export half |
-| Surya OCR 2 (21k) | 650M VLM-class OCR + layout + tables | yes (Hindi 82.2% on their 91-lang eval) | confidence only | code Apache-2.0, **weights modified OpenRAIL-M (free only <$5M)** — a commercial catch |
+| Surya OCR 2 (21k) | 650M VLM-class OCR + layout + tables | yes (Hindi 82.2% on their 91-lang eval) | confidence only | code Apache-2.0, **weights modified OpenRAIL-M (free only <$5M)** — a commercial catch. **We ran it locally** on the frozen hard-10: CER 0.166 (median 0.107) at **172 s/page** on a 4 GB laptop GPU — best text on the table-heavy slice, ~23× our page time |
 | Marker (40k, Apache-2.0) | PDF → markdown | weak/unverified | none | Datalab's sibling project |
 | Docling (68k, MIT) | document → structured data for LLMs | via OCR back-ends | none | integration hub, not an OCR engine |
 | MinerU (81k, license "other") | PDF → markdown/JSON | via OCR models | none | AGPL-class terms — verify upstream |
@@ -75,12 +75,15 @@ evidence missing from this market.
 **Accuracy.** On clean Latin print, cloud APIs and modern VLMs are at or above
 traditional engines; nobody credibly beats them across scripts. On Devanagari
 the published data is thin. Our contribution is not beating them — it is
-*measuring* ourselves honestly on the domains we claim (modern PDFs, real
-letterpress, synthetic photo proxy) and rejecting models that look good on
-vendor benchmarks: our bake-off caught Tesseract inventing 5,080 tokens on
-letterpress, TrOCR hallucinating on printed lines, and Qwen3-VL being 3× more
-accurate on hard table pages but 100× slower with 224 invented tokens — so no
-VLM mode ships. That gate is a feature.
+*measuring* ourselves honestly and rejecting models that look good on vendor
+benchmarks. Head-to-head on the frozen hard-10 (2026-09-30, same metric code
+— `evals/bakeoff_results.md` Phase 2): bag-of-tokens CER is **tied across all
+arms (0.360–0.380)** — glyph recognition is a commodity; the page-CER spread
+comes from ordering and structure. Surya 2 leads by median (0.107 vs our
+0.227) with overlapping CIs, at ~23× our page time and under OpenRAIL-M
+weights; Qwen3-VL-8B was 3× better than the old engine on table pages but 152
+s/page with 224 invented tokens; Tesseract invented 5,080 tokens on the
+letterpress set and TrOCR hallucinated on printed lines — neither ships.
 
 **Cost.** Cloud read-tier OCR is $1.00–1.50 per 1,000 pages; structured
 extraction $10–50; desktop $69–165/user/yr; desktop IDP platforms
@@ -156,3 +159,4 @@ falling; VLM inference costs collapsing — the moat is *not* the recognizer.
 - PaddleOCR PP-OCRv5 multilingual — paddleocr.ai (devanagari rec 84.96% on their set)
 - ABBYY FineReader pricing — pdf.abbyy.com/pricing; PCMag review 2026
 - Repository evidence — [EVALUATION.md](EVALUATION.md), [PLAN.md](PLAN.md), `evals/bakeoff_results.md`
+- Phase-2 head-to-head (2026-09-30) — `evals/bakeoff_results.md` Phase 2; raw JSON: `evals/headtohead_nepali_pdf_hard10.json`, `evals/headtohead_heidata69.json`, `evals/surya_nepali_pdf_hard10.json`

@@ -85,3 +85,80 @@ DLVM torchaudio ABI needs the shim; `jinja2>=3.1`; `rapidocr` needs
 `doc_data.load_dataset` now normalizes, POSIX-safe); 8B fp16 does not fit a
 16 GB V100 (CPU offload ⇒ ~1 h+/page with repetition loops — abandoned);
 NF4 needs compute capability ≥7.5 (T4 yes, V100 no).
+
+## Phase 2 — shipped pipeline vs VLM-class, same frozen slice (2026-09-30)
+
+Purpose: with the N1 table reading-order live, re-measure the **shipped**
+stack against the VLM-class candidates on the exact slice Phase 1 used
+(`nepali_pdf_v2` first 10 pages — the table-heavy hardest slice), plus the
+full 69-page letterpress set for the classical comparison. All arms are
+scored by the same metric code; CIs are 2000-resample bootstrap over pages.
+
+### Hard-10 government pages (the VLM-favoured slice)
+
+| arm | hardware | CER mean [CI] | CER median | bagCER | digBAG | invented* | s/page | licence |
+|---|---|---|---|---|---|---|---|---|
+| raw rapidocr (engine only) | RTX 2050 (DML) | 0.530 [0.463–0.585] | 0.543 | 0.380 | 0.135 | 0 | 3.8 | Apache-2.0 |
+| **shipped pipeline (default)** | RTX 2050 (DML) | **0.255 [0.202–0.329]** | **0.227** | 0.376 | 0.129 | 35 | **7.3** | Apache-2.0 |
+| Surya OCR 2 (llama.cpp/Vulkan) | RTX 2050 4 GB | **0.166 [0.100–0.258]** | **0.107** | 0.360 | 0.105 | 82 | **172.0** | code Apache-2.0 / weights OpenRAIL-M (<$5M) |
+| Qwen3-VL-8B NF4 (Phase 1, frozen) | T4 | 0.176 [0.129–0.235] | 0.141 | 0.369 | 0.107 | 224 | 152.7 | Apache-2.0 |
+
+\* invented = tokens in neither the GT nor the rapidocr pass (peer rule);
+the raw arm is 0 by construction.
+
+### Letterpress, 69 pages (default settings; the CRNN line-reader is OFF here)
+
+| arm | CER [CI] | bagCER | digit error-flag coverage | ECE | s/page |
+|---|---|---|---|---|---|
+| raw rapidocr | 0.4335 [0.387–0.481] | 0.553 | 0.589 | 0.818 | 2.0 |
+| shipped pipeline | 0.4309 [0.385–0.480] | 0.548 | 0.616 | 0.810 | 4.8 |
+
+(Reader-on number for context: CER 0.253 — `--deva-lines` path, EVALUATION W1.)
+
+### Reading
+
+- **bagCER is tied across all four arms (0.360–0.380).** Glyph recognition
+  is effectively identical; the entire page-CER spread comes from ordering,
+  structure and digit handling. The commodity is the recognizer; the delta
+  is order + trust — now measured, not asserted.
+- On the VLM-favoured slice Surya 2 reads best by median (0.107), with CIs
+  that overlap ours ([0.100–0.258] vs [0.202–0.329]) — a real but modest
+  advantage, bought with **~23× our page time** on the same consumer GPU and
+  an OpenRAIL-M weights licence (no free commercial use above $5M).
+- Our shipped pipeline **halves base RapidOCR's page CER** (0.530 → 0.255)
+  at ~2× the engine time, staying CPU-first, offline and Apache-2.0, and it
+  is the only arm that flags uncertain digits with alternative readings.
+- The two "supreme_218512" pages still expose all arms (Surya 0.55/0.28):
+  table-heavy court registers remain the hard case; a hybrid page reader
+  stays Phase-5 material (§ Phase 1 verdict).
+- Letterpress default is parity with raw (reader off); the pipeline's gain
+  there is digit-flag coverage (0.589 → 0.616) and calibration, on top of
+  the flag-only guarantees.
+
+### Reproduction
+
+```bash
+# ours + raw (frozen-verified, CIs)
+python evals/harness/eval_document.py --data-dir data/doc_eval/nepali_pdf_v2 \
+  --pages 10 --frozen evals/manifests/nepali_pdf_v2.json --lang ne \
+  --ocr rapidocr --methods raw,pipeline --bootstrap 2000 \
+  --json evals/headtohead_nepali_pdf_hard10.json
+
+# Surya 2: isolated venv + llama.cpp b11270 (Vulkan) + GGUFs from
+# datalab-to/surya-ocr-2-gguf; then
+LLAMA_CPP_BINARY=<...>/llama-server.exe SURYA_INFERENCE_BACKEND=llamacpp \
+SURYA_INFERENCE_PARALLEL=1 <surya-venv>/python evals/harness/eval_models.py \
+  --model surya --mode pages --data-dir data/doc_eval/nepali_pdf_v2 \
+  --limit 10 --lang ne --frozen evals/manifests/nepali_pdf_v2.json \
+  --json evals/surya_nepali_pdf_hard10.json
+```
+
+### Open items
+
+- The `eval_document` box-coverage figures for the pipeline on >2500 px pages
+  (0.254 IoU / 0.717 area vs raw 0.459 / 0.975) look like a coordinate-space
+  artifact: the pipeline fits oversized pages to 2500 px while the harness
+  compares against full-resolution GT boxes. Verify before quoting either way.
+- The letterpress `invented` count for the pipeline (502 over 69 pages) is
+  partly the same downscale effect (raw is the only peer reference); needs
+  the same investigation.
