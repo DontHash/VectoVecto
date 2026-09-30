@@ -492,7 +492,7 @@ class SuryaCandidate(Candidate):
 
     Surya 2 dropped pure-torch inference: it talks to a local llama.cpp or
     vLLM server. We use the llama.cpp backend (single binary, no Docker):
-      LLAMA_CPP_BINARY=<...>\llama-server.exe  (b11270 Vulkan build here)
+      LLAMA_CPP_BINARY=<...>/llama-server.exe  (b11270 Vulkan build here)
       SURYA_INFERENCE_BACKEND=llamacpp, SURYA_INFERENCE_PARALLEL=1
     Weights: datalab-to/surya-ocr-2-gguf (1.2 GB + 195 MB mmproj).
     Licence: code Apache-2.0; weights modified OpenRAIL-M (free for research,
@@ -543,11 +543,78 @@ class SuryaCandidate(Candidate):
         return out
 
 
+class PaddleOCRCandidate(Candidate):
+    """PaddleOCR 3.x full pipeline (PP-OCRv5), CPU.
+
+    Configuration note (2026-09-30): the model registry has **no Devanagari
+    server recognizer** — only `devanagari_PP-OCRv5_mobile_rec` (and v3
+    mobile). The generic `PP-OCRv5_server_det` was aborted after burning
+    ~5,900 CPU-seconds on a single 8 MP page without returning (impractical
+    on CPU); the mobile detector is the standard CPU configuration and is
+    what RapidOCR bundles, so this is also the fair like-for-like arm.
+    Environment note: paddlepaddle 3.3.1 hits a PIR/oneDNN executor bug on
+    this Windows box (`ConvertPirAttribute2RuntimeAttribute`); the venv pins
+    paddlepaddle==3.2.2. Licence Apache-2.0.
+    """
+    name = "paddleocr"
+    kind = "pages"
+    license = "Apache-2.0 (PP-OCRv5 mobile det + devanagari v5 mobile rec)"
+
+    DET = "PP-OCRv5_mobile_det"
+    REC = "devanagari_PP-OCRv5_mobile_rec"
+
+    def available(self):
+        try:
+            import paddleocr  # noqa: F401
+        except Exception as e:  # noqa: BLE001
+            return False, f"paddleocr not installed ({str(e)[:60]})"
+        return True, f"{self.DET} + {self.REC}"
+
+    def load(self, lang=None):
+        from paddleocr import PaddleOCR
+        ocr = PaddleOCR(lang="hi", ocr_version="PP-OCRv5",
+                        text_detection_model_name=self.DET,
+                        text_recognition_model_name=self.REC,
+                        use_doc_orientation_classify=False,
+                        use_doc_unwarping=False,
+                        use_textline_orientation=False)
+        return {"ocr": ocr}
+
+    @staticmethod
+    def _texts(result) -> List[str]:
+        d = getattr(result, "json", None)
+        if not isinstance(d, dict):
+            return []
+        res = d.get("res", d)
+        if isinstance(res, list) and res:
+            res = res[0]
+        if isinstance(res, dict):
+            texts = res.get("rec_texts")
+            if texts is None:
+                texts = d.get("rec_texts")
+            if texts:
+                return [str(t) for t in texts]
+        return []
+
+    def recognize_pages(self, ctx, images, lang=None):
+        out: List[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            for i, img in enumerate(images):
+                path = os.path.join(td, f"page_{i}.png")
+                doc_data.imwrite_safe(path, img)
+                res = ctx["ocr"].predict(path)
+                texts: List[str] = []
+                for r in res or []:
+                    texts.extend(self._texts(r))
+                out.append("\n".join(texts))
+        return out
+
+
 REGISTRY: Dict[str, Candidate] = {
     c.name: c() for c in (RapidOCRCandidate, TesseractCandidate, TrOCRCandidate,
                           GLMOCRCandidate, BodhanCandidate, Qwen3VLCandidate,
                           Qwen3VL8B4Bit, Qwen3VL8B4BitRT, Qwen3VL4B,
-                          Qwen3VL4B4Bit, SuryaCandidate)
+                          Qwen3VL4B4Bit, SuryaCandidate, PaddleOCRCandidate)
 }
 
 

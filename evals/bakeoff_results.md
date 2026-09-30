@@ -99,6 +99,7 @@ scored by the same metric code; CIs are 2000-resample bootstrap over pages.
 | arm | hardware | CER mean [CI] | CER median | bagCER | digBAG | invented* | s/page | licence |
 |---|---|---|---|---|---|---|---|---|
 | raw rapidocr (engine only) | RTX 2050 (DML) | 0.530 [0.463–0.585] | 0.543 | 0.380 | 0.135 | 0 | 3.8 | Apache-2.0 |
+| PaddleOCR 3.x full pipeline (mobile det + deva v5 mobile rec) | CPU (this box) | 0.662 [0.585–0.713] | 0.687 | 0.400 | 0.166 | 186 | 21.8 | Apache-2.0 |
 | **shipped pipeline (default)** | RTX 2050 (DML) | **0.255 [0.202–0.329]** | **0.227** | 0.376 | 0.129 | 35 | **7.3** | Apache-2.0 |
 | Surya OCR 2 (llama.cpp/Vulkan) | RTX 2050 4 GB | **0.166 [0.100–0.258]** | **0.107** | 0.360 | 0.105 | 82 | **172.0** | code Apache-2.0 / weights OpenRAIL-M (<$5M) |
 | Qwen3-VL-8B NF4 (Phase 1, frozen) | T4 | 0.176 [0.129–0.235] | 0.141 | 0.369 | 0.107 | 224 | 152.7 | Apache-2.0 |
@@ -128,6 +129,14 @@ the raw arm is 0 by construction.
 - Our shipped pipeline **halves base RapidOCR's page CER** (0.530 → 0.255)
   at ~2× the engine time, staying CPU-first, offline and Apache-2.0, and it
   is the only arm that flags uncertain digits with alternative readings.
+- PaddleOCR's own CPU pipeline — running the same recognizer family — **loses
+  to the raw engine** on this slice (0.662 vs 0.530): its ordering on dense
+  tables is worse and there is no Devanagari *server* recognizer to raise the
+  ceiling (registry has v5 mobile only). The generic server detector was
+  CPU-impractical (~5,900 CPU-s on one 8 MP page, aborted); paddlepaddle
+  3.3.1 crashed on this box (PIR/oneDNN bug) so the venv pins 3.2.2. The
+  measurement uses PaddleOCR's own output order; no extra sorting was applied
+  by us either way.
 - The two "supreme_218512" pages still expose all arms (Surya 0.55/0.28):
   table-heavy court registers remain the hard case; a hybrid page reader
   stays Phase-5 material (§ Phase 1 verdict).
@@ -151,6 +160,12 @@ SURYA_INFERENCE_PARALLEL=1 <surya-venv>/python evals/harness/eval_models.py \
   --model surya --mode pages --data-dir data/doc_eval/nepali_pdf_v2 \
   --limit 10 --lang ne --frozen evals/manifests/nepali_pdf_v2.json \
   --json evals/surya_nepali_pdf_hard10.json
+
+# PaddleOCR 3.x, CPU (pin paddlepaddle==3.2.2: 3.3.1 has a PIR/oneDNN bug here)
+<paddle-venv>/python evals/harness/eval_models.py --model paddleocr \
+  --mode pages --data-dir data/doc_eval/nepali_pdf_v2 --limit 10 --lang ne \
+  --frozen evals/manifests/nepali_pdf_v2.json \
+  --json evals/paddleocr_nepali_pdf_hard10.json
 ```
 
 ### Open items

@@ -50,7 +50,7 @@ evidence missing from this market.
 
 | Project (stars, license) | Role | Devanagari | Honesty/review | Notes |
 |---|---|---|---|---|
-| PaddleOCR (90k, Apache-2.0) | engine + PP-Structure/VL | yes — PP-OCRv5 devanagari rec 84.96% (their internal set); PP-OCRv6 released 2026-05 | confidence only | the engine we already build on |
+| PaddleOCR (90k, Apache-2.0) | engine + PP-Structure/VL | yes — PP-OCRv5 devanagari rec 84.96% (their internal set); PP-OCRv6 released 2026-05; **no Devanagari server recognizer** (mobile only) | confidence only | the engine we already build on. **We ran their full CPU pipeline on the frozen hard-10**: CER 0.662 at 21.8 s/page — worse than the raw engine on table pages, and their server detector was CPU-impractical (~5,900 CPU-s for one 8 MP page until aborted) |
 | RapidOCR (8k, Apache-2.0) | ONNX Runtime wrapper for Paddle models | as Paddle | confidence only | our recognizer back-end |
 | Tesseract (77k, Apache-2.0) | engine | `nep`/`hin` traineddata | confidence only | our own bake-off: page CER **0.353** but **5,080 invented tokens** on 69 letterpress pages and 3× slower — fails the honesty gate |
 | OCRmyPDF (35k, MPL-2.0) | searchable PDF via Tesseract | inherits Tesseract | none | closest free analogue to our PDF export half |
@@ -78,12 +78,15 @@ the published data is thin. Our contribution is not beating them — it is
 *measuring* ourselves honestly and rejecting models that look good on vendor
 benchmarks. Head-to-head on the frozen hard-10 (2026-09-30, same metric code
 — `evals/bakeoff_results.md` Phase 2): bag-of-tokens CER is **tied across all
-arms (0.360–0.380)** — glyph recognition is a commodity; the page-CER spread
+arms (0.360–0.400)** — glyph recognition is a commodity; the page-CER spread
 comes from ordering and structure. Surya 2 leads by median (0.107 vs our
 0.227) with overlapping CIs, at ~23× our page time and under OpenRAIL-M
 weights; Qwen3-VL-8B was 3× better than the old engine on table pages but 152
-s/page with 224 invented tokens; Tesseract invented 5,080 tokens on the
-letterpress set and TrOCR hallucinated on printed lines — neither ships.
+s/page with 224 invented tokens; **PaddleOCR's own CPU pipeline measured 0.662
+— behind even the raw engine (its published 84.96% is recognition-model
+accuracy on an internal set, not page CER)**; Tesseract invented 5,080 tokens
+on the letterpress set and TrOCR hallucinated on printed lines — neither
+ships.
 
 **Cost.** Cloud read-tier OCR is $1.00–1.50 per 1,000 pages; structured
 extraction $10–50; desktop $69–165/user/yr; desktop IDP platforms
