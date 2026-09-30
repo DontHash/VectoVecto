@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are
 [semantic](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Custom domain live**: <https://veriscript.live> (and
+  `https://www.veriscript.live`) mapped to the Cloud Run demo with
+  Google-managed certificates over Namecheap DNS; a Cloud Monitoring uptime
+  check plus email alert now watch `veriscript.live/api/health`. The Cloud Run
+  `…run.app` URL still serves; README and package metadata use the canonical
+  domain.
+
 ## [1.4.0] - 2026-09-30
 
 ### Added

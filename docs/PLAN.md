@@ -2189,3 +2189,10 @@ for Devanagari.
   logger name, the `vvweb` web package, and the Kaggle dataset slugs
   (`bhishmbhandari/vectovecto-*`) referenced by external kernels and evidence.
 
+**Addendum (2026-10-01).** The registered domain is **`veriscript.live`**
+(Namecheap, 2026-09-30) — `.dev` was left unregistered. Both
+`veriscript.live` (4×A + 4×AAAA) and `www.veriscript.live` (CNAME) map to the
+Cloud Run demo with Google-managed certificates; README and `pyproject` use it
+as the canonical URL (runbook:
+[deploy/gcp-cloudrun.md](../deploy/gcp-cloudrun.md)).
+
