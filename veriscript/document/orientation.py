@@ -89,7 +89,7 @@ def parse_osd(stdout: str) -> Optional[Dict]:
 
 
 def _find_tesseract() -> Optional[str]:
-    from document_ocr import TesseractBackend
+    from veriscript.document.ocr import TesseractBackend
     return TesseractBackend._find()
 
 

@@ -55,7 +55,9 @@ def load_srvgg_compact(path: str, device="cpu", num_feat=64, num_conv=32,
 
 if __name__ == "__main__":
     import os
-    p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+
+    from veriscript.paths import ROOT
+    p = os.path.join(ROOT,
                      "weights", "realesr-general-x4v3.pth")
     m = load_srvgg_compact(p)
     n = sum(x.numel() for x in m.parameters())

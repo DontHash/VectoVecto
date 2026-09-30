@@ -19,7 +19,7 @@ sys.path.insert(0, BASE_DIR)
 from deva_crnn.gate import (DIGIT_EXACT_BAR, heidata_line_crops,  # noqa: E402
                             line_stats, line_values, v2_anchor_pages)
 from deva_crnn.predict import load_model, recognize_lines  # noqa: E402
-from doc_metrics import bootstrap_ci  # noqa: E402
+from veriscript.core.metrics import bootstrap_ci  # noqa: E402
 
 
 def _run_lines(model, charset, crops, batch=32, decode_mode="greedy",

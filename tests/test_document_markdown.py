@@ -12,9 +12,9 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_export import (transcript_md_text,  # noqa: E402
+from veriscript.document.export import (transcript_md_text,  # noqa: E402
                              write_combined_transcript_md, write_transcript_md)
-from document_ocr import OCRResult, Token  # noqa: E402
+from veriscript.document.ocr import OCRResult, Token  # noqa: E402
 
 
 def _flagged_result() -> OCRResult:

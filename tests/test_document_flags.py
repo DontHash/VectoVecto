@@ -16,8 +16,8 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from calibration import apply_isotonic, load_calibration  # noqa: E402
-from document_ocr import (RISK_WEIGHTS, Token, apply_unknown_word,  # noqa: E402
+from veriscript.calibration import apply_isotonic, load_calibration  # noqa: E402
+from veriscript.document.ocr import (RISK_WEIGHTS, Token, apply_unknown_word,  # noqa: E402
                           flag_tokens, review_queue, token_risk)
 
 
@@ -137,7 +137,7 @@ def test_unknown_word_only_on_devanagari_tokens():
 
 
 def test_unknown_word_fraction_threshold(monkeypatch):
-    monkeypatch.setattr("document_ocr.LEXICON_OOV_FRAC", 0.5)
+    monkeypatch.setattr("veriscript.document.ocr.LEXICON_OOV_FRAC", 0.5)
     three = _tok("नेपाल कुल गलत", 99)
     flag_tokens([three], conf_threshold=60, devanagari=True,
                 lexicon={"नेपाल", "कुल"})

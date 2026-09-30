@@ -10,7 +10,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import sr_engine  # noqa: E402
+from veriscript.photo import sr_engine  # noqa: E402
 
 
 def test_tier_c_ignored_without_accepted_marker(tmp_path, monkeypatch):

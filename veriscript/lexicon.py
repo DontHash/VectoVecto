@@ -17,9 +17,11 @@ import re
 import unicodedata
 from typing import Collection, Dict, List, Optional
 
-import branding
+from veriscript import branding
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from veriscript.paths import ROOT
+
+BASE_DIR = ROOT
 ENV_VAR = "VERISCRIPT_LEXICON"
 DEFAULT_LEXICON = os.path.join(BASE_DIR, "data", "lexicon",
                                "nepali_lexicon_v1.txt")

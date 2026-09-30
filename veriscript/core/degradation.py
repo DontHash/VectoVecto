@@ -15,6 +15,8 @@ All randomness is seeded: same (image, seed, level) -> same output.
 """
 from __future__ import annotations
 
+from veriscript.paths import ROOT
+
 from dataclasses import dataclass, field
 from typing import Dict, Tuple
 
@@ -213,7 +215,7 @@ def degrade_page(img_bgr: np.ndarray, seed: int = 42, level: Level = "medium") -
 if __name__ == "__main__":
     import os
 
-    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "api_check")
+    out_dir = os.path.join(ROOT, "out", "api_check")
     os.makedirs(out_dir, exist_ok=True)
     page = np.full((1400, 1000, 3), 245, dtype=np.uint8)
     cv2.putText(page, "INVOICE 1200.00", (60, 160), cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 0, 0), 3)

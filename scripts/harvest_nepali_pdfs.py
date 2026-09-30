@@ -34,7 +34,7 @@ import urllib.request
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_metrics  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
 
 MAX_INVALID_RATE = 0.02
 

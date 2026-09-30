@@ -14,7 +14,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import (devanagari_validity, valid_gt_stats,  # noqa: E402
+from veriscript.core.metrics import (devanagari_validity, valid_gt_stats,  # noqa: E402
                          validity_report)
 
 

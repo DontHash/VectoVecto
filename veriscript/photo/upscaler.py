@@ -28,14 +28,14 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 
-import sr_engine
-from sr_engine import load_engine
-from logging_setup import get_logger
+from veriscript.photo import sr_engine
+from veriscript.photo.sr_engine import load_engine
+from veriscript.logging_setup import get_logger
 
 _LOG = get_logger("smart_upscaler")
 
-import vector_raster_hybrid as vrh  # noqa: F401  (kept for API compatibility)
-from vector_raster_hybrid import (
+from veriscript.photo import hybrid as vrh  # noqa: F401  (kept for API compatibility)
+from veriscript.photo.hybrid import (
     VectorShape,
     compute_structure_tensor,  # noqa: F401
     segment_flat_and_graphic_regions,
@@ -256,13 +256,13 @@ class SmartUpscaler:
         backend is installed (restore still works offline).
         """
         try:
-            from document_pipeline import run_document_pipeline
+            from veriscript.document.pipeline import run_document_pipeline
             res = run_document_pipeline(img_bgr, deskew=False, scale=scale)
             print(f"  [SmartUpscaler] document mode: {res.status_line}")
             return res.display_bgr
         except Exception as e:  # noqa: BLE001
             print(f"  [SmartUpscaler] document pipeline unavailable ({e}); restore-only")
-            from document_restore import restore_document
+            from veriscript.document.restore import restore_document
             return restore_document(img_bgr, scale=scale)["display_bgr"]
 
     def upscale(self, img: np.ndarray, scale: int = 4, mode: str = "auto",

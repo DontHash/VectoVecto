@@ -26,9 +26,9 @@ from typing import Dict, List
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from document_ocr import review_queue  # noqa: E402
-from document_pipeline import run_document_pipeline  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.document.ocr import review_queue  # noqa: E402
+from veriscript.document.pipeline import run_document_pipeline  # noqa: E402
 
 
 def page_profile(result) -> Dict:

@@ -31,8 +31,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "evals", "harness"))
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
 from anchor_gemini import DEFAULT_MODEL, transcribe_page  # noqa: E402
 
 MIN_SIM = 0.60
@@ -247,7 +247,7 @@ def label_page(client, img: np.ndarray, page_id: str, model: str,
 
 
 def _default_ocr(img: np.ndarray):
-    from document_ocr import ocr_page
+    from veriscript.document.ocr import ocr_page
     return ocr_page(img, backend="rapidocr", lang="ne")
 
 

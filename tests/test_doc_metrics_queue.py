@@ -13,8 +13,8 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import queue_stats  # noqa: E402
-from document_ocr import Token  # noqa: E402
+from veriscript.core.metrics import queue_stats  # noqa: E402
+from veriscript.document.ocr import Token  # noqa: E402
 
 
 def _tok(text, conf=99, bbox=(0, 0, 10, 10), flags=None):

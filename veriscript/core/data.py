@@ -37,8 +37,9 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+from veriscript.paths import ROOT
+
+BASE_DIR = ROOT
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ def imread_safe(path: str):
         return None
     return cv2.imdecode(data, cv2.IMREAD_COLOR)
 
-from degradation_document import degrade_page  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +281,7 @@ def build_pdf_dataset(pdf_paths: List[str], out_dir: str, name: str | None = Non
                 "gt": os.path.relpath(gt_path, out_dir),
             }
             if gt_validity:
-                from doc_metrics import devanagari_validity
+                from veriscript.core.metrics import devanagari_validity
                 audit = devanagari_validity(gt)
                 entry["gt_invalid_tokens"] = audit["invalid_tokens"]
                 entry["gt_invalid_token_rate"] = audit["invalid_token_rate"]

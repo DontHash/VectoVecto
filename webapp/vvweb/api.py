@@ -26,7 +26,7 @@ from .security import (RateLimiter, SecurityHeadersMiddleware, client_key,
                        validate_upload)
 from .storage import PUBLIC_FILES, RunStore
 
-from logging_setup import get_logger
+from veriscript.logging_setup import get_logger
 
 _LOG = get_logger("web")
 
@@ -81,8 +81,8 @@ def _warm_pipeline() -> None:
     try:
         import tempfile
 
-        import doc_data
-        from document_pipeline import run_document_pipeline
+        from veriscript.core import data as doc_data
+        from veriscript.document.pipeline import run_document_pipeline
 
         page, _gt = doc_data.render_synthetic_invoice(seed=1, dpi=110)
         with tempfile.TemporaryDirectory(prefix="vv_warm_") as td:

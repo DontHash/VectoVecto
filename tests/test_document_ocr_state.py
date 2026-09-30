@@ -17,7 +17,7 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_ocr import available_backends, get_backend, ocr_page  # noqa: E402
+from veriscript.document.ocr import available_backends, get_backend, ocr_page  # noqa: E402
 
 pytestmark = pytest.mark.skipif("rapidocr" not in available_backends(),
                                 reason="rapidocr unavailable")

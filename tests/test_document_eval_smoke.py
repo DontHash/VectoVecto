@@ -15,10 +15,10 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from degradation_document import degrade_page  # noqa: E402
-from document_ocr import Token, available_backends, ocr_page  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
+from veriscript.document.ocr import Token, available_backends, ocr_page  # noqa: E402
 
 
 def test_degradation_deterministic():
@@ -157,7 +157,7 @@ def test_eval_document_pipeline(tmp_path):
 
 def test_tesseract_adapter_optional():
     status = "tesseract" in available_backends()
-    from document_ocr import TesseractBackend
+    from veriscript.document.ocr import TesseractBackend
     ok, why = TesseractBackend().available()
     assert ok == status
     if not ok:
@@ -165,7 +165,7 @@ def test_tesseract_adapter_optional():
 
 
 def test_dual_stream_gate_flags_digit_conflicts():
-    from document_ocr import OCRResult, compare_digit_streams
+    from veriscript.document.ocr import OCRResult, compare_digit_streams
 
     primary = OCRResult("", [Token(text="TOTAL 1200.00", conf=95,
                                    bbox=(100, 100, 300, 130), granularity="word",
@@ -187,13 +187,13 @@ def test_dual_stream_gate_flags_digit_conflicts():
 
 
 def test_recommended_stream_table_covers_backends():
-    from document_ocr import RECOMMENDED_STREAM
+    from veriscript.document.ocr import RECOMMENDED_STREAM
     assert RECOMMENDED_STREAM.get("rapidocr") == "raw"
     assert RECOMMENDED_STREAM.get("tesseract", "").startswith("restore")
 
 
 def test_digit_repass_records_evidence_without_polluting_flags():
-    from document_ocr import apply_digit_repass
+    from veriscript.document.ocr import apply_digit_repass
 
     img = np.full((60, 300, 3), 255, dtype=np.uint8)
 

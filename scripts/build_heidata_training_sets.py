@@ -22,7 +22,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "evals", "harness"))
 
-import doc_data  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
 
 TRAIN_BOOKS = ["giridharadasa1902", "nivajakavi1895", "sriramastavarajah1898",
                "trisuli1890", "vyasa1896", "vyasa1906"]

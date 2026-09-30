@@ -18,7 +18,7 @@ from typing import Callable, Dict, List, Optional, Sequence
 import cv2
 import numpy as np
 
-from document_ocr import Token
+from veriscript.document.ocr import Token
 
 
 def text_mask_from_tokens(shape, tokens: Sequence[Token],

@@ -13,8 +13,8 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_layout import row_major, sort_reading_order  # noqa: E402
-from document_ocr import Token  # noqa: E402
+from veriscript.document.layout import row_major, sort_reading_order  # noqa: E402
+from veriscript.document.ocr import Token  # noqa: E402
 
 
 def T(text, x0, y0, x1, y1, conf=99.0, gran="line"):
@@ -90,7 +90,7 @@ def test_wide_title_separates_band_even_when_close_to_columns():
 
 
 def test_wide_token_sharing_a_row_is_not_a_separator():
-    from document_layout import _content_width, _standalone_wide_ids
+    from veriscript.document.layout import _content_width, _standalone_wide_ids
 
     wide = T("WIDE LINE", 0, 0, 1000, 30)
     same_row = T("value", 700, 5, 900, 25)
@@ -270,8 +270,8 @@ def test_three_row_table_is_not_dense():
 
 def test_pipeline_applies_reading_order(monkeypatch):
     import numpy as np
-    import document_pipeline as dp
-    from document_ocr import OCRResult
+    from veriscript.document import pipeline as dp
+    from veriscript.document.ocr import OCRResult
 
     def fake_restore(img, **kw):
         return {"display_bgr": img, "skew_angle": 0.0,

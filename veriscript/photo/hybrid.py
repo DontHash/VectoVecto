@@ -647,7 +647,7 @@ def hybrid_vector_raster_upscale(
     if raster_engine == "lanczos":
         raster_hr = cv2.resize(lr_bgr, (out_w, out_h), interpolation=cv2.INTER_LANCZOS4)
     elif raster_engine == "tv":
-        from tv_refinement import tv_super_resolution_refine
+        from veriscript.photo.tv_refinement import tv_super_resolution_refine
         base_bicubic = cv2.resize(lr_bgr, (out_w, out_h), interpolation=cv2.INTER_CUBIC)
         raster_hr = tv_super_resolution_refine(lr_bgr, base_bicubic, scale=scale, lambda_tv=0.015, num_iters=4)
     elif callable(raster_engine):

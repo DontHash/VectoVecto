@@ -17,8 +17,8 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_metrics  # noqa: E402
-from document_ocr import Token, available_backends, normalize_lang  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import Token, available_backends, normalize_lang  # noqa: E402
 
 RAPID_OK = "rapidocr" in available_backends()
 try:
@@ -45,7 +45,7 @@ def test_devanagari_digits_count_as_digits():
 
 @pytest.mark.skipif(not QT_OK, reason="PySide6 unavailable")
 def test_devanagari_fixture_renders_and_gt_matches():
-    import doc_data
+    from veriscript.core import data as doc_data
 
     img, gt = doc_data.render_devanagari_invoice(seed=1, dpi=300, script="ne")
     assert img.shape[0] > 2000 and img.shape[1] > 1500
@@ -63,8 +63,8 @@ def test_devanagari_fixture_renders_and_gt_matches():
 @pytest.mark.skipif(not RAPID_OK or not QT_OK, reason="rapidocr/PySide6 unavailable")
 @pytest.mark.parametrize("script", ["ne", "hi"])
 def test_devanagari_engine_reads_fixture(script):
-    import doc_data
-    from document_ocr import ocr_page
+    from veriscript.core import data as doc_data
+    from veriscript.document.ocr import ocr_page
 
     img, gt = doc_data.render_devanagari_invoice(seed=5, dpi=300, script=script)
     try:

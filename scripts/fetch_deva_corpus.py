@@ -40,7 +40,7 @@ from typing import Dict, Iterator, List, Optional
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import devanagari_validity, normalize_text  # noqa: E402
+from veriscript.core.metrics import devanagari_validity, normalize_text  # noqa: E402
 
 CORPUS_URL = "https://data.statmt.org/cc-100/ne.txt.xz"
 CORPUS_NAME = "deva_sentences_v1.txt"

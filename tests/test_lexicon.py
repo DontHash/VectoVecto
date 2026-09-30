@@ -13,7 +13,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from lexicon import (deva_words, is_deva_word, load_lexicon,  # noqa: E402
+from veriscript.lexicon import (deva_words, is_deva_word, load_lexicon,  # noqa: E402
                      normalize_word, unknown_words)
 
 

@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from .data import normalize_line  # noqa: E402
-from doc_metrics import cer, cer_bag, digit_string, digit_tokens  # noqa: E402
+from veriscript.core.metrics import cer, cer_bag, digit_string, digit_tokens  # noqa: E402
 
 DIGIT_EXACT_BAR = 0.75
 
@@ -50,7 +50,7 @@ def line_values(gts: List[str], hyps: List[str]) -> Dict[str, List[float]]:
 
 def heidata_line_crops(data_dir: str, limit: int = 0) -> Tuple[List[str], List[np.ndarray]]:
     """(texts, crops) from frozen heiDATA pages + ALTO line boxes."""
-    import doc_data
+    from veriscript.core import data as doc_data
     manifest = doc_data.load_dataset(data_dir)
     texts: List[str] = []
     crops: List[np.ndarray] = []
@@ -75,8 +75,8 @@ def heidata_line_crops(data_dir: str, limit: int = 0) -> Tuple[List[str], List[n
 def v2_anchor_pages(data_dir: str, readings_path: str,
                     limit: int = 0) -> List[Dict]:
     """Per anchor page: RapidOCR line boxes (image + crops) + Gemini GT."""
-    import doc_data
-    from document_ocr import ocr_page
+    from veriscript.core import data as doc_data
+    from veriscript.document.ocr import ocr_page
     manifest = doc_data.load_dataset(data_dir)
     readings = {r["page"]: r["readings"]["gemini"]
                 for r in json.load(open(readings_path, encoding="utf-8"))["rows"]}

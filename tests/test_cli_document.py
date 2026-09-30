@@ -14,9 +14,9 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from degradation_document import degrade_page  # noqa: E402
-from document_ocr import available_backends  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
+from veriscript.document.ocr import available_backends  # noqa: E402
 
 
 def _doc_args(**overrides) -> argparse.Namespace:
@@ -34,7 +34,7 @@ def _doc_args(**overrides) -> argparse.Namespace:
 
 @pytest.mark.skipif(not available_backends(), reason="no OCR backend available")
 def test_cli_document_mode_writes_outputs(tmp_path):
-    from cli import run_document_mode
+    from veriscript.cli import run_document_mode
 
     page, _gt = doc_data.render_synthetic_invoice(seed=51, dpi=150)
     degraded = degrade_page(page, seed=5101, level="mild")
@@ -84,7 +84,7 @@ def _make_pdf(path, n_pages=3):
 
 @pytest.mark.skipif(not available_backends(), reason="no OCR backend available")
 def test_cli_document_all_pages_writes_combined(tmp_path):
-    from cli import run_document_mode
+    from veriscript.cli import run_document_mode
 
     src = tmp_path / "multi.pdf"
     _make_pdf(src, 3)
@@ -112,7 +112,7 @@ def test_cli_document_all_pages_writes_combined(tmp_path):
 
 @pytest.mark.skipif(not available_backends(), reason="no OCR backend available")
 def test_cli_document_mode_skip_existing(tmp_path):
-    from cli import run_document_mode
+    from veriscript.cli import run_document_mode
 
     page, _gt = doc_data.render_synthetic_invoice(seed=52, dpi=150)
     src = tmp_path / "scan.png"

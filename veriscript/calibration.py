@@ -15,7 +15,9 @@ import json
 import os
 from typing import Dict, Optional
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from veriscript.paths import ROOT
+
+BASE_DIR = ROOT
 DEFAULT_CALIBRATION = os.path.join(BASE_DIR, "calibration",
                                    "rapidocr_devanagari_v1.json")
 

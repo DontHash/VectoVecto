@@ -18,10 +18,10 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import Token, available_backends  # noqa: E402
-from document_orientation import (RotationInfo, detect_rotation,  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import Token, available_backends  # noqa: E402
+from veriscript.document.orientation import (RotationInfo, detect_rotation,  # noqa: E402
                                   infer_angle, load_image_bgr,
                                   orientation_suspect, parse_osd, rotate_bgr,
                                   vertical_fraction)
@@ -114,7 +114,7 @@ def test_load_image_bgr_applies_exif(tmp_path):
 
 @pytest.mark.skipif(not RAPID_OK, reason="rapidocr unavailable")
 def test_line_orientation_votes_separate_flip():
-    from document_ocr import get_backend, ocr_page
+    from veriscript.document.ocr import get_backend, ocr_page
 
     page, _gt = doc_data.render_synthetic_invoice(seed=341, dpi=150)
     be = get_backend("rapidocr")
@@ -135,7 +135,7 @@ def test_line_orientation_votes_separate_flip():
     ("180", cv2.ROTATE_180, 180),
 ])
 def test_pipeline_resolves_every_orientation(label, rot, expect):
-    from document_pipeline import run_document_pipeline
+    from veriscript.document.pipeline import run_document_pipeline
 
     page, gt = doc_data.render_synthetic_invoice(seed=342, dpi=150)
     img = page if rot is None else cv2.rotate(page, rot)
@@ -150,7 +150,7 @@ def test_pipeline_resolves_every_orientation(label, rot, expect):
 
 @pytest.mark.skipif(not RAPID_OK, reason="rapidocr unavailable")
 def test_rotate_off_flags_instead_of_rotating():
-    from document_pipeline import run_document_pipeline
+    from veriscript.document.pipeline import run_document_pipeline
 
     page, _gt = doc_data.render_synthetic_invoice(seed=343, dpi=150)
     sideways = cv2.rotate(page, cv2.ROTATE_90_CLOCKWISE)

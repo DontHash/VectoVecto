@@ -15,7 +15,7 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import bootstrap_ci  # noqa: E402
+from veriscript.core.metrics import bootstrap_ci  # noqa: E402
 from eval_freeze import (BASE_DIR, _resolve_data_dir, build_manifest,  # noqa: E402
                          freeze_info, verify_manifest)
 

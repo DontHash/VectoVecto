@@ -24,8 +24,6 @@ from typing import List, Optional
 
 import numpy as np
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
 
 REPO_ID = "bodhan-ai/indic-ocr"
 

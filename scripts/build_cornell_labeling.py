@@ -26,8 +26,8 @@ import time
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from document_pipeline import run_document_pipeline  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.document.pipeline import run_document_pipeline  # noqa: E402
 
 DEFAULT_PDF_DIR = os.path.join(BASE_DIR, "data", "doc_eval",
                                "nepali_textbook_scans")

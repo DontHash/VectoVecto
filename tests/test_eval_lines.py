@@ -14,7 +14,7 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
 from eval_lines import make_contact_sheet, score_lines, write_review_csv  # noqa: E402
 
 

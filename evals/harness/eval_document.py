@@ -42,9 +42,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import available_backends, ocr_page  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import available_backends, ocr_page  # noqa: E402
 
 Method = Callable[[np.ndarray], np.ndarray]
 
@@ -75,7 +75,7 @@ def method_lanczos2(img: np.ndarray) -> np.ndarray:
 
 
 def method_photo(img: np.ndarray) -> np.ndarray:
-    from smart_upscaler import SmartUpscaler
+    from veriscript.photo.upscaler import SmartUpscaler
     engine = method_photo._engine  # type: ignore[attr-defined]
     return engine.upscale(img, scale=2, mode="photo", fast=True, grain_strength=0.0)
 
@@ -85,7 +85,7 @@ method_photo._engine = None  # type: ignore[attr-defined]
 
 def method_restore(img: np.ndarray) -> np.ndarray:
     try:
-        from document_restore import restore_document
+        from veriscript.document.restore import restore_document
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"document_restore not available yet ({e})") from e
     out = restore_document(img, scale=1)
@@ -94,7 +94,7 @@ def method_restore(img: np.ndarray) -> np.ndarray:
 
 def _restore_stream(stream: str) -> Method:
     def fn(img: np.ndarray) -> np.ndarray:
-        from document_restore import restore_document
+        from veriscript.document.restore import restore_document
         return restore_document(img, scale=1, ocr_stream=stream)["ocr_bgr"]
     return fn
 
@@ -151,7 +151,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
             if method == "photo" and not with_photo:
                 continue
             if method == "pipeline":
-                from document_pipeline import run_document_pipeline
+                from veriscript.document.pipeline import run_document_pipeline
                 for backend in backends:
                     t0 = time.time()
                     try:

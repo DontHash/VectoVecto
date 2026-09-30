@@ -38,9 +38,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import ocr_page  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import ocr_page  # noqa: E402
 
 AGREEMENT_BAR = 0.95
 DEFAULT_BUDGET = 8
@@ -261,7 +261,7 @@ def build(data_dir: str, out_dir: str, frozen: Optional[str] = None,
 
     verifier = None
     if use_bodhan:
-        from document_verifier import get_digit_verifier
+        from veriscript.document.verifier import get_digit_verifier
         verifier = get_digit_verifier("bodhan")
         print("[anchor] bodhan verifier loaded (line re-reads)")
 

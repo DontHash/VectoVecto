@@ -34,9 +34,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "evals", "harness"))
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import ocr_page  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import ocr_page  # noqa: E402
 
 LATENCY_BUDGET_S = 1.0
 
@@ -186,7 +186,7 @@ def run(data_dir: str, frozen: Optional[str], lang: str, ckpt: Optional[str],
             raise SystemExit("frozen drift - refusing to evaluate")
         print(f"[gate] frozen verified: {os.path.basename(frozen)}")
 
-    from deva_reader import reader_info
+    from veriscript.deva.reader import reader_info
     print(f"[gate] reader: {json.dumps(reader_info(ckpt))}")
 
     rows = _page_rows(data_dir, readings, limit=limit)

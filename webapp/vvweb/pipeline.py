@@ -49,7 +49,7 @@ def _load_pages(path: str, kind: Optional[str],
     """
     is_pdf = kind == "pdf" if kind else path.lower().endswith(".pdf")
     if is_pdf:
-        import doc_data
+        from veriscript.core import data as doc_data
         pages: List[Tuple[int, "object"]] = []
         for idx, img_bgr, _gt in doc_data.pdf_to_pages(path, dpi=200):
             pages.append((idx, img_bgr))
@@ -59,7 +59,7 @@ def _load_pages(path: str, kind: Optional[str],
             raise PipelineError("Could not read that PDF.")
         return pages, "pdf"
 
-    from document_orientation import load_image_bgr
+    from veriscript.document.orientation import load_image_bgr
     img_bgr = load_image_bgr(path)
     if img_bgr is None:
         raise PipelineError("Could not read that image.")
@@ -91,9 +91,9 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
     """Run restore+OCR and write canonical artifacts into run_dir."""
     import cv2
 
-    from document_export import (write_combined_transcript_md,
+    from veriscript.document.export import (write_combined_transcript_md,
                                  write_searchable_pdf_pages)
-    from document_pipeline import run_document_pipeline
+    from veriscript.document.pipeline import run_document_pipeline
 
     started = time.time()
     pages, kind = _load_pages(upload_path, kind, all_pages)

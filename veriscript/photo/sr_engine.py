@@ -23,8 +23,9 @@ from typing import Callable, Optional
 import cv2
 import numpy as np
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, BASE_DIR)
+from veriscript.paths import ROOT
+
+BASE_DIR = ROOT
 
 IMG_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")
 
@@ -71,10 +72,10 @@ def build_generator(path: str, scale: int = 4, device: str = "cpu"):
     sd = load_state_dict_any(path)
     arch = detect_arch(sd)
     if arch == "rrdbnet":
-        from rrdbnet import RRDBNet
+        from veriscript.photo.rrdbnet import RRDBNet
         model = RRDBNet(3, 3, 64, 23, 32, scale=scale)
     elif arch == "srvgg":
-        from srvggnet import SRVGGNetCompact
+        from veriscript.photo.srvggnet import SRVGGNetCompact
         model = SRVGGNetCompact(3, 3, 64, 32, upscale=scale)
     else:
         raise ValueError("deep-unfolding checkpoints are not handled by "

@@ -21,9 +21,11 @@ from typing import Dict, List, Optional
 import cv2
 import numpy as np
 
-import branding
+from veriscript import branding
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from veriscript.paths import ROOT
+
+BASE_DIR = ROOT
 ENV_VAR = "VERISCRIPT_DEVA_CKPT"
 DEFAULT_CKPT = os.path.join(BASE_DIR, "weights", "deva_crnn_h48w512.pt")
 MIN_CHARS = 1

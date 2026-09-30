@@ -33,7 +33,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from document_ocr import OCRResult, Token
+from veriscript.document.ocr import OCRResult, Token
 
 FLAG_COLORS = {  # BGR
     "digit_conflict": (0, 0, 255),      # red
@@ -43,7 +43,9 @@ FLAG_COLORS = {  # BGR
 }
 OK_COLOR = (0, 180, 0)                  # green
 
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from veriscript.paths import ROOT
+
+_BASE_DIR = ROOT
 _UNICODE_FONT_NAME = "VectoDevaUnicode"
 _FONT_STATE: Dict[str, Optional[object]] = {"path": None, "tried": False}
 _LOG = logging.getLogger("vectovecto.document_export")
@@ -225,7 +227,7 @@ def transcript_md_text(result: OCRResult) -> str:
     Deterministic (no timestamps): the same OCR result always produces the
     same bytes. The review table is omitted when nothing was flagged.
     """
-    from document_ocr import review_queue
+    from veriscript.document.ocr import review_queue
 
     review = review_queue(result.tokens)
     low = sum(1 for t in result.tokens if "low_conf" in t.flags)
@@ -281,7 +283,7 @@ def write_combined_transcript_md(path: str, results, title: str) -> str:
 
 
 def write_ocr_json(path: str, result: OCRResult) -> str:
-    from document_ocr import review_queue, token_risk
+    from veriscript.document.ocr import review_queue, token_risk
 
     review = review_queue(result.tokens)
     payload = {
@@ -346,11 +348,9 @@ def export_document_outputs(out_dir: str, stem: str, image_bgr: np.ndarray,
 
 if __name__ == "__main__":
     import sys
-
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import doc_data
-    from degradation_document import degrade_page
-    from document_ocr import ocr_page
+    from veriscript.core import data as doc_data
+    from veriscript.core.degradation import degrade_page
+    from veriscript.document.ocr import ocr_page
 
     page, gt = doc_data.render_synthetic_invoice(seed=21, dpi=300)
     deg = degrade_page(page, seed=2101, level="medium")

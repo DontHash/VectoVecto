@@ -32,8 +32,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
 from eval_anchor import render_html  # noqa: E402
 
 DEFAULT_MODEL = "gemini-2.5-pro"

@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import sys
 
-import branding
+from veriscript import branding
 
 ROOT_NAME = "vectovecto"
 DEFAULT_LEVEL = "INFO"

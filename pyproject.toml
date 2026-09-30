@@ -55,38 +55,21 @@ Homepage = "https://github.com/DontHash/VeriScript"
 Issues = "https://github.com/DontHash/VeriScript/issues"
 
 [project.scripts]
-veriscript = "cli:main"
+veriscript = "veriscript.cli:main"
 # Legacy alias: the console script keeps working after the rename.
-vectovecto = "cli:main"
+vectovecto = "veriscript.cli:main"
 
 [tool.setuptools]
-# Product modules only. The training package (`deva_crnn/`) and the evaluation
-# harness stay out of the distributed wheel — they are repo tooling.
-py-modules = [
-  "calibration",
-  "cli",
-  "degradation_document",
-  "deva_reader",
-  "doc_data",
-  "doc_metrics",
-  "document_export",
-  "document_layout",
-  "document_ocr",
-  "document_orientation",
-  "document_pipeline",
-  "document_restore",
-  "document_router",
-  "document_verifier",
-  "lexicon",
-  "logging_setup",
-  "branding",
-  "rrdbnet",
-  "smart_upscaler",
-  "sr_engine",
-  "srvggnet",
-  "vector_raster_hybrid",
+# The product package and the line-recognizer training package. The evaluation
+# harness stays out of the distributed wheel — it is repo tooling.
+packages = [
+  "veriscript",
+  "veriscript.core",
+  "veriscript.document",
+  "veriscript.deva",
+  "veriscript.photo",
+  "deva_crnn",
 ]
-packages = ["deva_crnn"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

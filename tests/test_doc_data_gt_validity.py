@@ -13,7 +13,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import build_pdf_dataset, make_demo_pdf  # noqa: E402
+from veriscript.core.data import build_pdf_dataset, make_demo_pdf  # noqa: E402
 
 
 def _demo(tmp_path):

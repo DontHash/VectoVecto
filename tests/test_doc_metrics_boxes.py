@@ -10,9 +10,9 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import (build_heidata_dataset, parse_alto_page,  # noqa: E402
+from veriscript.core.data import (build_heidata_dataset, parse_alto_page,  # noqa: E402
                       parse_page_xml)
-from doc_metrics import box_match_report  # noqa: E402
+from veriscript.core.metrics import box_match_report  # noqa: E402
 
 ALTO_V4 = """<?xml version="1.0" encoding="UTF-8"?>
 <alto xmlns="http://www.loc.gov/standards/alto/ns-v4#">
@@ -146,7 +146,7 @@ def test_build_heidata_dataset_end_to_end(tmp_path):
     assert "प्रथम पंक्ति" in gt
     boxes = json.load(open(os.path.join(out, e["boxes"]), encoding="utf-8"))
     assert boxes[1]["bbox"] == [60, 200, 310, 240]
-    from doc_data import load_dataset
+    from veriscript.core.data import load_dataset
     loaded = load_dataset(str(out))
     assert "_boxes_path" in loaded["entries"][0]
 

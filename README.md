@@ -61,6 +61,9 @@ python cli.py --mode document --input scan.pdf --output out/run1 --max-pages 3
 # PDF → Markdown: per-page .md always; --max-pages 0 adds one combined .md
 python cli.py --mode document --input report.pdf --output out/report --max-pages 0
 
+# Same CLI as a module / installed console script:
+python -m veriscript --mode document --input report.pdf --output out/report
+
 # Photo upscaling (shares the same CLI/app)
 python cli.py --mode photo --input photos/ --output out/upscaled --scale 4
 ```
@@ -177,16 +180,20 @@ alternative-reading digit review queue.
 ## Project layout
 
 ```
-cli.py                    command-line entry point (document + photo)
+veriscript/               the product package
+  cli.py                  command-line entry point (document + photo)
+  core/                   dataset IO + metrics (doc_data, doc_metrics), degradation
+  document/               pipeline: OCR, layout, orientation, restore, export, router, verifier
+  deva/                   Devanagari line reader (CRNN+CTC), opt-in via --deva-lines
+  photo/                  photo/vector stack (parked; CLI photo mode)
+  branding.py, logging_setup.py, lexicon.py, calibration.py
+cli.py                    compatibility launcher for `python -m veriscript`
 webapp/                   the studio: FastAPI backend (vvweb/) + SolidJS frontend
-document_*.py, doc_*.py   pipeline: OCR, layout, orientation, restore, export, router, verifier
-calibration.py            isotonic confidence calibration
-smart_upscaler.py, sr_engine.py, ...   photo/vector stack (parked; CLI photo mode)
-deva_crnn/                Devanagari line reader (CRNN+CTC), opt-in via --deva-lines
+deva_crnn/                training package for the line reader (repo tooling)
 evals/harness/            evaluation harnesses (frozen sets, metrics, gates)
 evals/manifests/          content-hash frozen evaluation sets
 scripts/                  data acquisition, training export, gates, release tooling
-tests/                    the test suite (pytest counts them; ~336)
+tests/                    the test suite (pytest counts them; ~338)
 docs/                     architecture, evaluation, deployment, licensing, plan
 ```
 

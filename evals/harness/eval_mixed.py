@@ -32,11 +32,11 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import ocr_page  # noqa: E402
-from document_restore import fit_max_side, restore_document  # noqa: E402
-from document_router import route_page, text_mask_from_tokens  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import ocr_page  # noqa: E402
+from veriscript.document.restore import fit_max_side, restore_document  # noqa: E402
+from veriscript.document.router import route_page, text_mask_from_tokens  # noqa: E402
 
 TEXT_CER_SLACK = 1.02
 COST_BUDGET_S = 1.0

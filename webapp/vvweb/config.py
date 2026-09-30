@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-import branding
+from veriscript import branding
 
 
 def _env_int(name: str, default: int) -> int:

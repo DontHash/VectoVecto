@@ -463,11 +463,11 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     calibration = None
     lexicon = None
     if devanagari:
-        from calibration import load_calibration
+        from veriscript.calibration import load_calibration
         calibration = load_calibration()
         if calibration:
             result.meta["calibration"] = f"isotonic:{os.path.basename(calibration.get('domain', '?'))}"
-        from lexicon import load_lexicon
+        from veriscript.lexicon import load_lexicon
         lex = load_lexicon()
         if lex:
             lexicon = lex["words"]
@@ -509,10 +509,10 @@ def apply_deva_line_reader(result: OCRResult, img_bgr: np.ndarray,
     at line granularity. Every line falls back to the backend reading when the
     model output is implausible. Never raises.
     """
-    from deva_reader import (DevaLineReader, get_reader,  # noqa: WPS433
+    from veriscript.deva.reader import (DevaLineReader, get_reader,  # noqa: WPS433
                              merge_line_boxes, page_is_line_like,
                              page_looks_letterpress)
-    from doc_metrics import digit_tokens  # noqa: WPS433
+    from veriscript.core.metrics import digit_tokens  # noqa: WPS433
     reader = get_reader(deva_ckpt)
     if reader is None:
         result.meta["deva_line_reader"] = {"active": False,
@@ -668,7 +668,7 @@ def apply_unknown_word(tokens: List["Token"],
     """
     if not lexicon:
         return 0
-    from lexicon import deva_words
+    from veriscript.lexicon import deva_words
     frac = LEXICON_OOV_FRAC if oov_frac is None else oov_frac
     flagged = 0
     for tok in tokens:
@@ -711,11 +711,11 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
             # Hypothesis-side validity: OCR output containing an impossible
             # combining sequence (reordered matra, dangling virama) is wrong by
             # construction - a near-free, high-precision queue signal (W0.1).
-            from doc_metrics import _invalid_devanagari_token
+            from veriscript.core.metrics import _invalid_devanagari_token
             if _invalid_devanagari_token(tok.text):
                 tok.flags.append("invalid_sequence")
         if calibration is not None:
-            from calibration import apply_isotonic
+            from veriscript.calibration import apply_isotonic
             tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)
     if devanagari and lexicon:
         apply_unknown_word(tokens, lexicon)

@@ -32,11 +32,11 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
 
 def _shim_broken_torchaudio() -> None:
     """Delegate to the runtime shim (document_verifier)."""
-    from document_verifier import shim_broken_torchaudio
+    from veriscript.document.verifier import shim_broken_torchaudio
     shim_broken_torchaudio()
 
 
@@ -87,12 +87,12 @@ class RapidOCRCandidate(Candidate):
     license = "Apache-2.0 (PP-OCRv5 devanagari mobile)"
 
     def available(self):
-        from document_ocr import available_backends
+        from veriscript.document.ocr import available_backends
         ok = "rapidocr" in available_backends()
         return ok, "installed" if ok else "rapidocr unavailable"
 
     def load(self, lang=None):
-        from document_ocr import get_backend
+        from veriscript.document.ocr import get_backend
         return get_backend("rapidocr")
 
     def recognize_lines(self, ctx, crops, lang=None):
@@ -109,7 +109,7 @@ class TesseractCandidate(Candidate):
 
     @staticmethod
     def _find():
-        from document_ocr import TesseractBackend
+        from veriscript.document.ocr import TesseractBackend
         return TesseractBackend._find()
 
     def available(self):

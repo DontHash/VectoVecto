@@ -14,12 +14,12 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from degradation_document import degrade_page  # noqa: E402
-from document_export import (export_document_outputs, write_overlay_png,  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
+from veriscript.document.export import (export_document_outputs, write_overlay_png,  # noqa: E402
                              write_searchable_pdf,
                              write_searchable_pdf_pages)
-from document_ocr import Token, available_backends, ocr_page  # noqa: E402
+from veriscript.document.ocr import Token, available_backends, ocr_page  # noqa: E402
 
 
 def test_searchable_pdf_pages_writes_one_page_per_entry(tmp_path):
@@ -72,8 +72,8 @@ def test_overlay_marks_conflicts_red(tmp_path):
 
 
 def test_ocr_json_review_queue_is_ranked(tmp_path):
-    from document_export import write_ocr_json
-    from document_ocr import OCRResult, review_queue, token_risk
+    from veriscript.document.export import write_ocr_json
+    from veriscript.document.ocr import OCRResult, review_queue, token_risk
 
     toks = [
         Token(text="note", conf=50, bbox=(0, 100, 40, 120), granularity="word",

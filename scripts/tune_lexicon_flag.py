@@ -24,11 +24,11 @@ from typing import Dict, List, Tuple
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-import document_ocr  # noqa: E402
-from document_ocr import apply_unknown_word, ocr_page  # noqa: E402
-from lexicon import load_lexicon  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document import ocr as document_ocr  # noqa: E402
+from veriscript.document.ocr import apply_unknown_word, ocr_page  # noqa: E402
+from veriscript.lexicon import load_lexicon  # noqa: E402
 
 DEVA_DIGITS = {chr(0x0966 + i) for i in range(10)}
 TOPK = (5, 10)

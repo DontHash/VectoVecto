@@ -16,8 +16,8 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_ocr import Token  # noqa: E402
-from document_router import (composite_regions, route_page,  # noqa: E402
+from veriscript.document.ocr import Token  # noqa: E402
+from veriscript.document.router import (composite_regions, route_page,  # noqa: E402
                              text_mask_from_tokens)
 
 
@@ -71,11 +71,12 @@ def test_route_page_photo_upscaler_only_touches_photo_regions():
     assert out[85, 85].max() == 0, "logo must stay original (no upscaler)"
 
 
-@pytest.mark.skipif("rapidocr" not in __import__("document_ocr").available_backends(),
+@pytest.mark.skipif("rapidocr" not in __import__("veriscript.document.ocr",
+                                                 fromlist=["available_backends"]).available_backends(),
                     reason="rapidocr unavailable")
 def test_pipeline_mixed_router_keeps_non_text(tmp_path):
-    import doc_data
-    from document_pipeline import run_document_pipeline
+    from veriscript.core import data as doc_data
+    from veriscript.document.pipeline import run_document_pipeline
 
     page, _gt = doc_data.render_synthetic_invoice(seed=401, dpi=150)
     res = run_document_pipeline(page, backend="rapidocr", mixed_router=True,

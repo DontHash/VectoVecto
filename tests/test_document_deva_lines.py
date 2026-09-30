@@ -15,9 +15,9 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import deva_reader  # noqa: E402
-import document_ocr  # noqa: E402
-from document_ocr import OCRResult, Token, ocr_page  # noqa: E402
+from veriscript.deva import reader as deva_reader  # noqa: E402
+from veriscript.document import ocr as document_ocr  # noqa: E402
+from veriscript.document.ocr import OCRResult, Token, ocr_page  # noqa: E402
 
 
 class _FakeBackend:
@@ -75,7 +75,7 @@ def test_ocr_page_replaces_texts_and_records_provenance(monkeypatch):
 
 
 def test_merge_line_boxes_groups_fragments_only():
-    from deva_reader import merge_line_boxes
+    from veriscript.deva.reader import merge_line_boxes
 
     def tok(text, bbox):
         return Token(text=text, conf=90.0, bbox=bbox, backend="fake")
@@ -99,7 +99,7 @@ def test_merge_line_boxes_groups_fragments_only():
 
 
 def test_merge_line_boxes_keeps_columns_apart():
-    from deva_reader import merge_line_boxes
+    from veriscript.deva.reader import merge_line_boxes
 
     def tok(bbox):
         return Token(text="x", conf=90.0, bbox=bbox, backend="fake")
@@ -112,7 +112,7 @@ def test_merge_line_boxes_keeps_columns_apart():
 
 def test_auto_policy_skips_cell_like_pages(monkeypatch):
     """`auto` engages on running text, stays off on table-like pages."""
-    from deva_reader import page_is_line_like
+    from veriscript.deva.reader import page_is_line_like
 
     class _B:
         name = "fake"
@@ -159,7 +159,7 @@ def test_auto_gate_requires_letterpress_paper(monkeypatch):
     still line-shaped, so geometry alone is not enough: the paper must look
     aged/letterpress (saturated, not bright white).
     """
-    from deva_reader import page_looks_letterpress
+    from veriscript.deva.reader import page_looks_letterpress
 
     assert page_looks_letterpress(_img_letterpress()) is True
     assert page_looks_letterpress(_img()) is False
@@ -194,7 +194,7 @@ def test_auto_gate_requires_letterpress_paper(monkeypatch):
 
 def test_merge_line_boxes_stops_at_a_table_rule():
     """A drawn vertical rule between boxes means separate table cells."""
-    from deva_reader import merge_line_boxes
+    from veriscript.deva.reader import merge_line_boxes
 
     def tok(bbox):
         return Token(text="x", conf=90.0, bbox=bbox, backend="fake")
@@ -283,7 +283,7 @@ def test_reader_loads_a_real_checkpoint(tmp_path):
     import deva_crnn.predict as pr
     import deva_crnn.train as tr
     from deva_crnn.data import export_npz
-    from doc_data import render_devanagari_line
+    from veriscript.core.data import render_devanagari_line
 
     texts = ["कख", "ग१"]
     imgs = [render_devanagari_line(t, px=48) for t in texts]

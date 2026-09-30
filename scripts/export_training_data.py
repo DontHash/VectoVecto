@@ -29,11 +29,11 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
 from deva_crnn.augment import augment_line  # noqa: E402
 from deva_crnn.data import export_npz  # noqa: E402
 from deva_crnn.gate import heidata_line_crops  # noqa: E402
-from doc_data import synthesize_deva_lines  # noqa: E402
+from veriscript.core.data import synthesize_deva_lines  # noqa: E402
 
 
 def load_real_lines(real_dir: str):
@@ -151,7 +151,7 @@ def main():
         "counts": counts,
         "charset_size": len({c for t in texts for c in t}),
         "size_mb": round(os.path.getsize(args.out) / 1e6, 1),
-        "source": ("doc_data.synthesize_deva_lines + deva_crnn.gate."
+        "source": ("veriscript.core.data.synthesize_deva_lines + deva_crnn.gate."
                    "heidata_line_crops + label_real_lines + augment_line"),
         "corpus": args.corpus,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),

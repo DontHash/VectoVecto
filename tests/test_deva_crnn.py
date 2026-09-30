@@ -22,7 +22,7 @@ from deva_crnn.data import export_npz, load_npz, normalize_line  # noqa: E402
 from deva_crnn.model import CRNN  # noqa: E402
 from deva_crnn.predict import beam_search_decode  # noqa: E402
 from deva_crnn.train import train  # noqa: E402
-from doc_data import render_devanagari_line  # noqa: E402
+from veriscript.core.data import render_devanagari_line  # noqa: E402
 
 
 def _collapse(path, charset):

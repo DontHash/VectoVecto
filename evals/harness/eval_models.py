@@ -34,8 +34,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
 sys.path.insert(0, BASE_DIR)
 
 import bakeoff_models  # noqa: E402
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
 
 HEIDATA_DEFAULT = os.path.join(BASE_DIR, "data", "doc_eval", "heidata_printed")
 HEIDATA_LINES_DEFAULT = os.path.join(BASE_DIR, "data", "doc_eval",
@@ -155,7 +155,7 @@ def score_pages(cand, ctx, data_dir: str, lang: Optional[str],
         entries = entries[:limit]
     ref = None
     if with_reference and cand.name != "rapidocr":
-        from document_ocr import get_backend
+        from veriscript.document.ocr import get_backend
         ref = get_backend("rapidocr")
     cers, bags, digit_cers, inventories, misses, secs = [], [], [], [], [], []
     invented_tot = invented_digits = 0

@@ -15,7 +15,7 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import (build_synthetic_line_dataset,  # noqa: E402
+from veriscript.core.data import (build_synthetic_line_dataset,  # noqa: E402
                       render_devanagari_line, sample_deva_line_text,
                       synthesize_deva_lines, _corpus_line)
 
@@ -85,7 +85,7 @@ def test_synthetic_line_pool_is_digit_rich(tmp_path):
 
 
 def test_multi_font_pool_renders_distinct_lines():
-    from doc_data import available_deva_font_specs, synthesize_deva_lines
+    from veriscript.core.data import available_deva_font_specs, synthesize_deva_lines
     specs = available_deva_font_specs()
     assert specs, "at least one Devanagari font must be installed"
     imgs, texts = synthesize_deva_lines(24, seed=7, fonts=specs, jitter=True)
@@ -109,7 +109,7 @@ def test_letter_spacing_and_stretch_change_the_line():
 
 
 def test_cell_pool_is_short_and_digit_rich():
-    from doc_data import synthesize_deva_lines
+    from veriscript.core.data import synthesize_deva_lines
     imgs, texts = synthesize_deva_lines(60, seed=11, cell_frac=1.0)
     assert len(imgs) == 60
     assert all(len(t) <= 8 for t in texts), "cells must stay short"
@@ -125,7 +125,7 @@ def test_punctuation_parity_with_the_real_corpus():
     Measured gap (W1 attempt 3b): `(`/`)` occur 1 line in 23 in the real
     letterpress GT but 1 in 300 in training; the recognizer read `)` as `१`.
     """
-    from doc_data import synthesize_deva_lines
+    from veriscript.core.data import synthesize_deva_lines
     _imgs, texts = synthesize_deva_lines(600, seed=13)
     joined = "\n".join(texts)
     assert "(" in joined and ")" in joined, "parenthesized numbers missing"
@@ -140,7 +140,7 @@ def test_punctuation_parity_with_the_real_corpus():
 
 def test_pool_contains_long_lines_matching_real_widths():
     """Real letterpress lines are wide; the pool must cover 40-60 chars."""
-    from doc_data import synthesize_deva_lines
+    from veriscript.core.data import synthesize_deva_lines
     _imgs, texts = synthesize_deva_lines(400, seed=17)
     long_lines = [t for t in texts if len(t) >= 40]
     assert len(long_lines) >= 60, "at least ~15% of lines must be long"

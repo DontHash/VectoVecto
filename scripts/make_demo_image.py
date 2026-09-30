@@ -23,10 +23,10 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from degradation_document import degrade_page  # noqa: E402
-from document_export import write_overlay_png  # noqa: E402
-from document_pipeline import run_document_pipeline  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
+from veriscript.document.export import write_overlay_png  # noqa: E402
+from veriscript.document.pipeline import run_document_pipeline  # noqa: E402
 
 PANEL_H = 760
 GAP = 26

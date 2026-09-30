@@ -12,8 +12,8 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from smart_upscaler import SmartUpscaler, is_document, page_likeness  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.photo.upscaler import SmartUpscaler, is_document, page_likeness  # noqa: E402
 
 
 def test_page_likeness_separates_document_from_photo_like():
@@ -28,7 +28,7 @@ def test_page_likeness_separates_document_from_photo_like():
 
 
 def test_auto_routes_document_without_loading_photo_engine(monkeypatch):
-    import smart_upscaler
+    from veriscript.photo import upscaler as smart_upscaler
 
     page, _gt = doc_data.render_synthetic_invoice(seed=82, dpi=150)
     monkeypatch.setattr(smart_upscaler, "is_document", lambda img, threshold=0.45: True)
@@ -64,9 +64,9 @@ def test_is_document_threshold_default():
 
 
 def test_pipeline_primary_stream_follows_recommended_table(monkeypatch):
-    import document_ocr
-    import document_pipeline as dp
-    from document_ocr import OCRResult
+    from veriscript.document import ocr as document_ocr
+    from veriscript.document import pipeline as dp
+    from veriscript.document.ocr import OCRResult
 
     if "tesseract" not in document_ocr.available_backends():
         import pytest

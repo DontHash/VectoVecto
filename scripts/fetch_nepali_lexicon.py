@@ -35,7 +35,7 @@ from typing import Dict, List, Optional, Tuple
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from lexicon import MIN_WORD_LEN, is_deva_word, normalize_word  # noqa: E402
+from veriscript.lexicon import MIN_WORD_LEN, is_deva_word, normalize_word  # noqa: E402
 
 WORDLIST_URL = ("https://raw.githubusercontent.com/tesseract-ocr/langdata/"
                 "master/nep/nep.wordlist")

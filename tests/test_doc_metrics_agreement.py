@@ -14,7 +14,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_metrics import three_way_agreement  # noqa: E402
+from veriscript.core.metrics import three_way_agreement  # noqa: E402
 
 
 def test_identical_readings_agree_fully():

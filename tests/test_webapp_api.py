@@ -48,7 +48,7 @@ def _fake_pipeline(captured: dict | None = None):
     the artifacts the web layer copies to canonical names."""
     import numpy as np
 
-    from document_ocr import OCRResult, Token
+    from veriscript.document.ocr import OCRResult, Token
 
     class _FakeResult:
         def __init__(self):
@@ -126,7 +126,7 @@ def test_restore_rejects_an_empty_file(client):
 
 
 def test_restore_happy_path_serves_the_markdown(client, monkeypatch):
-    import document_pipeline
+    from veriscript.document import pipeline as document_pipeline
 
     monkeypatch.setattr(document_pipeline, "run_document_pipeline",
                         _fake_pipeline())
@@ -148,7 +148,7 @@ def test_restore_happy_path_serves_the_markdown(client, monkeypatch):
 
 
 def test_restore_threads_engine_and_options(client, monkeypatch):
-    import document_pipeline
+    from veriscript.document import pipeline as document_pipeline
 
     captured: dict = {}
     monkeypatch.setattr(document_pipeline, "run_document_pipeline",
@@ -166,7 +166,7 @@ def test_restore_threads_engine_and_options(client, monkeypatch):
 
 
 def test_output_toggles_hide_artifacts(client, monkeypatch):
-    import document_pipeline
+    from veriscript.document import pipeline as document_pipeline
 
     monkeypatch.setattr(document_pipeline, "run_document_pipeline",
                         _fake_pipeline())
@@ -182,7 +182,7 @@ def test_output_toggles_hide_artifacts(client, monkeypatch):
 def test_pdf_upload_is_loaded_as_a_pdf(client, tmp_path, monkeypatch):
     """Regression: streamed uploads have no extension; the validator's kind
     must decide the loader, not the filename on disk."""
-    import document_pipeline
+    from veriscript.document import pipeline as document_pipeline
     from reportlab.pdfgen import canvas
 
     pdf = tmp_path / "one.pdf"
@@ -205,7 +205,7 @@ def test_pdf_upload_is_loaded_as_a_pdf(client, tmp_path, monkeypatch):
 
 
 def test_all_pages_writes_combined_outputs(client, tmp_path, monkeypatch):
-    import document_pipeline
+    from veriscript.document import pipeline as document_pipeline
     from reportlab.pdfgen import canvas
 
     pdf = tmp_path / "three.pdf"

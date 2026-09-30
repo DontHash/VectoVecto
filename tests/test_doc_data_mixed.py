@@ -16,7 +16,7 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import (build_mixed_dataset, build_photo_proxy_dataset,  # noqa: E402
+from veriscript.core.data import (build_mixed_dataset, build_photo_proxy_dataset,  # noqa: E402
                       load_dataset, render_mixed_document)
 
 
@@ -75,7 +75,7 @@ def test_photo_region_has_texture_variance():
 
 
 def test_build_photo_proxy_degrades_and_reuses_gt(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)
@@ -100,7 +100,7 @@ def test_build_photo_proxy_degrades_and_reuses_gt(tmp_path):
 
 
 def test_build_photo_proxy_is_deterministic(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)

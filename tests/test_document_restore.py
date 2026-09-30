@@ -18,8 +18,8 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-from document_restore import (  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.document.restore import (  # noqa: E402
     build_ocr_stream, estimate_skew, flatten_illumination, restore_document, rotate,
 )
 
@@ -85,7 +85,8 @@ def test_restore_contract():
         assert key in dbg
 
 
-@pytest.mark.skipif("rapidocr" not in __import__("document_ocr").available_backends(),
+@pytest.mark.skipif("rapidocr" not in __import__("veriscript.document.ocr",
+                                                 fromlist=["available_backends"]).available_backends(),
                     reason="rapidocr unavailable")
 def test_pipeline_boxes_stay_inside_downscaled_display():
     """Geometry contract: display, OCR boxes and exported page share one space.
@@ -94,7 +95,7 @@ def test_pipeline_boxes_stay_inside_downscaled_display():
     display was fitted to MAX_SIDE, so boxes (and PDF text) fell outside the
     exported page.
     """
-    from document_pipeline import run_document_pipeline
+    from veriscript.document.pipeline import run_document_pipeline
 
     page, _gt = doc_data.render_synthetic_invoice(seed=502, dpi=300)
     assert max(page.shape[:2]) > 2500

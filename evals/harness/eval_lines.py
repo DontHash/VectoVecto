@@ -35,9 +35,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import available_backends, get_backend, normalize_lang  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import available_backends, get_backend, normalize_lang  # noqa: E402
 
 Recognizer = Callable[[np.ndarray], Tuple[str, float]]
 

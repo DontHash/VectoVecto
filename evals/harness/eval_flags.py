@@ -30,9 +30,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
-from document_ocr import apply_digit_verifier, ocr_page, review_queue  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
+from veriscript.document.ocr import apply_digit_verifier, ocr_page, review_queue  # noqa: E402
 
 DEVA_DIGITS = {chr(0x0966 + i) for i in range(10)}
 
@@ -180,7 +180,7 @@ def main():
 
     verifier = None
     if args.digit_verifier != "off":
-        from document_verifier import get_digit_verifier
+        from veriscript.document.verifier import get_digit_verifier
         verifier = get_digit_verifier(args.digit_verifier)
         print(f"[flags] digit verifier enabled: {args.digit_verifier}")
 

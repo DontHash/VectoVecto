@@ -25,8 +25,8 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
-import doc_metrics  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core import metrics as doc_metrics  # noqa: E402
 
 
 def _logit(p):
@@ -35,7 +35,7 @@ def _logit(p):
 
 
 def collect_pairs(data_dir: str, lang: str) -> List[Tuple[float, bool]]:
-    from document_ocr import ocr_page
+    from veriscript.document.ocr import ocr_page
     manifest = doc_data.load_dataset(data_dir)
     pairs: List[Tuple[float, bool]] = []
     for e in manifest["entries"]:
@@ -126,7 +126,7 @@ def fit_isotonic(pairs: List[Tuple[float, bool]], n_bins: int = 20) -> Dict:
 
 
 def apply_isotonic(conf_pct: float, mapping: Dict) -> float:
-    from calibration import apply_isotonic as _apply
+    from veriscript.calibration import apply_isotonic as _apply
     return _apply(conf_pct, mapping)
 
 

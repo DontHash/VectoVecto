@@ -26,7 +26,7 @@ from typing import Dict, List, Sequence
 
 import jiwer
 
-from document_ocr import Token, review_queue
+from veriscript.document.ocr import Token, review_queue
 
 _PUNCT = ".,;:!?()[]{}\"'`“”‘’«»·-–—/\\|@#$%^&*+=~<>"
 
@@ -572,7 +572,7 @@ def ece(tokens: Sequence[Token], gt_text: str, bins: int = 10,
 
 
 if __name__ == "__main__":
-    from document_ocr import Token as T
+    from veriscript.document.ocr import Token as T
 
     gt = "INVOICE 1200.00 Total Amount"
     hyp = "INVOICE 1200.00 Total Am0unt"

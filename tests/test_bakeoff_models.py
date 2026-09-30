@@ -17,8 +17,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 import bakeoff_models  # noqa: E402
-import doc_data  # noqa: E402
-from doc_metrics import bag_stats, digit_exact, digit_string  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core.metrics import bag_stats, digit_exact, digit_string  # noqa: E402
 from eval_models import iter_heidata_lines, score_lines  # noqa: E402
 
 

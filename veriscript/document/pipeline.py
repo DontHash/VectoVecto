@@ -30,14 +30,14 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from document_ocr import (RECOMMENDED_STREAM, OCRResult, apply_digit_verifier,
+from veriscript.document.ocr import (RECOMMENDED_STREAM, OCRResult, apply_digit_verifier,
                           available_backends, compare_digit_streams, get_backend,
                           ocr_page, review_queue)
-from document_orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
+from veriscript.document.orientation import (VERTICAL_ACTION, VOTE180_FRAC, VOTE180_HI,
                                   RotationInfo, detect_rotation, infer_angle,
                                   rotate_bgr, vertical_fraction)
-from document_restore import fit_max_side, restore_document
-from logging_setup import get_logger
+from veriscript.document.restore import fit_max_side, restore_document
+from veriscript.logging_setup import get_logger
 
 _LOG = get_logger("document_pipeline")
 
@@ -100,7 +100,7 @@ def resolve_repass_digits(repass_digits: Optional[bool],
     """
     if repass_digits is not None:
         return repass_digits
-    from document_ocr import normalize_lang
+    from veriscript.document.ocr import normalize_lang
     return normalize_lang(lang) == "devanagari"
 
 
@@ -246,7 +246,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     result.meta["skew_angle"] = p.restored["debug"]["skew_angle"]
 
     if reading_order:
-        from document_layout import sort_reading_order, text_in_order
+        from veriscript.document.layout import sort_reading_order, text_in_order
         before = [t.text for t in result.tokens]
         stats: Dict = {}
         result.tokens = sort_reading_order(result.tokens, stats=stats)
@@ -276,13 +276,13 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     }
 
     if mixed_router:
-        from document_router import route_page
+        from veriscript.document.router import route_page
         p.display = route_page(img_bgr, p.display, result.tokens)
         result.meta["mixed_router"] = True
 
     outputs: Dict[str, str] = {}
     if out_dir:
-        from document_export import export_document_outputs
+        from veriscript.document.export import export_document_outputs
         outputs = export_document_outputs(
             out_dir, stem, p.display, result, dpi=dpi,
             make_pdf=make_pdf, make_overlay=make_overlay, make_txt=make_txt,
@@ -321,10 +321,8 @@ def _osd_sideways(img_bgr: np.ndarray) -> RotationInfo:
 
 if __name__ == "__main__":
     import sys
-
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import doc_data
-    from degradation_document import degrade_page
+    from veriscript.core import data as doc_data
+    from veriscript.core.degradation import degrade_page
 
     page, _gt = doc_data.render_synthetic_invoice(seed=61, dpi=200)
     degraded = degrade_page(page, seed=6101, level="medium")

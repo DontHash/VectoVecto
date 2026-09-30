@@ -19,7 +19,7 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from smart_upscaler import SmartUpscaler, smart_upscale, ContentAnalysis
+from veriscript.photo.upscaler import SmartUpscaler, smart_upscale, ContentAnalysis
 
 @pytest.fixture(scope="module")
 def upscaler():

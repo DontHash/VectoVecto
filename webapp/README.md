@@ -14,7 +14,7 @@ and the offline promise — underneath.
   The ink ladder is hard-coded, not alpha — 900 ≈ 17:1, 700 ≈ 9.3:1,
   500 ≈ 7.1:1 on the paper — so nothing washes out against the grain.
 - **Backend** — FastAPI (`vvweb/`) around the repo's own pipeline
-  (`document_pipeline.run_document_pipeline`). The same pipeline the CLI runs;
+  (`veriscript.document.pipeline.run_document_pipeline`). The same pipeline the CLI runs;
   only the delivery is different.
 - **Shared studio** — `lib/studio-state.ts` (one state factory) +
   `components/StudioPanel.tsx` / `StudioResults.tsx`, embedded by both the

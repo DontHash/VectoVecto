@@ -197,10 +197,8 @@ def restore_document(img_bgr: np.ndarray, *, scale: int = 1,
 if __name__ == "__main__":
     import os
     import sys
-
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import doc_data
-    from degradation_document import degrade_page
+    from veriscript.core import data as doc_data
+    from veriscript.core.degradation import degrade_page
 
     page, gt = doc_data.render_synthetic_invoice(seed=5)
     deg = degrade_page(page, seed=5, level="heavy")
@@ -211,10 +209,10 @@ if __name__ == "__main__":
     cv2.imwrite("out/api_check/restore_display.png", out["display_bgr"])
     cv2.imwrite("out/api_check/restore_ocr.png", out["ocr_bgr"])
 
-    from document_ocr import ocr_page
+    from veriscript.document.ocr import ocr_page
     raw_cer = None
     try:
-        import doc_metrics
+        from veriscript.core import metrics as doc_metrics
         raw = ocr_page(deg, backend="rapidocr")
         res = ocr_page(out["ocr_bgr"], backend="rapidocr")
         raw_cer = doc_metrics.cer(gt, raw.text)

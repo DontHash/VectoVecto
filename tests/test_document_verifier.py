@@ -16,9 +16,9 @@ import pytest
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from document_ocr import (RISK_WEIGHTS, Token, apply_digit_verifier,  # noqa: E402
+from veriscript.document.ocr import (RISK_WEIGHTS, Token, apply_digit_verifier,  # noqa: E402
                           available_backends)
-from document_verifier import get_digit_verifier  # noqa: E402
+from veriscript.document.verifier import get_digit_verifier  # noqa: E402
 
 
 def _tok(text, conf=90, bbox=(10, 10, 120, 40)):
@@ -89,8 +89,8 @@ def test_verifier_weight_in_queue():
 @pytest.mark.skipif("rapidocr" not in available_backends(),
                     reason="rapidocr unavailable")
 def test_pipeline_verifier_scope_all_covers_unflagged_digit_tokens():
-    import doc_data
-    from document_pipeline import run_document_pipeline
+    from veriscript.core import data as doc_data
+    from veriscript.document.pipeline import run_document_pipeline
 
     page, _gt = doc_data.render_synthetic_invoice(seed=301, dpi=150)
 
@@ -143,7 +143,7 @@ def test_apply_digit_verifier_verifies_riskiest_first():
 
 
 def test_repass_default_is_devanagari_only():
-    from document_pipeline import resolve_repass_digits
+    from veriscript.document.pipeline import resolve_repass_digits
 
     assert resolve_repass_digits(None, "ne") is True
     assert resolve_repass_digits(None, "nepali") is True

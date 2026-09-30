@@ -38,6 +38,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Repo restructure (cosmetic).** Root product modules moved into the
+  `veriscript/` package — `core/` (dataset IO, metrics, degradation),
+  `document/` (the pipeline), `deva/` (line reader), `photo/` (parked
+  upscaling stack); `veriscript/paths.py` keeps `data/`, `weights/`,
+  `fonts/` and `calibration/` resolution. `python cli.py` still works (root
+  launcher) and `python -m veriscript` / the `veriscript` console script are
+  the package entry points. Packaging (`pyproject.toml`, PyInstaller spec,
+  Docker `COPY`) and the structure docs updated; four stray test-generated
+  PNGs removed from the root (they were already gitignored). Fixed a
+  pre-existing `--help` crash (`-42%` in an argparse help string).
 - **Project renamed: VectoVecto → VeriScript.** Brand surfaces (README,
   docs, studio UI, package metadata, Docker tags, repo links) use the new
   name; `VERISCRIPT_*` env vars are the current prefix and `VECTOVECTO_*`

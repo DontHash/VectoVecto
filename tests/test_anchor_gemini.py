@@ -88,7 +88,7 @@ def test_transcribe_page_raises_after_retries():
 
 
 def test_run_resume_reuses_existing_text_without_calling(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)
@@ -109,7 +109,7 @@ def test_run_resume_reuses_existing_text_without_calling(tmp_path):
 
 
 def test_run_records_failures_and_continues(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "two.pdf")
     from reportlab.pdfgen import canvas
@@ -129,7 +129,7 @@ def test_run_records_failures_and_continues(tmp_path):
 
 
 def test_run_writes_verified_files_and_readings(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)

@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from vector_raster_hybrid import (
+from veriscript.photo.hybrid import (
     Point2D, CubicBezier, fit_cubic_bezier_segment, fit_curve_recursive,
     vectorize_contour, compute_structure_tensor, segment_flat_and_graphic_regions,
     extract_vector_shapes, render_vector_shapes, export_svg,

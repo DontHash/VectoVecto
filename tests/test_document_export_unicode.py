@@ -18,11 +18,11 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-import document_export as de  # noqa: E402
-from document_export import (unicode_font_path, unicode_pdf_font,  # noqa: E402
+from veriscript.document import export as de  # noqa: E402
+from veriscript.document.export import (unicode_font_path, unicode_pdf_font,  # noqa: E402
                              write_overlay_png, write_searchable_pdf,
                              write_searchable_pdf_pages)
-from document_ocr import Token  # noqa: E402
+from veriscript.document.ocr import Token  # noqa: E402
 
 
 def _extract(path: str) -> str:

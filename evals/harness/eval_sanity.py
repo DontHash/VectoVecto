@@ -23,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 sys.path.insert(0, BASE_DIR)
 
-import doc_data  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
 
 
 def run_audit(entries: List[Dict], pipeline_fn, lang: str | None = None,
@@ -114,7 +114,7 @@ def main():
         entries = entries[:args.limit]
     print(f"[sanity] {len(entries)} pages from {args.data_dir}")
 
-    from document_pipeline import run_document_pipeline
+    from veriscript.document.pipeline import run_document_pipeline
     result = run_audit(entries, run_document_pipeline, lang=args.lang)
     print_report(result)
     if args.json:

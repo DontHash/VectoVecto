@@ -38,9 +38,9 @@ sys.path.insert(0, BASE_DIR)
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
-import doc_data  # noqa: E402
-from degradation_document import degrade_page  # noqa: E402
-from document_ocr import _crop_with_pad, get_backend  # noqa: E402
+from veriscript.core import data as doc_data  # noqa: E402
+from veriscript.core.degradation import degrade_page  # noqa: E402
+from veriscript.document.ocr import _crop_with_pad, get_backend  # noqa: E402
 
 SRC_V2 = os.path.join(BASE_DIR, "data", "doc_eval", "nepali_pdf_sources_v2")
 SRC_CORNELL = os.path.join(BASE_DIR, "data", "doc_eval",

@@ -97,4 +97,4 @@ registers, +22pp on their degraded photo proxies) — so it ships **opt-in**
   attribution requirement (see [LICENSES.md](LICENSES.md)).
 - Modern-PDF line crops derive from Nepali government publications (internal
   evaluation use only; the derived npz datasets on Kaggle are private).
-- Synthetic data is generated locally by `doc_data.py` (Qt-shaped rendering).
+- Synthetic data is generated locally by `veriscript/core/data.py` (Qt-shaped rendering).

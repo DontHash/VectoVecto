@@ -16,7 +16,7 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from doc_data import imread_safe, imwrite_safe  # noqa: E402
+from veriscript.core.data import imread_safe, imwrite_safe  # noqa: E402
 
 
 def test_unicode_filename_roundtrip(tmp_path):

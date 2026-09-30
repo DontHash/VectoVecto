@@ -74,7 +74,7 @@ def test_harvest_accepts_and_keeps_clean(tmp_path, monkeypatch):
 
 
 def test_probe_pdf_reports_invalid_rate(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)
@@ -84,7 +84,7 @@ def test_probe_pdf_reports_invalid_rate(tmp_path):
 
 
 def test_probe_pdf_releases_file_lock(tmp_path):
-    import doc_data
+    from veriscript.core import data as doc_data
 
     pdf = str(tmp_path / "demo.pdf")
     doc_data.make_demo_pdf(pdf)

@@ -42,7 +42,7 @@ from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from document_ocr import Token
+from veriscript.document.ocr import Token
 
 # A gutter x-run may be crossed by at most this share of token boxes (measured:
 # arXiv renders 0-5%, SROIE receipts never produce a candidate at all).
@@ -512,7 +512,7 @@ def text_in_order(tokens: Sequence[Token]) -> str:
 
 
 if __name__ == "__main__":
-    from document_ocr import Token as T
+    from veriscript.document.ocr import Token as T
 
     words = []
     for i in range(6):

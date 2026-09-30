@@ -15,7 +15,7 @@ import sys
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from logging_setup import configure_logging, get_logger  # noqa: E402
+from veriscript.logging_setup import configure_logging, get_logger  # noqa: E402
 
 
 def test_get_logger_prefixes_root():
