@@ -38,6 +38,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Landing page simplified.** The site is now hero + real examples + the
+  offline/install story, with a **Try it** call to action into `/studio`
+  (no signup, no account; demo files deleted after the retention window).
+  The "How it reads", "Review queue" and "Evidence" sections were removed
+  from the site — that detail lives in the repo docs (README, EVALUATION,
+  ARCHITECTURE). Nav/footer pointers updated and the offline section's
+  install commands fixed (`python -m veriscript`, `python webapp/server.py`).
 - **Repo restructure (cosmetic).** Root product modules moved into the
   `veriscript/` package — `core/` (dataset IO, metrics, degradation),
   `document/` (the pipeline), `deva/` (line reader), `photo/` (parked

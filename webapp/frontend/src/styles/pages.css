@@ -114,6 +114,13 @@
   color: var(--text-3);
 }
 
+.hero__cta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
 /* ---------- the studio panel (homepage hero + studio page) ---------- */
 
 .panel-card {
@@ -130,6 +137,12 @@
   padding-bottom: var(--space-4);
   margin-bottom: var(--space-6);
   border-bottom: var(--rule) solid var(--line);
+}
+
+.panel-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .panel {

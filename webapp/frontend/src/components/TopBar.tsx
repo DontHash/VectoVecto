@@ -15,14 +15,8 @@ export function TopBar() {
           <a class="nav-link" href="/#examples">
             Examples
           </a>
-          <a class="nav-link" href="/#pipeline">
-            How it reads
-          </a>
-          <a class="nav-link" href="/#queue">
-            Review queue
-          </a>
-          <a class="nav-link" href="/#evidence">
-            Evidence
+          <a class="nav-link" href="/#offline">
+            Offline
           </a>
         </nav>
 
@@ -36,7 +30,7 @@ export function TopBar() {
             GitHub
           </a>
           <A class="btn btn--ghost btn--small" href="/studio" data-active={isStudio()}>
-            Open the studio
+            Try it
           </A>
         </div>
       </div>

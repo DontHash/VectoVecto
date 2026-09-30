@@ -1,9 +1,9 @@
 # VeriScript Studio — web app
 
-A clean web front door for the document pipeline: **the homepage is the product**
-(the studio sits in the hero, and a run's results appear straight below it), with
-the story — real examples, how it reads, the live review queue, measured numbers,
-and the offline promise — underneath.
+A clean web front door for the document pipeline: a short landing page
+(hero, real examples, the offline/install story) with a **Try it** call to
+action into `/studio`, where the full product runs on one page — drop a file,
+watch the results, download the outputs.
 
 - **Frontend** — SolidJS + TypeScript + Vite, hand-built design system
   (`src/styles/tokens.css`), three.js only for the studio's empty-state "desk"
@@ -17,8 +17,8 @@ and the offline promise — underneath.
   (`veriscript.document.pipeline.run_document_pipeline`). The same pipeline the CLI runs;
   only the delivery is different.
 - **Shared studio** — `lib/studio-state.ts` (one state factory) +
-  `components/StudioPanel.tsx` / `StudioResults.tsx`, embedded by both the
-  homepage hero and `/studio`.
+  `components/StudioPanel.tsx` / `StudioResults.tsx`, used by the `/studio`
+  page (the landing page funnels there via **Try it**).
 
 ## Run it
 

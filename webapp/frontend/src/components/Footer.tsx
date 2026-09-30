@@ -12,18 +12,15 @@ export function Footer() {
         </div>
 
         <div class="footer__col">
-          <span class="eyebrow">Read</span>
+          <span class="eyebrow">Explore</span>
           <a class="footer__link" href="/#examples">
             Real examples
           </a>
-          <a class="footer__link" href="/#pipeline">
-            How it reads a page
+          <a class="footer__link" href="/#offline">
+            Runs offline
           </a>
-          <a class="footer__link" href="/#queue">
-            The review queue
-          </a>
-          <a class="footer__link" href="/#evidence">
-            Measured numbers
+          <a class="footer__link" href="/studio">
+            Try the studio
           </a>
         </div>
 

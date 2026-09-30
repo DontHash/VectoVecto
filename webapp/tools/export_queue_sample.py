@@ -1,8 +1,9 @@
 """Export real review-queue samples into the frontend as typed data.
 
 Reads the run JSONs produced by the brag asset pipeline and writes
-frontend/src/lib/queue-sample.ts. The values are verbatim, so the landing
-page's queue table is the same data the video and README show.
+frontend/src/lib/queue-sample.ts on demand (the current landing page no
+longer embeds the queue, but the same verbatim sample is what the video and
+README materials use).
 
     python webapp/tools/export_queue_sample.py
 """
