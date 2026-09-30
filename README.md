@@ -148,6 +148,7 @@ docs/                     architecture, evaluation, deployment, licensing, plan
 | [docs/LICENSES.md](docs/LICENSES.md) | dependency + model license gate |
 | [docs/RELEASE.md](docs/RELEASE.md) | release checklist, versioning, desktop packaging path |
 | [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md) | web studio: audit, diet and phased plan |
+| [docs/MARKET.md](docs/MARKET.md) | market landscape, competitors, positioning |
 | [docs/PLAN.md](docs/PLAN.md) | the full research log and decision record |
 
 ## Tests
