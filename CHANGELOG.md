@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format follows
 - **Markdown output**: every document run writes `<stem>.md` (web:
   `transcript.md`) — the reading-order transcript plus the review queue as a
   table; CLI knob `--no-md`, download link in the web studio.
+- README: head-to-head comparison matrix on the frozen hard-10 (CER / median /
+  bagCER / invented / speed / lightweight-heavy) and explicit PDF → Markdown
+  usage + real output filenames; sources in `evals/bakeoff_results.md`.
 - CI: a frontend build job (Node 22) and the first `webapp` tests
   (`tests/test_webapp_api.py`).
 - **Web document parity (P2)**: the studio exposes the OCR engine choice
