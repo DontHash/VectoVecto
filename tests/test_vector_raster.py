@@ -176,12 +176,14 @@ def test_hybrid_upscaling_benchmark():
     print(f"  Bicubic Graphic ROI  : {psnr_graphic_bicubic:.2f} dB")
     print(f"  Phase 4.5 Graphic ROI: {psnr_graphic_hybrid:.2f} dB")
 
-    # Save visual verification sheet
-    cv2.imwrite("test_hr.png", hr)
-    cv2.imwrite("test_lr.png", lr)
-    cv2.imwrite("test_bicubic.png", upscaled_bicubic)
-    cv2.imwrite("test_hybrid_4_5.png", upscaled_hybrid)
-    print("\nVisual verification images saved: test_bicubic.png, test_hybrid_4_5.png")
+    # Save visual verification sheet (gitignored out/, keeps the repo root clean)
+    vis_dir = os.path.join(BASE_DIR, "out", "vector_raster")
+    os.makedirs(vis_dir, exist_ok=True)
+    cv2.imwrite(os.path.join(vis_dir, "test_hr.png"), hr)
+    cv2.imwrite(os.path.join(vis_dir, "test_lr.png"), lr)
+    cv2.imwrite(os.path.join(vis_dir, "test_bicubic.png"), upscaled_bicubic)
+    cv2.imwrite(os.path.join(vis_dir, "test_hybrid_4_5.png"), upscaled_hybrid)
+    print(f"\nVisual verification images saved under {vis_dir}")
 
     assert upscaled_hybrid.shape == hr.shape, "Output shape mismatch"
     print("  -> Benchmark complete and verified!")

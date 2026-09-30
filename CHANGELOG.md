@@ -46,7 +46,8 @@ All notable changes to this project are documented here. The format follows
   launcher) and `python -m veriscript` / the `veriscript` console script are
   the package entry points. Packaging (`pyproject.toml`, PyInstaller spec,
   Docker `COPY`) and the structure docs updated; four stray test-generated
-  PNGs removed from the root (they were already gitignored). Fixed a
+  PNGs removed from the root (they were already gitignored) and the vector
+  benchmark now writes them under `out/vector_raster/`. Fixed a
   pre-existing `--help` crash (`-42%` in an argparse help string).
 - **Project renamed: VectoVecto → VeriScript.** Brand surfaces (README,
   docs, studio UI, package metadata, Docker tags, repo links) use the new
