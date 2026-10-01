@@ -92,6 +92,11 @@ kaggle.json
 KGAT_*
 key_*.txt
 
+# ===== Environment / API credentials (NEVER commit these) =====
+.env
+.env.*
+!.env.example
+
 # ===== OS junk =====
 .DS_Store
 Thumbs.db

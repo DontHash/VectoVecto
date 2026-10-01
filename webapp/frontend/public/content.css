@@ -1,0 +1,357 @@
+/* ==========================================================================
+   Static content pages (crawlable HTML served from public/).
+   Shares the studio's palette and type: warm paper, one ink, one amber accent.
+   ========================================================================== */
+
+@font-face {
+  font-family: "Instrument Serif";
+  src: url("/fonts/instrument-serif-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Mukta";
+  src: url("/fonts/mukta-400.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --paper: #f4f0e6;
+  --surface: #fcfaf4;
+  --surface-deep: #e7e1d2;
+  --ink: #120e08;
+  --ink-2: #443e33;
+  --ink-3: #544f45;
+  --line: rgba(22, 18, 12, 0.16);
+  --line-soft: rgba(22, 18, 12, 0.08);
+  --amber: #e8a200;
+  --amber-dark: #c99000;
+  --green: #008a00;
+  --red: #d40000;
+  --mono: "IBM Plex Mono", "Courier New", monospace;
+  --display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --body: "Mukta", "Nirmala UI", "Noto Sans Devanagari", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: var(--amber);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--amber-dark);
+}
+
+.wrap {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ---------------------------------------------------------------- nav */
+
+.nav {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.nav__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  flex-wrap: wrap;
+}
+
+.nav__brand {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.nav__brand strong {
+  color: var(--amber-dark);
+}
+
+.nav__links {
+  display: flex;
+  gap: 18px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.nav__links a {
+  text-decoration: none;
+}
+
+.nav__links a:hover {
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------- hero */
+
+.hero {
+  padding: 64px 0 20px;
+}
+
+.kicker {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 18px;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(40px, 6vw, 64px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  margin: 0 0 22px;
+}
+
+.answer {
+  font-size: 21px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 46em;
+  margin: 0 0 26px;
+}
+
+.cta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+}
+
+.btn {
+  display: inline-block;
+  background: var(--amber);
+  color: var(--ink);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 13px 22px;
+  border: 1px solid var(--amber-dark);
+}
+
+.btn:hover {
+  background: var(--amber-dark);
+  color: var(--ink);
+}
+
+.textlink {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+}
+
+/* ---------------------------------------------------------------- media */
+
+figure {
+  margin: 40px 0;
+}
+
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+figcaption {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 10px;
+}
+
+/* ---------------------------------------------------------------- sections */
+
+section {
+  padding: 36px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+}
+
+h3 {
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 20px;
+  margin: 26px 0 8px;
+}
+
+p {
+  margin: 0 0 16px;
+  color: var(--ink-2);
+}
+
+ul,
+ol {
+  margin: 0 0 16px;
+  padding-left: 22px;
+  color: var(--ink-2);
+}
+
+li {
+  margin-bottom: 8px;
+}
+
+strong {
+  color: var(--ink);
+  font-weight: 400;
+  border-bottom: 1px solid var(--amber);
+}
+
+/* ---------------------------------------------------------------- table */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  margin: 8px 0 20px;
+}
+
+th {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: left;
+  font-weight: 400;
+  border-bottom: 1px solid var(--ink);
+  padding: 8px 10px 8px 0;
+}
+
+td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 10px 10px 10px 0;
+  vertical-align: top;
+  color: var(--ink-2);
+}
+
+td:first-child {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- notes */
+
+.note {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 18px 20px;
+  margin: 20px 0;
+}
+
+.note p:last-child {
+  margin-bottom: 0;
+}
+
+.legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 14px 0 0;
+}
+
+.legend span::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: baseline;
+}
+
+.legend .green::before { background: var(--green); }
+.legend .amber::before { background: var(--amber); }
+.legend .red::before { background: var(--red); }
+
+/* ---------------------------------------------------------------- faq */
+
+.faq h3 {
+  margin-top: 24px;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+footer.site {
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  margin-top: 40px;
+  padding: 28px 0 40px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+footer.site a {
+  text-decoration: none;
+}
+
+footer.site a:hover {
+  text-decoration: underline;
+}
+
+footer.site p {
+  color: var(--ink-3);
+  margin: 0 0 8px;
+}
+
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .hero { padding-top: 40px; }
+  h2 { font-size: 27px; }
+}

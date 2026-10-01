@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nepali OCR — offline Devanagari OCR with a digit review queue | VeriScript</title>
+    <meta
+      name="description"
+      content="Free Nepali OCR that runs offline: photos, scans and PDFs into searchable PDFs, text and Markdown — with every uncertain digit flagged for review instead of guessed. Measured on frozen Devanagari sets."
+    />
+    <link rel="canonical" href="https://veriscript.live/nepali-ocr/" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="VeriScript" />
+    <meta property="og:title" content="Nepali OCR that does not guess your numbers" />
+    <meta
+      property="og:description"
+      content="Photos, scans and PDFs into searchable PDFs and Markdown — offline, with a numbered review queue for uncertain digits. Measured on frozen Devanagari sets."
+    />
+    <meta property="og:url" content="https://veriscript.live/nepali-ocr/" />
+    <meta property="og:image" content="https://veriscript.live/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/content.css" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": "https://veriscript.live/nepali-ocr/#page",
+            "url": "https://veriscript.live/nepali-ocr/",
+            "name": "Nepali OCR — offline Devanagari OCR with a digit review queue",
+            "inLanguage": "en",
+            "isPartOf": { "@id": "https://veriscript.live/#website" },
+            "about": { "@id": "https://veriscript.live/#software" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "VeriScript", "item": "https://veriscript.live/" },
+              { "@type": "ListItem", "position": 2, "name": "Nepali OCR" }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is there a free Nepali OCR that works offline?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. VeriScript is open source (MIT) and runs on your machine — no cloud calls, no telemetry, no account. The hosted studio at veriscript.live is only a demo and deletes uploads after 60 minutes."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How accurate is VeriScript's Nepali OCR?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "On frozen, hash-verified sets: modern Devanagari government PDFs score CER 0.135 [0.097–0.186] and letterpress books CER 0.434 [0.387–0.481]. The review queue surfaces 88% of wrong digits (letterpress) and 38% (government PDFs) within its first ten rows. Full tables and reproduction commands are in the public benchmark."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does it read Nepali handwriting?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. VeriScript is for printed text — letterpress, government PDFs, newspapers, invoices. Handwriting is a weak point and better served by other tools; saying so is part of the honesty the project is built on."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does my document leave my machine?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "With a local install, no — the pipeline runs with networking disabled. The demo studio processes the page on the server and deletes it after the 60-minute retention window. Nothing about page content is logged."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I use it commercially?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The VeriScript code is MIT and the OCR stack is Apache-2.0. The optional photo-upscaler weights are non-commercial and are excluded from commercial builds; the document studio does not include them."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does it output a searchable PDF?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes — a cleaned page with an invisible Unicode text layer (Devanagari included, bundled Mukta font) alongside the restored image, a numbered review overlay, plain text, Markdown and OCR JSON."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+
+  <body>
+    <header class="nav">
+      <div class="wrap nav__row">
+        <a class="nav__brand" href="/"><strong>Veri</strong>Script · offline document restoration</a>
+        <nav class="nav__links" aria-label="Links">
+          <a href="/studio">Live studio</a>
+          <a href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md">Benchmark</a>
+          <a href="https://github.com/DontHash/VeriScript">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap hero">
+        <p class="kicker">Nepali OCR · Devanagari first · offline by design</p>
+        <h1>Nepali OCR that does not guess your numbers.</h1>
+        <p class="answer">
+          VeriScript reads printed Devanagari from photos, scans and PDFs and turns it into a
+          searchable PDF, plain text and Markdown. When a digit is uncertain it is flagged with
+          its alternative reading in a numbered review queue — instead of being silently
+          guessed. It runs on your machine; no account, no cloud calls.
+        </p>
+        <div class="cta">
+          <a class="btn" href="/studio">Try it on one page</a>
+          <a class="textlink" href="#accuracy">See the measured numbers ↓</a>
+        </div>
+
+        <figure>
+          <img
+            src="/examples/letterpress-overlay.jpg"
+            alt="A 1955 Nepali letterpress page restored by VeriScript, with numbered review boxes: green for accepted text, amber for uncertain, red for digit conflicts with the alternative reading kept beside the box."
+            width="1500"
+            height="2445"
+            loading="lazy"
+          />
+          <figcaption>
+            Real pipeline output on a 1955 letterpress page (heiDATA, CC BY 4.0). Green =
+            accepted; amber = uncertain; red = digit conflict, alternative reading kept.
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="wrap">
+        <section id="what">
+          <h2>What do you get from a page?</h2>
+          <ul>
+            <li><strong>Searchable PDF</strong> — the cleaned page plus an invisible Unicode text layer, Devanagari included (bundled Mukta font). Selectable and copyable.</li>
+            <li><strong>Review overlay</strong> — the page with numbered boxes: accepted, uncertain, and digit conflicts with the alternative reading kept next to the box.</li>
+            <li><strong>Transcript</strong> — reading-order plain text, with layout decided from evidence (columns, tables, rotation), not defaults.</li>
+            <li><strong>Markdown</strong> — the transcript plus the review queue as a table, ready for notes or a CMS.</li>
+            <li><strong>OCR JSON</strong> — every token, risk flag, and the orientation/reading-order evidence behind the decisions.</li>
+          </ul>
+        </section>
+
+        <section id="review">
+          <h2>Why a review queue, and not just OCR text?</h2>
+          <p>
+            A confidence number is not a review. On a bill, a land deed (लालपुर्जा) or a court
+            register, one wrong digit changes the amount or the case number — and mainstream
+            engines report their errors only as scores, never as “check this token”.
+          </p>
+          <p>
+            VeriScript re-reads digits, ranks them by risk, runs a calibration model, and keeps
+            the conflicting alternative reading whenever two passes disagree. Impossible
+            sequences and script mismatches are flagged the same way. The user check is
+            therefore a short, ordered list — not a re-proofread of the whole page.
+          </p>
+          <div class="note">
+            <p>
+              Measured on frozen sets: the queue surfaces <strong>88% of wrong digits</strong>
+              (letterpress) and <strong>38%</strong> (modern government PDFs) within its first
+              ten rows — up from 73%/15% before the re-pass. Calibration error (ECE) drops
+              from 0.82 to 0.30 on scans.
+            </p>
+          </div>
+        </section>
+
+        <section id="accuracy">
+          <h2>How accurate is this Nepali OCR?</h2>
+          <p>
+            Numbers below come from hash-frozen evaluation sets with bootstrap 95% confidence
+            intervals. Nothing here is a vendor claim; every row can be reproduced from the
+            repository.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Set</th>
+                <th>CER (95% CI)</th>
+                <th>Exact-token recall</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Modern government PDFs (n=41)</td>
+                <td>0.135 [0.097–0.186]</td>
+                <td>0.877</td>
+              </tr>
+              <tr>
+                <td>Letterpress books, 20th century (n=69)</td>
+                <td>0.434 [0.387–0.481]</td>
+                <td>0.647</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            CER (character error rate) is the edit distance to ground truth over the number of
+            ground-truth characters — 0 is perfect, lower is better. On the hard,
+            table-heavy slice of the government PDFs, VeriScript scores below raw engines and
+            the CPU-friendly middle of the field while staying offline (full head-to-head in
+            the <a href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md">benchmark</a>).
+            Speed: roughly one second per clean page, two to four seconds on letterpress
+            material, on CPU.
+          </p>
+          <h3>What it is honest about</h3>
+          <ul>
+            <li><strong>Handwriting</strong> is out of scope — printed text only.</li>
+            <li>Heavy phone photos degrade recognition (measured CER 0.757 on the heavy synthetic proxy; recognition, not the review layer, is what breaks).</li>
+            <li>More than two columns is unsupported; complex forms are weaker than prose and tables.</li>
+          </ul>
+        </section>
+
+        <section id="use-cases">
+          <h2>What do people use it for?</h2>
+          <ul>
+            <li>Digitising citizenship papers, certificates and land deeds — locally, without uploading family documents.</li>
+            <li>Making scanned Nepali and Hindi PDFs searchable for archives, libraries and law offices.</li>
+            <li>Turning letterpress books and newspapers into text and Markdown for research and publishing.</li>
+            <li>Reading invoices and ledgers where a wrong digit matters more than a pretty layout.</li>
+          </ul>
+        </section>
+
+        <section id="offline">
+          <h2>Does my document leave my machine?</h2>
+          <p>
+            With a local install, no: the pipeline is designed to run with networking disabled,
+            and there are no cloud calls, no account and no telemetry. The studio at
+            veriscript.live is a demo — the page is processed on the server and deleted after
+            the 60-minute retention window, and page content is never logged.
+          </p>
+          <p>
+            Install from the <a href="https://github.com/DontHash/VeriScript">GitHub repository</a>
+            (<code>pip install -r requirements.txt</code>, MIT), or point the demo at one page
+            first.
+          </p>
+        </section>
+
+        <section id="faq" class="faq">
+          <h2>Questions</h2>
+
+          <h3>Is there a free Nepali OCR that works offline?</h3>
+          <p>
+            Yes. VeriScript is open source (MIT) and runs on your machine — no cloud calls, no
+            telemetry, no account. The hosted studio is only a demo and deletes uploads after
+            60 minutes.
+          </p>
+
+          <h3>How accurate is VeriScript’s Nepali OCR?</h3>
+          <p>
+            On frozen sets: modern government PDFs score CER 0.135 [0.097–0.186]; letterpress
+            books 0.434 [0.387–0.481]. The review queue surfaces 88% of wrong digits
+            (letterpress) and 38% (PDFs) within its first ten rows. Full tables and
+            reproduction commands are in the public benchmark.
+          </p>
+
+          <h3>Does it read Nepali handwriting?</h3>
+          <p>
+            No. VeriScript is for printed text — letterpress, government PDFs, newspapers,
+            invoices. Handwriting is a weak point and better served by other tools; saying so
+            is part of the honesty the project is built on.
+          </p>
+
+          <h3>Does my document leave my machine?</h3>
+          <p>
+            With a local install, no — the pipeline runs with networking disabled. The demo
+            studio processes the page on the server and deletes it after the 60-minute
+            retention window. Nothing about page content is logged.
+          </p>
+
+          <h3>Can I use it commercially?</h3>
+          <p>
+            The VeriScript code is MIT and the OCR stack is Apache-2.0. The optional
+            photo-upscaler weights are non-commercial and are excluded from commercial builds;
+            the document studio does not include them.
+          </p>
+
+          <h3>Does it output a searchable PDF?</h3>
+          <p>
+            Yes — a cleaned page with an invisible Unicode text layer (Devanagari included,
+            bundled Mukta font) alongside the restored image, a numbered review overlay, plain
+            text, Markdown and OCR JSON.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">
+        <p>
+          <a href="/">VeriScript</a> · <a href="/studio">Live studio</a> ·
+          <a href="https://github.com/DontHash/VeriScript">GitHub (MIT)</a> ·
+          <a href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md">Benchmark</a>
+        </p>
+        <p>
+          Offline document restoration for Nepali, Hindi and English. No cloud calls, no
+          telemetry, no account. Engine: RapidOCR / PaddleOCR PP-OCR (Apache-2.0).
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

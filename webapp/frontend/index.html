@@ -3,10 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VeriScript — offline OCR for Nepali, Hindi and English documents</title>
     <meta
       name="description"
       content="VeriScript restores photos and scans into cleaned pages and searchable PDFs — and puts every uncertain digit into a review queue instead of guessing. Devanagari first, offline by design."
     />
+    <link rel="canonical" href="https://veriscript.live/" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VeriScript" />
+    <meta property="og:title" content="VeriScript — it will not invent the numbers on your bill" />
+    <meta
+      property="og:description"
+      content="Photos, scans and PDFs into searchable PDFs, transcripts and Markdown — offline, with a review queue for uncertain digits. Devanagari first, MIT."
+    />
+    <meta property="og:url" content="https://veriscript.live/" />
+    <meta property="og:image" content="https://veriscript.live/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link
       rel="preload"
@@ -22,10 +37,89 @@
       type="font/woff2"
       crossorigin
     />
-    <title>VeriScript — offline document restoration</title>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://veriscript.live/#website",
+            "url": "https://veriscript.live/",
+            "name": "VeriScript",
+            "inLanguage": "en"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://veriscript.live/#software",
+            "name": "VeriScript",
+            "description": "Offline document restoration: photos, scans and PDFs become searchable PDFs, transcripts and Markdown, with a review queue that flags uncertain digits instead of guessing. Devanagari (Nepali/Hindi) first.",
+            "url": "https://veriscript.live/",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": "Windows, macOS, Linux (CLI, Docker); self-hosted web studio",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "license": "https://opensource.org/license/mit",
+            "codeRepository": "https://github.com/DontHash/VeriScript",
+            "softwareRequirements": "Python 3.10+",
+            "featureList": [
+              "Offline Devanagari (Nepali/Hindi) and English OCR",
+              "Searchable PDF with an invisible Unicode text layer",
+              "Review queue: uncertain digits flagged with alternative readings kept",
+              "Transcript, Markdown and OCR JSON exports",
+              "No cloud calls, no telemetry, no account"
+            ]
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://veriscript.live/#org",
+            "name": "VeriScript",
+            "url": "https://veriscript.live/",
+            "logo": "https://veriscript.live/favicon.svg",
+            "sameAs": ["https://github.com/DontHash/VeriScript"]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!--
+        Static fallback: this is what crawlers see before (and without) JavaScript.
+        It mirrors the landing page and is removed by the inline script below
+        before the app boots, so users never see it.
+      -->
+      <div id="seo-fallback">
+        <h1>It will not invent the numbers on your bill.</h1>
+        <p>
+          VeriScript turns photos, scans and PDFs into cleaned pages, searchable PDFs,
+          transcripts and Markdown — and puts every uncertain number in a review queue
+          instead of guessing. Devanagari (Nepali/Hindi) first; it runs on your machine
+          with no cloud calls, no telemetry and no account.
+        </p>
+        <p>
+          <a href="/studio">Try the studio</a> ·
+          <a href="/nepali-ocr/">Nepali OCR</a> ·
+          <a href="https://github.com/DontHash/VeriScript">Source code (MIT)</a>
+        </p>
+        <h2>What you get</h2>
+        <ul>
+          <li>Searchable PDF — the cleaned page with an invisible Unicode text layer (Devanagari included)</li>
+          <li>A numbered review overlay: accepted, uncertain, and digit conflicts with the alternative reading kept</li>
+          <li>Transcript (.txt), Markdown (.md) and OCR JSON (tokens, risk flags, review queue)</li>
+        </ul>
+        <h2>Measured, not asserted</h2>
+        <p>
+          Modern Devanagari government PDFs: CER 0.135 [0.097–0.186]. Letterpress books:
+          CER 0.434 [0.387–0.481]. Review-queue digit recall@10: 0.88 letterpress / 0.38 PDFs.
+          <a href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md">Read the benchmark</a>.
+        </p>
+      </div>
+    </div>
+    <script>
+      // Remove the static fallback just before the app module boots (JS users only).
+      var fallback = document.getElementById("seo-fallback");
+      if (fallback) fallback.remove();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

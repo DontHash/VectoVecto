@@ -22,6 +22,9 @@ export function Footer() {
           <a class="footer__link" href="/studio">
             Try the studio
           </a>
+          <a class="footer__link" href="/nepali-ocr/">
+            Nepali OCR — offline
+          </a>
           <a
             class="footer__link"
             href="https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md"

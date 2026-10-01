@@ -1,0 +1,15 @@
+# VeriScript
+
+> Offline document restoration: photos, scans and PDFs become searchable PDFs, transcripts and Markdown, with a review queue that flags uncertain digits instead of guessing. Devanagari (Nepali/Hindi) first; English by the same pipeline. No cloud calls, no telemetry, no account. MIT.
+
+## Tools
+- [Nepali OCR](https://veriscript.live/nepali-ocr/): what it does, honest accuracy numbers, FAQ.
+- [Live studio](https://veriscript.live/studio): one page at a time, no signup; demo uploads are deleted after 60 minutes.
+
+## Evidence
+- [Benchmark](https://github.com/DontHash/VeriScript/blob/main/docs/BENCHMARK.md): head-to-head CER on frozen Devanagari sets, with confidence intervals.
+- [Evaluation](https://github.com/DontHash/VeriScript/blob/main/docs/EVALUATION.md): frozen manifests, metrics, reproduction commands.
+- [Market landscape](https://github.com/DontHash/VeriScript/blob/main/docs/MARKET.md): positioning against OCRmyPDF, Tesseract, cloud APIs and IDP suites.
+
+## Code
+- [Repository](https://github.com/DontHash/VeriScript): Python CLI, FastAPI + SolidJS studio, MIT.
