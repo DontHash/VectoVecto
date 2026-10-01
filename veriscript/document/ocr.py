@@ -440,7 +440,9 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
              recheck_digits: bool = False,
              repass_conf_below: float = 95.0,
              deva_lines: str = "off",
-             deva_ckpt: Optional[str] = None) -> OCRResult:
+             deva_ckpt: Optional[str] = None,
+             split_numbers: bool = False,
+             date_flags: bool = False) -> OCRResult:
     """Run OCR, attach flags, optionally re-read digit tokens on 2x crops.
 
     The re-pass never replaces text; it records `repass_text`/`repass_conf` and
@@ -458,6 +460,17 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     Line texts are replaced only when the model output is plausible; otherwise
     the backend reading stays. Provenance lands in `meta["deva_line_reader"]`
     and `Token.text_source`.
+
+    `split_numbers` enables merged-number splitting (Appendix AG): a
+    digit-dominant token is cut inside its own box at a wide clean gap or a
+    drawn table rule and every segment is re-read. It FAILED its frozen gate
+    (fragments valid dates on tightly ruled tables); kept for reference only.
+    Counters land in `meta["number_split"]`.
+
+    `date_flags` enables the Appendix AH domain-format validator: a token
+    whose text parses as a date with a provably impossible component (day 39,
+    month 13, year out of range) is flagged `invalid_format`, flag-only.
+    Opt-in until its frozen gate.
     """
     be = get_backend(backend)
     result = be.run(img_bgr, lang=lang)
@@ -465,6 +478,13 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     if devanagari and deva_lines != "off":
         apply_deva_line_reader(result, img_bgr, deva_ckpt,
                                force=(deva_lines == "on"))
+    if split_numbers:
+        new_tokens, split_stats = split_merged_number_tokens(
+            result.tokens, img_bgr, be.recognize_crop, lang=lang)
+        if split_stats["split"]:
+            result.tokens = new_tokens
+            result.text = "\n".join(t.text for t in new_tokens)
+        result.meta["number_split"] = split_stats
     calibration = None
     lexicon = None
     if devanagari:
@@ -480,7 +500,8 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     result.meta["flagged"] = flag_tokens(result.tokens, conf_threshold,
                                          devanagari=devanagari,
                                          calibration=calibration,
-                                         lexicon=lexicon)
+                                         lexicon=lexicon,
+                                         date_flags=date_flags)
     result.meta["conf_threshold"] = conf_threshold
     if recheck_digits:
         conflicts = apply_digit_repass(result.tokens, img_bgr, be.recognize_crop,
@@ -593,6 +614,204 @@ def apply_deva_line_reader(result: OCRResult, img_bgr: np.ndarray,
     return info
 
 
+# ---------------------------------------------------------------------------
+# merged number-run splitting (Appendix AG)
+# ---------------------------------------------------------------------------
+
+# A digit-dominant token read as one long number is often several numbers the
+# detector glued together. This splitter failed its frozen gate (Appendix AG:
+# on tightly ruled tables the rule continuation test accepts digit strokes, so
+# it fragments valid dates - hard-10 CER 0.2550 -> 0.2791); kept for
+# reference, off by default and not to be enabled without a new gate.
+
+SPLIT_MIN_DIGITS = 5          # candidate: >= this many digits
+SPLIT_MIN_DIGIT_FRAC = 0.5    # ... in a digit-dominant token
+SPLIT_GAP_RATIO = 0.45        # clean gap >= this * token height = boundary
+SPLIT_GAP_MEDIAN_MULT = 2.5   # ... and >= this * the median internal gap
+SPLIT_RULE_DARK_FRAC = 0.85   # full-height dark column = drawn rule
+SPLIT_RULE_MAX_W = 8          # rules are thin; wider dark runs are glyph mass
+SPLIT_MIN_SEG_PX = 4          # segments thinner than this are specks
+SPLIT_MAX_CANDIDATES = 12     # per page, cost guard
+
+
+def _split_boundaries(ink: "np.ndarray", height: int,
+                      rule_check=None) -> List[Tuple[int, int]]:
+    """Column ranges [a, b) inside a token band that separate ink groups.
+
+    Two kinds of evidence: a drawn vertical rule (a thin run of near-full-
+    height dark columns -> a boundary even when ink touches it from both
+    sides) and a clean background gap that is both wide relative to the token
+    height and wider than the token's own inter-glyph spacing.
+
+    `rule_check(a, b)` can veto a thin dark run - the caller uses it to
+    require page-level continuation (a drawn rule runs past the text row; a
+    glyph stroke stops at the box edge); without it every thin run counts.
+    """
+    width = ink.shape[1]
+    col_ink = ink.any(axis=0)
+    col_dark = ink.mean(axis=0)
+    nz = np.flatnonzero(col_ink)
+    if nz.size < 2:
+        return []
+    a0, a1 = int(nz[0]), int(nz[-1]) + 1
+
+    boundaries: List[Tuple[int, int]] = []
+    run: Optional[int] = None
+    for x in range(a0, a1 + 1):
+        is_rule = x < a1 and col_dark[x] >= SPLIT_RULE_DARK_FRAC
+        if is_rule and run is None:
+            run = x
+        elif not is_rule and run is not None:
+            if (x - run <= SPLIT_RULE_MAX_W
+                    and (rule_check is None or rule_check(run, x))):
+                boundaries.append((run, x))
+            run = None
+
+    gaps: List[Tuple[int, int]] = []
+    run = None
+    for x in range(a0, a1 + 1):
+        is_gap = x < a1 and not col_ink[x]
+        if is_gap and run is None:
+            run = x
+        elif not is_gap and run is not None:
+            gaps.append((run, x))
+            run = None
+    # A single clean gap carries the absolute ratio alone; with several gaps
+    # the relative rule protects uniformly wide digit spacing from splitting.
+    med = float(np.median([b - a for a, b in gaps])) if len(gaps) >= 3 else 0.0
+    floor = SPLIT_GAP_RATIO * height
+    for a, b in gaps:
+        width = b - a
+        if width >= floor and (med <= 0.0
+                               or width >= SPLIT_GAP_MEDIAN_MULT * med):
+            boundaries.append((a, b))
+    boundaries.sort()
+    return boundaries
+
+
+def _segments_between(a0: int, a1: int,
+                      boundaries: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """Ink segments [a, b) between boundary ranges, specks dropped."""
+    segments: List[Tuple[int, int]] = []
+    cur = a0
+    for a, b in boundaries:
+        if a > cur:
+            segments.append((cur, a))
+        cur = max(cur, b)
+    if cur < a1:
+        segments.append((cur, a1))
+    return [(a, b) for a, b in segments if b - a >= SPLIT_MIN_SEG_PX]
+
+
+def _rule_continues(gray: np.ndarray, xa: int, xb: int, y0: int, y1: int,
+                    thr: int, band: int = 6, min_frac: float = 0.6) -> bool:
+    """True when a thin dark column run continues above/below the token box.
+
+    A drawn table rule runs past the text row; a glyph's full-height vertical
+    stroke (the `1`, a matra stem) stops at the box edge. This keeps the rule
+    branch from firing on glyphs.
+    """
+    h_img = gray.shape[0]
+    best = 0.0
+    for ya, yb in ((max(0, y0 - band), y0), (y1, min(h_img, y1 + band))):
+        if yb - ya < 2 or xb <= xa:
+            continue
+        sub = gray[ya:yb, xa:xb]
+        if sub.size:
+            best = max(best, float((sub < thr).mean()))
+    return best >= min_frac
+
+
+def split_merged_number_tokens(tokens: List["Token"], img_bgr: np.ndarray,
+                               recognize_fn, lang: Optional[str] = None,
+                               max_candidates: int = SPLIT_MAX_CANDIDATES
+                               ) -> Tuple[List["Token"], Dict]:
+    """Split digit-dominant tokens at wide internal gaps / drawn rules.
+
+    Returns (tokens_out, stats). Never raises. The original token is kept
+    whenever its box shows no physical separator or any segment cannot be
+    read (text is never dropped; no ink is ever invented).
+    """
+    stats = {"candidates": 0, "split": 0, "segments": 0, "aborted": 0,
+             "tokens_in": len(tokens), "tokens_out": len(tokens)}
+    if not tokens or img_bgr is None or getattr(img_bgr, "size", 0) == 0:
+        return tokens, stats
+    gray = (cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+            if img_bgr.ndim == 3 else img_bgr)
+    h_img, w_img = gray.shape[:2]
+
+    out: List["Token"] = []
+    for tok in tokens:
+        digits = _digits_of(tok.text)
+        compact = [c for c in tok.text if not c.isspace()]
+        if (len(digits) < SPLIT_MIN_DIGITS
+                or len(digits) < SPLIT_MIN_DIGIT_FRAC * max(1, len(compact))
+                or stats["candidates"] >= max_candidates):
+            out.append(tok)
+            continue
+        x0, y0, x1, y1 = tok.bbox
+        x0, y0 = max(0, x0), max(0, y0)
+        x1, y1 = min(w_img, x1), min(h_img, y1)
+        if x1 - x0 < 8 or y1 - y0 < 8:
+            out.append(tok)
+            continue
+        band = gray[y0:y1, x0:x1]
+        thr, _ = cv2.threshold(band, 0, 255,
+                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if not 0 < thr < 255:  # uniform band: nothing to measure
+            out.append(tok)
+            continue
+        stats["candidates"] += 1
+        ink = band < thr
+
+        def _rule_check(a: int, b: int, _x0: int = x0, _y0: int = y0,
+                        _y1: int = y1, _thr: int = int(thr)) -> bool:
+            return _rule_continues(gray, _x0 + a, _x0 + b, _y0, _y1, _thr)
+
+        segments = _segments_between(
+            0, x1 - x0, _split_boundaries(ink, y1 - y0,
+                                          rule_check=_rule_check))
+        if len(segments) < 2:
+            out.append(tok)
+            continue
+        parts: List[Tuple[int, int, str, float]] = []
+        for sx0, sx1 in segments:
+            crop = img_bgr[y0:y1, x0 + sx0:x0 + sx1]
+            if crop.size == 0:
+                parts = []
+                break
+            try:
+                text, conf = (recognize_fn(crop, lang) if lang
+                              else recognize_fn(crop))
+            except TypeError:
+                try:
+                    text, conf = recognize_fn(crop)
+                except Exception:  # noqa: BLE001 - OCR must never fail here
+                    parts = []
+                    break
+            except Exception:  # noqa: BLE001
+                parts = []
+                break
+            text = (text or "").strip()
+            if not text:
+                parts = []
+                break
+            parts.append((sx0, sx1, text, float(conf)))
+        if len(parts) < 2:
+            stats["aborted"] += 1
+            out.append(tok)
+            continue
+        for sx0, sx1, text, conf in parts:
+            out.append(Token(text=text, conf=conf,
+                             bbox=(x0 + sx0, y0, x0 + sx1, y1),
+                             granularity=tok.granularity, backend=tok.backend,
+                             text_source="split"))
+        stats["split"] += 1
+        stats["segments"] += len(parts)
+    stats["tokens_out"] = len(out)
+    return out, stats
+
+
 def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
                        repass_fn, lang: Optional[str] = None,
                        scale: float = 2.0, conf_below: float = 95.0,
@@ -643,6 +862,7 @@ RISK_WEIGHTS: Dict[str, float] = {
     "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
     "invalid_sequence": 1.0,  # impossible Devanagari sequence; dev-tuned to
                               # not displace digit signals in the top-10
+    "invalid_format": 2.0,   # provably impossible date (Appendix AH)
     "digit_uncertain": 1.5,  # digit token below the digit-confidence bar
     "digit_added": 1.5,      # a number only the line reader saw (never silent)
     "unknown_word": 0.5,     # Devanagari words absent from the lexicon (W-B);
@@ -689,11 +909,54 @@ def apply_unknown_word(tokens: List["Token"],
     return flagged
 
 
+# Domain-format validators (Appendix AH): a date whose parsed components are
+# provably impossible is wrong by construction - like invalid_sequence, a
+# near-free high-precision queue signal. Conservative by design: BS month
+# lengths vary by year (29-32 days), so days 30-32 are never flagged without a
+# calendar table; only provably impossible values are.
+
+DATE_MIN_YEAR = 1900
+DATE_MAX_YEAR = 2200
+DATE_MIN_MONTH = 1
+DATE_MAX_MONTH = 12
+DATE_MIN_DAY = 1
+DATE_MAX_DAY = 32  # BS months reach 32 days on some years; never flag 30-32
+
+_DEVA_TO_LATIN = str.maketrans("०१२३४५६७८९", "0123456789")
+_DATE_SEP_RE = re.compile(
+    r"(?<![०-९\d])([०-९\d]{4})[-./।]([०-९\d]{1,2})[-./।]([०-९\d]{1,2})"
+    r"(?![०-९\d])")
+_DATE_BARE_RE = re.compile(
+    r"(?<![०-९\d])((?:२०|१९|20|19)[०-९\d]{6})(?![०-९\d])")
+
+
+def _impossible_date(text: str) -> bool:
+    """True when a date-shaped token has a provably impossible component."""
+
+    def _int(s: str) -> int:
+        return int(s.translate(_DEVA_TO_LATIN))
+
+    def _bad(year: int, month: int, day: int) -> bool:
+        return (not DATE_MIN_YEAR <= year <= DATE_MAX_YEAR
+                or not DATE_MIN_MONTH <= month <= DATE_MAX_MONTH
+                or not DATE_MIN_DAY <= day <= DATE_MAX_DAY)
+
+    for m in _DATE_SEP_RE.finditer(text or ""):
+        if _bad(*(_int(g) for g in m.groups())):
+            return True
+    for m in _DATE_BARE_RE.finditer(text or ""):
+        s = m.group(1).translate(_DEVA_TO_LATIN)
+        if _bad(int(s[:4]), int(s[4:6]), int(s[6:8])):
+            return True
+    return False
+
+
 def flag_tokens(tokens: List["Token"], conf_threshold: float,
                 devanagari: bool = False,
                 calibration: Optional[Dict] = None,
                 deva_digit_conf: float = 90.0,
-                lexicon: Optional[Collection[str]] = None) -> int:
+                lexicon: Optional[Collection[str]] = None,
+                date_flags: bool = False) -> int:
     """Attach honesty flags (never changes text). Returns flagged count.
 
     Devanagari-specific signals measured on the dev set (Appendix M):
@@ -703,6 +966,8 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
       caught only 23% of digit errors, at 90 it catches 69%.
     * out-of-lexicon Devanagari words -> `unknown_word` (W-B; only when the
       optional lexicon is installed).
+    * a provably impossible date -> `invalid_format` (Appendix AH; opt-in
+      until its frozen gate).
     """
     for tok in tokens:
         if tok.conf < conf_threshold:
@@ -719,6 +984,8 @@ def flag_tokens(tokens: List["Token"], conf_threshold: float,
             from veriscript.core.metrics import _invalid_devanagari_token
             if _invalid_devanagari_token(tok.text):
                 tok.flags.append("invalid_sequence")
+            if date_flags and _impossible_date(tok.text):
+                tok.flags.append("invalid_format")
         if calibration is not None:
             from veriscript.calibration import apply_isotonic
             tok.cal_conf = round(apply_isotonic(tok.conf, calibration["isotonic"]), 2)

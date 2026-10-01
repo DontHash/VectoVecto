@@ -116,6 +116,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           mixed_router: bool = False,
                           deva_lines: str = "off",
                           deva_ckpt: Optional[str] = None,
+                          split_numbers: bool = False,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -133,7 +134,12 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
 
     `mixed_router` composites the exported page: restored pixels inside the
     OCR text boxes, original pixels elsewhere (logos/photos/signatures are
-    never touched by the restore). Recognition is unchanged."""
+    never touched by the restore). Recognition is unchanged.
+
+    `split_numbers` enables merged-number splitting (Appendix AG) on both OCR
+    passes: digit-dominant tokens are cut at wide internal gaps / drawn rules
+    and the segments re-read. Opt-in until its frozen gate; counters land in
+    `meta["number_split"]`."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -163,13 +169,15 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         result = ocr_page(primary_img, backend=backend, lang=lang,
                           conf_threshold=conf_threshold,
                           recheck_digits=repass_effective,
-                          deva_lines=deva_lines, deva_ckpt=deva_ckpt)
+                          deva_lines=deva_lines, deva_ckpt=deva_ckpt,
+                          split_numbers=split_numbers)
         conflicts = 0
         audit_error = None
         try:
             audit = ocr_page(audit_img, backend=backend, lang=lang,
                              conf_threshold=conf_threshold,
-                             deva_lines=deva_lines, deva_ckpt=deva_ckpt)
+                             deva_lines=deva_lines, deva_ckpt=deva_ckpt,
+                             split_numbers=split_numbers)
             conflicts = compare_digit_streams(result, audit)
         except Exception as e:  # noqa: BLE001
             audit_error = str(e)
@@ -301,6 +309,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         "auto_rotate": rot.as_dict(),
         "orientation_evidence": result.meta["orientation_evidence"],
         "repass_digits": repass_effective,
+        "number_split": result.meta.get("number_split"),
         "mixed_router": mixed_router,
         "resized": resized,
         "downscale": round(fit, 4),

@@ -15,9 +15,10 @@ The highest-leverage gap in the system is not another model. It is the
   corrections never feed the pipeline;
 - model-side improvements keep failing for lack of *target-domain* ground
   truth (Appendix AF: 219 mixed crops did not teach court-register runs);
-- the failure evidence is consistent: the delta is **structure and formats**,
-  not glyph recognition (bagCER is tied across every engine; 43% of modern
-  digit conflicts are merged multi-number boxes).
+- the failure evidence is consistent: the delta is **recognition and
+  structure**, not glyph shapes (bagCER is tied across every engine; the
+  hard-10 residual is mostly valid-looking digit substitutions inside
+  correctly boxed date cells — no format rule can see them).
 
 Three compounding bets plus one continuous one:
 
@@ -39,7 +40,7 @@ Three compounding bets plus one continuous one:
 | Clean modern print | cornell **0.0541**, gov PDFs 0.135 | solved; stop investing |
 | Letterpress default | **0.373** (`auto` reader, Appendix AE) | held; monitor only |
 | Modern PDF digit trust | queue digit R@10 **0.38**; digit-exact pages 3/41 | **primary target** |
-| Failure shape | 43% of conflicts ≥8-digit merged runs; near-misses (0.66 overlap) | structure, not glyphs |
+| Failure shape | 43% of conflicts are ≥8-digit runs — mostly single dates misread *inside* the box; genuinely glued boxes are the ≥12-digit tail (9 of 145) | recognition + structure |
 | Verifier (second reader) | CRNN tracks falsified (0.0 precision, Appendix AF); bodhan VLM 0.81 precision but +8.3 s/page (opt-in) | rules & splitting first |
 | Hard table pages | pipeline 0.255 vs raw 0.530; VLMs 0.17 at 21–23× cost | order/structure work |
 | Phone photos | proxy only: 0.370 / 0.757 | needs real ground truth |
@@ -62,6 +63,11 @@ reading order and the queue as its own token.
 
 **Effort:** 3–5 days.
 
+**Status 2026-10-02: attempted — gate FAILED** (Appendix AG: on ruled tables
+the rule test accepts digit strokes and shreds valid dates; hard-10 CER
+0.2550 → 0.2791, digit-exact pages 0.600 → 0.000). Opt-in reference only; a
+future attempt needs a gap-only redesign aimed at the ≥12-digit tail.
+
 ### 1b. Domain-format validators (flags, no model)
 
 **Do:** `invalid_format` flags with reasons — impossible calendar values (the
@@ -72,6 +78,11 @@ groupings. Flag-only; the alternative never replaces text.
 GT; no queue growth on the other frozen sets.
 
 **Effort:** 2–4 days.
+
+**Status 2026-10-02: attempted — primary clause FAILED** (Appendix AH: +1.9 pp,
+precision 1.0, one cornell displacement). The impossible-date set is 3 of 156
+v2 digit errors; valid-looking substitutions bypass format rules. Opt-in
+parameter, default off.
 
 ### 1c. Queue ranking with structural evidence
 

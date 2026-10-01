@@ -149,6 +149,7 @@ def run_document_mode(args) -> int:
                 deva_lines=(deva_lines if deva_lines is not None
                             else getattr(args, "deva_lines", "auto")),
                 deva_ckpt=getattr(args, "deva_ckpt", None),
+                split_numbers=getattr(args, "split_numbers", False),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -332,6 +333,11 @@ def main():
     doc.add_argument("--deva-ckpt", default=None,
                      help="path to the line-reader checkpoint (defaults "
                           "to $VERISCRIPT_DEVA_CKPT or weights/)")
+    doc.add_argument("--split-numbers", action="store_true",
+                     dest="split_numbers", default=False,
+                     help="FAILED its frozen gate (Appendix AG): on ruled "
+                          "tables it fragments valid dates; kept for "
+                          "reference only - do not enable")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")

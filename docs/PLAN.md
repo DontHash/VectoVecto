@@ -2291,3 +2291,149 @@ cannot reach. The alternatives remain the opt-in bodhan verifier (precision
 the same bake-off if one lands. Artifacts: `data/doc_eval/digit_lines_v1`,
 `out/kaggle_w1_digits_out/w1_digits_v1/`, gate JSONs under `out/`.
 
+## Appendix AG - merged number-run splitting (pre-registered 2026-10-02)
+
+**Where this came from.** Appendix AF quantified the N5 failure: 43% of the
+frozen v2 digit conflicts are engine sequences >= 8 digits (9 of them >= 12
+digits) with mean character overlap with the candidate 0.66 - the detector
+glues adjacent numbers (dates, case numbers) into one box, and no recognizer
+can fix a box that contains several numbers (bagCER is tied across every
+engine). This is the first Lever-3 attempt: fix the input, not the model.
+
+**Change (`split_numbers`, opt-in until the gate).** In `ocr_page`, a token
+whose text is digit-dominant (>= 5 digits and digits >= 50% of its
+non-whitespace characters) is split *inside its own box* at physical
+separators:
+
+* a clean vertical gap >= 0.45 x token height, and >= 2.5 x the token's median
+  internal gap when >= 3 gaps exist (so a number with uniformly wide digit
+  spacing never splits), or
+* a drawn vertical rule: a <= 8 px contiguous run of columns with >= 85%
+  full-height dark pixels (court-register cell rules; a rule is a boundary
+  even when ink touches it from both sides).
+
+Segments thinner than 4 px are dropped; fewer than 2 segments aborts. Each
+segment is re-read by the engine (`recognize_crop`); an empty or failed
+segment read aborts the split and keeps the original token - ink is never
+synthesized and text is never dropped. At most 12 candidates per page. Flags,
+queue, dual-stream audit and reading order all run on the split tokens;
+provenance is `Token.text_source="split"` and `meta["number_split"]`
+counters. Library default stays off for evaluation semantics.
+
+**Pre-registered gate (frozen sets, the Appendix Y harness/config; both arms
+with the shipped Devanagari defaults).**
+
+| clause | target |
+|---|---|
+| hard-10 (first 10 `nepali_pdf_v2` pages) pipeline page CER | <= 0.22 (-12% rel vs 0.2550) |
+| `nepali_pdf_v2` digit queue R@10 | >= baseline + 3 pp |
+| full-41 `nepali_pdf_v2` CER / bagCER / digit-exact pages | not worse |
+| invented tokens / silent inventions | not increased |
+| `heidata_printed`, `cornell_real`, `nepali_photo_proxy` | zero engagement (byte-identical text) |
+| latency | <= +1 s/page |
+
+**Decision rule.** All clauses pass -> adopt (`split_numbers` on for the
+Devanagari image path in CLI/web; library default unchanged). Any fail ->
+record the numbers, keep it opt-in, stop. Frozen sets are not re-tuned.
+
+**Diagnosis amendment (before the gate run).** Inspecting the target pages
+before measuring (same practice as Appendix Y's token dump) shows the >= 8
+digit bucket in Appendix AF is *mostly single dates* with separators
+(`२०७८-१२-०६`, 8 digits; the hyphen is dropped by `digits_of`), misread inside
+a correctly boxed cell (`२०८१-०४-३९` - a day-39 date), while the genuinely
+glued multi-number boxes are the >= 12 digit tail (9 of 145 conflicts). This
+splitter targets that tail only: geometry cannot help a single date, and
+splitting valid dates at their separators would fragment them. The queue
+metric, not the CER, is therefore the clause with a real mechanism; the CER
+and non-regression clauses are guards.
+
+**Measured (2026-10-02, same harness/config as the Appendix Y baselines).**
+
+| clause | target | measured (off -> on) | verdict |
+|---|---|---|---|
+| hard-10 pipeline page CER | <= 0.22 | 0.2550 -> **0.2791** | **FAIL** |
+| `nepali_pdf_v2` digit queue R@10 (hard-10) | >= +3 pp | 0.3478 -> 0.4016 (+5.4 pp) | PASS* |
+| bagCER | not worse | 0.3758 -> 0.4070 | **FAIL** |
+| digit-exact pages | not worse | 0.600 -> 0.000 | **FAIL** |
+| invented / invented digits | not increased | 665/15 -> 800/130 | **FAIL** |
+| latency | <= +1 s/page | -0.13 s/page | PASS |
+
+Engagement: 97 candidates / 24 splits / 116 segments on the 10 pages.
+
+*The queue clause passed spuriously: the splitter manufactured new wrong
+tokens, which are flagged, so recall rose over a larger error set.
+
+Token dump of the splits shows the mechanism failure: on tightly ruled
+register rows the horizontal rules sit within a few pixels of the text, so the
+drawn-rule continuation test accepts digit strokes as rules and the splitter
+fragments *valid single dates* (`२०८१-०४-३२` -> `२` `0` `८१-०` `४-३` `२`),
+manufacturing digit errors and destroying whole-page digit exactness.
+
+**Decision: stop** (pre-registered rule: any fail -> record, keep opt-in,
+stop). The measured lesson: geometry cannot split what is not physically
+separate; the >= 12-digit merged tail needs a redesigned, gap-only rule (not
+attempted here), and the dominant hard-10 residual - single date cells misread
+*inside* the box - is recognition/validation, not structure. Next lever:
+Appendix AH (format validators). `split_numbers` stays opt-in; the CLI help
+records the failed gate.
+
+## Appendix AH - domain-format validators: impossible dates (pre-registered 2026-10-02)
+
+**Where this came from.** Appendix AG's diagnosis: the hard-10 register
+failures are mostly single date cells misread *inside* the box
+(`२०८१-०४-३९`, a day-39 date - the text pattern is intact, a digit is wrong).
+Geometry cannot fix that; a domain rule can at least *surface* it: day 39 in a
+date is wrong by construction.
+
+**Change (`invalid_format`, flag-only, Devanagari path).** In `flag_tokens`, a
+token whose text parses as a date with a provably impossible component is
+flagged. Recognized shapes (Devanagari or Latin digits):
+
+* `YYYY<sep>M<sep>D` with sep in `- . / ।`, or
+* a bare run starting `२०|१९|20|19` followed by 6 digits, parsed `YYYYMMDD`.
+
+Impossible = month not in [1, 12], day not in [1, **32**], or year not in
+[1900, 2200]. Conservatism is deliberate: BS month lengths vary by year
+(29-32 days), so days 30-32 are never declared impossible without a calendar
+table; only provably impossible values are. `invalid_format` weight 2.0 in
+`RISK_WEIGHTS`. Text is never edited; valid dates and non-date tokens are
+never flagged. Opt-in parameter until the gate.
+
+**Pre-registered gate (frozen sets, shipped repass on, same-day arms).**
+
+| clause | target |
+|---|---|
+| `nepali_pdf_v2` digit queue R@10 | >= baseline + 3 pp |
+| flag precision on v2 digit tokens | >= 0.5 (flagged digit tokens that are true digit errors per GT) |
+| text identity with/without the flag | exact (flag-only) |
+| non-target sets (`heidata_printed`, `cornell_real`) | digit R@10 / P@10 not worse (added flags must not displace true errors) |
+| latency | <= +0.1 s/page |
+
+**Decision rule.** All clauses pass -> adopt (on by default on the Devanagari
+path, like the other flag signals). Any fail -> record, keep it opt-in, stop.
+Frozen sets are not re-tuned.
+
+**Measured (2026-10-02).**
+
+| clause | target | measured (off -> on) | verdict |
+|---|---|---|---|
+| `nepali_pdf_v2` digit queue R@10 | >= +3 pp | 0.3846 -> 0.4038 (+1.9 pp) | **FAIL** |
+| flag precision on v2 digit tokens | >= 0.5 | 3/3 = **1.0** | PASS |
+| text identity with/without the flag | exact | exact (0 changed pages) | PASS |
+| `heidata_printed` R@10 / P@10 | not worse | 0.8832 / 0.1754 unchanged | PASS |
+| `cornell_real` R@10 / P@10 | not worse | 0.2472 / 0.2588 -> 0.2472 / 0.2558 | **FAIL** |
+| latency | <= +0.1 s/page | -0.17 s/page | PASS |
+
+The validator is exact where it fires (v2 3/3 true, heidata 1/1) but the
+catchable set - *provably* impossible dates - is tiny: 3 of the 156 v2 digit
+errors. The cornell failure is one false-positive flag displacing a true error
+from a page's top-10 (P@10 0.2588 -> 0.2558).
+
+**Decision: stop** (pre-registered rule: any fail -> record, keep opt-in).
+Valid-looking misreads (`२०८१-०४-३१` misread as `२०८१-०४-३०`) cannot be seen
+by a format rule; a full BS calendar table would add only the day-31/32-in-
+short-month cases (a few more, still far from +3 pp) at a false-positive cost.
+The modern-PDF queue ceiling is recognition, not validation - which returns the
+path to target-domain digit ground truth (the N5 need) or a stronger reader
+class. `date_flags` stays an opt-in parameter, default off.
+

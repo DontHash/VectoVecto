@@ -44,7 +44,7 @@ def _digit_tokens(text: str) -> List[str]:
 
 def run(data_dir: str, lang: str, limit: int = 0,
         digit_verifier=None, verifier_scope: str = "flagged",
-        repass_digits: bool = False) -> Dict:
+        repass_digits: bool = False, split_numbers: bool = False) -> Dict:
     manifest = doc_data.load_dataset(data_dir)
     entries = manifest["entries"]
     if limit:
@@ -72,7 +72,8 @@ def run(data_dir: str, lang: str, limit: int = 0,
         gt_digits = {doc_metrics.digit_string(t) for t in _digit_tokens(gt)}
         gt_digits.discard("")
         rec = ocr_page(img, backend="rapidocr", lang=lang,
-                       recheck_digits=repass_digits)
+                       recheck_digits=repass_digits,
+                       split_numbers=split_numbers)
         vconflicts = 0
         if digit_verifier is not None:
             vconflicts = apply_digit_verifier(
@@ -166,6 +167,9 @@ def main():
     ap.add_argument("--repass-digits", action="store_true", dest="repass_digits",
                     help="re-read digit tokens on 2x crops (W0.3 measurement; "
                          "disagreements raise digit_conflict)")
+    ap.add_argument("--split-numbers", action="store_true",
+                    dest="split_numbers", default=False,
+                    help="merged-number splitting before scoring (Appendix AG)")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
 
@@ -186,7 +190,8 @@ def main():
 
     result = run(args.data_dir, args.lang, args.limit, digit_verifier=verifier,
                  verifier_scope=args.digit_verifier_scope,
-                 repass_digits=args.repass_digits)
+                 repass_digits=args.repass_digits,
+                 split_numbers=args.split_numbers)
     if verifier is not None:
         verifier.close()
     s = result["summary"]

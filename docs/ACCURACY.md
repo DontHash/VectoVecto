@@ -84,6 +84,20 @@ Do: cell-aware grouping for register grids (label/value columns keyed to
 ruling lines), validated on the hard-10 + full 41. Gate: hard-10 CER −≥15%
 relative, byte-identical elsewhere, invented unchanged.
 
+**Status 2026-10-02 — attempted, stopped.** Two mechanisms were built and
+gated; both failed. (1) Merged number-run splitting (Appendix AG): on tightly
+ruled tables the rule test accepts digit strokes and shreds valid dates —
+hard-10 CER 0.2550 → 0.2791, digit-exact pages 0.600 → 0.000. (2) The
+impossible-date validator (Appendix AH) is exact where it fires (precision
+1.0) but catches only 3 of 156 v2 digit errors (+1.9 pp vs the +3 pp bar) and
+displaced one true error on cornell. The measured conclusion is sharper than
+the hypothesis: the hard-10 residual is mostly **valid-looking digit
+substitution inside correctly boxed cells** — recognition, not structure and
+not format. Remaining paths: target-domain digit ground truth at scale (the
+N5 need, now with a better-defined target: real court-register date fields),
+or a stronger reader class through the same bake-off. Both stay opt-in
+reference code.
+
 ### Lever 4 — degradation and real photos (weeks; needs data)
 
 All photo numbers are a synthetic proxy. The path:

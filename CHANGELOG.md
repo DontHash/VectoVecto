@@ -21,6 +21,17 @@ All notable changes to this project are documented here. The format follows
   (`tests/test_frontend_shell.py`). The N5 fine-tune attempt itself stopped at
   the pre-registered verifier gate — [docs/PLAN.md](docs/PLAN.md) Appendix AF.
 
+- **Digit-trust experiments with their gates and harnesses (both stopped).**
+  `split_numbers` (merged number-run splitting, Appendix AG) and `date_flags`
+  (provably-impossible-date validator, Appendix AH) ship as opt-in reference
+  only, with new gate tooling (`scripts/eval_number_split.py`,
+  `scripts/eval_date_flags.py`) and `--split-numbers` support in the document
+  eval harnesses. Measured: the splitter fragments valid dates on tightly
+  ruled tables (hard-10 CER 0.2550 → 0.2791) — FAIL; the validator is exact
+  (flag precision 1.0) but catches only 3 of 156 v2 digit errors (+1.9 pp vs
+  the +3 pp bar) and displaced one true error on cornell — FAIL. The residual
+  is recognition inside correctly boxed cells.
+
 ### Changed
 
 - **The Devanagari line reader is on by default for image inputs** under the

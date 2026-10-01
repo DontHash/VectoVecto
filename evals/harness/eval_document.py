@@ -132,7 +132,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                    conf_threshold: float = 60.0, recheck_digits: bool = False,
                    repass_conf_below: float = 95.0,
                    lang: Optional[str] = None,
-                   bootstrap: int = 0) -> Dict:
+                   bootstrap: int = 0,
+                   split_numbers: bool = False) -> Dict:
     results: Dict[str, Dict] = {}
     per_page: List[Dict] = []
     for i, entry in enumerate(entries, 1):
@@ -157,7 +158,8 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                     try:
                         pres = run_document_pipeline(
                             degraded, backend=backend, conf_threshold=conf_threshold,
-                            repass_digits=recheck_digits, lang=lang)
+                            repass_digits=recheck_digits, lang=lang,
+                            split_numbers=split_numbers)
                     except Exception as e:  # noqa: BLE001
                         print(f"  [skip] pipeline@{backend}: {e}")
                         continue
@@ -180,7 +182,7 @@ def run_evaluation(entries: List[Dict], methods: List[str], backends: List[str],
                     res = ocr_page(img, backend=backend, conf_threshold=conf_threshold,
                                    recheck_digits=recheck_digits,
                                    repass_conf_below=repass_conf_below,
-                                   lang=lang)
+                                   lang=lang, split_numbers=split_numbers)
                 except Exception as e:  # noqa: BLE001
                     print(f"  [skip] {method}@{backend}: {e}")
                     continue
@@ -421,6 +423,11 @@ def main():
     ap.add_argument("--with-photo", action="store_true")
     ap.add_argument("--recheck-digits", action="store_true",
                     help="recognition-only re-pass on digit tokens (adds flags, never text)")
+    ap.add_argument("--split-numbers", action="store_true",
+                    dest="split_numbers", default=False,
+                    help="merged-number splitting (Appendix AG): split "
+                         "digit-dominant tokens at wide gaps / drawn rules and "
+                         "re-read the segments; opt-in until its frozen gate")
     ap.add_argument("--repass-conf-below", type=float, default=95.0,
                     help="re-pass digit tokens with conf below this (100 = all)")
     ap.add_argument("--pages", type=int, default=0)
@@ -486,7 +493,8 @@ def main():
                             with_photo=args.with_photo,
                             recheck_digits=args.recheck_digits,
                             repass_conf_below=args.repass_conf_below,
-                            lang=args.lang, bootstrap=args.bootstrap)
+                            lang=args.lang, bootstrap=args.bootstrap,
+                            split_numbers=args.split_numbers)
     report["args"] = vars(args)
     report["dataset"] = {"dir": args.data_dir, "kind": manifest.get("kind"),
                          "pages": len(entries)}
