@@ -45,6 +45,13 @@ body::before {
   flex-direction: column;
 }
 
+/* Static crawler fallback in index.html. Hidden here (bundled stylesheet, not
+   an inline style: the CSP has no 'unsafe-inline') and removed from the DOM by
+   main.tsx before mount, so JS users never see it. */
+#seo-fallback {
+  display: none;
+}
+
 ::selection {
   background: var(--accent);
   color: var(--accent-ink);

@@ -84,9 +84,11 @@
   <body>
     <div id="root">
       <!--
-        Static fallback: this is what crawlers see before (and without) JavaScript.
-        It mirrors the landing page and is removed by the inline script below
-        before the app boots, so users never see it.
+        Static fallback: this is what crawlers see before (and without)
+        JavaScript. It mirrors the landing page. It is hidden by the bundled
+        stylesheet (#seo-fallback) and removed by the app bundle before mount —
+        never by an inline script, because the production CSP allows
+        script-src 'self' only.
       -->
       <div id="seo-fallback">
         <h1>It will not invent the numbers on your bill.</h1>
@@ -115,11 +117,6 @@
         </p>
       </div>
     </div>
-    <script>
-      // Remove the static fallback just before the app module boots (JS users only).
-      var fallback = document.getElementById("seo-fallback");
-      if (fallback) fallback.remove();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
