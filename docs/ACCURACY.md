@@ -60,6 +60,17 @@ actionable:
 Expected: PDF queue 0.38 → 0.5+, digit-exact pages up from 3/41, letterpress
 0.88 held. This is the highest-value accuracy work for the product's claim.
 
+**Status 2026-10-01 — attempted, stopped.** N5 was executed first (219
+human-corrected crops, `xheavy`-augmented, Kaggle warm-start fine-tune from
+the shipped checkpoint). Verifier precision on the frozen modern pages stayed
+**0.0** (145 conflicts, 0 fixes) — the pre-registered `<0.4 → stop` rule
+applies; letterpress moved +1.07 pp digit-exact inside the CI while CER/bagCER
+moved marginally worse, so the shipped reader is unchanged. Full numbers:
+[PLAN.md](PLAN.md) Appendix AF. Remaining paths unchanged: target-domain
+ground truth at an order-of-magnitude larger scale, the opt-in bodhan verifier
+(precision 0.81, +8.3 s/page), or re-testing a stronger recognizer class
+through the same gates.
+
 ### Lever 3 — the structure gap on hard tables (1–2 weeks)
 
 The remaining pages (`supreme_218512` court registers) expose **every** arm,
@@ -120,7 +131,7 @@ line split/merge logic, not a bigger CRNN.
 | 1 | Adversarial gate tests + image default `auto` — **shipped 2026-10-01** (Appendix AE) | 1 | done | — |
 | 2 | Build + label the digit crop sheet, `--import` | 2 | ~1 day | human labeling |
 | 3 | Synthetic digit injection in the renderer mix | 2 | days | — |
-| 4 | Digit recognizer fine-tune (Kaggle) + run gates | 2 | days | #2, #3 |
+| 4 | Digit recognizer fine-tune (Kaggle) + run gates — **attempted 2026-10-01, stopped** (Appendix AF: precision 0.0) | 2 | done | #2, #3 |
 | 5 | Table cell-grouping spike on the exposed pages | 3 | days | — |
 | 6 | Real-photo collection protocol draft | 4 | days | community |
 

@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format follows
   check plus email alert now watch `veriscript.live/api/health`. The Cloud Run
   `…run.app` URL still serves; README and package metadata use the canonical
   domain.
+- **Digit-accuracy tooling (N5).** New `xheavy` augmentation level
+  (`deva_crnn.augment`: affine/perspective/elastic geometry, shadow fields,
+  gamma/fade, motion blur, salt-pepper/speckle, JPEG), the
+  `scripts/eval_digit_verifier.py` screen, and frontend shell guards
+  (`tests/test_frontend_shell.py`). The N5 fine-tune attempt itself stopped at
+  the pre-registered verifier gate — [docs/PLAN.md](docs/PLAN.md) Appendix AF.
 
 ### Changed
 
@@ -26,6 +32,14 @@ All notable changes to this project are documented here. The format follows
   semantics. Frozen letterpress set: page CER **0.434 → 0.373** (42/69 pages)
   at **+0.62 s/page**, with zero engagement and byte-identical output on the
   modern scan set — [docs/PLAN.md](docs/PLAN.md) Appendix AE.
+
+### Fixed
+
+- **Crawler fallback no longer renders above the app.** The static SEO
+  fallback in `index.html` was removed by an inline script, which the
+  production CSP (`script-src 'self'`) blocks; it now stays in the raw HTML
+  for crawlers, is hidden by the bundled stylesheet, and is removed by the app
+  bundle before mount (`tests/test_frontend_shell.py` guards this).
 
 ## [1.4.0] - 2026-09-30
 

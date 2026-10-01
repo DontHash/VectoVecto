@@ -2240,3 +2240,50 @@ graceful and unchanged. The default engages on full installs (CLI and
 self-hosted web) where the checkpoint is present; shipping the reader in the
 hosted image (torch cost) is a separate decision.
 
+## Appendix AF - N5 digit fine-tune: verifier gate STOP (2026-10-01)
+
+**Question.** The AC stop (CRNN disagreement on modern digits is useless)
+named two paths: a better model (N3) or more real digit ground truth (N5).
+N5 went first: 219 hand-corrected digit crops collected from unfrozen modern
+pages (`scripts/build_digit_crop_sheet.py`; `data/doc_eval/digit_lines_v1`),
+appended to the shipped v8 npz x32 (65% under the new `xheavy` augmentation
+level) and fine-tuned on Kaggle (warm start from the shipped checkpoint,
+8 epochs cosine, lr 5e-4, T4; combined npz 89,735 lines). Tooling added:
+`deva_crnn.augment` level `xheavy` (affine/perspective/elastic geometry,
+shadow fields, gamma/fade, motion blur, salt-pepper/speckle, JPEG last) and
+`scripts/eval_digit_verifier.py` (the N2 screen), each with tests.
+
+**Pre-registered rule (AC):** precision on engine-vs-candidate disagreements
+>= 0.6 -> flag-only; >= 0.8 -> replacement; < 0.4 -> stop.
+
+**Gate 1 - verifier screen, frozen `nepali_pdf_v2` (41 pages, min 3 digits):**
+
+| model | tokens | conflicts | engine right | candidate fixes | both wrong | precision |
+|---|---|---|---|---|---|---|
+| shipped v8 | 261 | 158 | 10 | 0 | 148 | **0.0** |
+| v8 + digits (N5) | 261 | 145 | 8 | 0 | 137 | **0.0** |
+
+Both fail the screen; the N5 fine-tune does not move it. Conflict samples show
+why: the hard tokens are long merged date/case runs (engine
+`२०८१०४२७२०८१०४३२`, reader `२८१०१२२८०५२`; near-misses like `०८००१७६` vs
+`८००१७६`) - a 48-px line model reading one merged crop produces near-misses,
+and exact GT-run membership is rarely satisfied.
+
+**Gate 2 - frozen letterpress line gate (non-regression):**
+
+| model | heiDATA digit-exact [CI] | CER | bagCER | v2 anchor digit-exact pages | v2 anchor bagCER |
+|---|---|---|---|---|---|
+| shipped v8 | 0.8097 [0.769-0.847] | 0.1771 | 0.2348 | 0.000 | 0.4809 |
+| v8 + digits (N5) | 0.8204 [0.780-0.858] | 0.1790 | 0.2394 | 0.0244 | 0.4753 |
+
+Passes the >= 0.72 bar but every delta is inside frozen-set resolution (CI
+overlap on digit-exact; CER/bagCER marginal). Not adopt-worthy.
+
+**Decision: stop.** The shipped v8 reader stays; no verifier ships from this
+track. Recorded for the next attempt: the bottleneck is (a) exact resolution
+of long merged runs and (b) target-domain ground truth at a scale 219 crops
+cannot reach. The alternatives remain the opt-in bodhan verifier (precision
+0.81 on letterpress, +8.3 s/page) and re-testing a stronger open model through
+the same bake-off if one lands. Artifacts: `data/doc_eval/digit_lines_v1`,
+`out/kaggle_w1_digits_out/w1_digits_v1/`, gate JSONs under `out/`.
+
