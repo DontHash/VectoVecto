@@ -52,7 +52,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/DontHash/VeriScript"
-Live demo = "https://veriscript.live"
+"Live demo" = "https://veriscript.live"
 Issues = "https://github.com/DontHash/VeriScript/issues"
 
 [project.scripts]
