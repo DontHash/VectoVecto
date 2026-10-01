@@ -79,6 +79,27 @@ def test_heavy_augment_is_deterministic_and_keeps_ink():
         assert out.std() > 8, "heavy augmentation must not flatten to one tone"
 
 
+def test_xheavy_augment_is_deterministic_and_keeps_ink():
+    """The N5 stress level: geometry + shadows + sensor noise, label-safe.
+
+    Shape may change: anisotropic squeeze/stretch is one of the augmentations
+    (detector boxes vary); the training pipeline normalizes to a fixed size.
+    """
+    img = render_devanagari_line("मिति २०८१-०४-२७", px=40)
+    r1 = augment_line(img, np.random.default_rng(5), level="xheavy")
+    r2 = augment_line(img, np.random.default_rng(5), level="xheavy")
+    assert r1.ndim == 3 and r1.dtype == np.uint8 and r1.size > 0
+    assert np.array_equal(r1, r2), "same rng must give the same image"
+    heavy = augment_line(img, np.random.default_rng(5), level="heavy")
+    assert not (r1.shape == heavy.shape and np.array_equal(r1, heavy)), \
+        "xheavy must differ from heavy"
+    for seed in range(6):
+        out = augment_line(img, np.random.default_rng(seed), level="xheavy")
+        assert int((out.min(axis=2) < 160).sum()) > 20, \
+            "xheavy augmentation must not wash the ink out"
+        assert out.std() > 8, "xheavy augmentation must not flatten to one tone"
+
+
 def test_charset_roundtrip():
     cs = build_charset(["नेपाल १२", "मिति"])
     ids = encode("नेपाल १२", cs)

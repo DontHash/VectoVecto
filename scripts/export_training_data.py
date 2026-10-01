@@ -73,7 +73,8 @@ def main():
                     help="normalized line height (32 or 48; train --in-h must match)")
     ap.add_argument("--fonts", choices=("default", "all"), default="default",
                     help="'all' = every installed Devanagari font + jitter")
-    ap.add_argument("--aug-level", choices=("light", "heavy"), default="light")
+    ap.add_argument("--aug-level", choices=("light", "heavy", "xheavy"),
+                    default="light")
     ap.add_argument("--cell-frac", type=float, default=0.0,
                     help="fraction of synthetic samples that are short table "
                          "cells (digits-heavy, square crops)")
