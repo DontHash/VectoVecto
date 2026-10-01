@@ -6,6 +6,9 @@ bake-off table in `evals/bakeoff_results.md`). Nothing here is a promise until
 it passes its own pre-registered gate — that discipline is what makes the
 numbers publishable.
 
+> Program-level sequencing (trust → correction loop → data) is in
+> [ROADMAP.md](ROADMAP.md).
+
 ## 1. What is solved, and what actually fails
 
 | Class | Measured now | Reading |
