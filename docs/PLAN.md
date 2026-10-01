@@ -2267,7 +2267,11 @@ Both fail the screen; the N5 fine-tune does not move it. Conflict samples show
 why: the hard tokens are long merged date/case runs (engine
 `२०८१०४२७२०८१०४३२`, reader `२८१०१२२८०५२`; near-misses like `०८००१७६` vs
 `८००१७६`) - a 48-px line model reading one merged crop produces near-misses,
-and exact GT-run membership is rarely satisfied.
+and exact GT-run membership is rarely satisfied. Quantified: 43% of the 145
+conflicts involve engine sequences >= 8 digits (merged runs; 9 of them >= 12
+digits), and the reader's mean character overlap with the engine on conflicts
+is 0.66 - the candidate sees roughly the same digits but gets the sequence
+wrong, so it never counts as a fix.
 
 **Gate 2 - frozen letterpress line gate (non-regression):**
 
