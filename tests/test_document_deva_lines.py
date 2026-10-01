@@ -60,6 +60,18 @@ def _img_letterpress(h=500, w=600):
     return np.full((h, w, 3), (170, 200, 225), dtype=np.uint8)
 
 
+def _img_tinted_bright(h=400, w=600):
+    """Modern cream stock: saturated (15) but bright (lum ~244)."""
+    return np.full((h, w, 3), (235, 243, 250), dtype=np.uint8)
+
+
+def _img_shadowed_modern(h=400, w=600):
+    """White modern paper under a soft neutral shadow (no hue added)."""
+    img = np.full((h, w, 3), 235, dtype=np.uint8).astype(np.float32)
+    ramp = np.linspace(1.0, 0.62, w, dtype=np.float32)
+    return (img * ramp[None, :, None]).astype(np.uint8)
+
+
 def test_ocr_page_replaces_texts_and_records_provenance(monkeypatch):
     backend = _FakeBackend(["मिति २०८१", "कुल जम्मा"])
     reader = _FakeReader(["मिति २०८१-०४-२७", "कुल जम्मा रु. ५०"])
@@ -190,6 +202,48 @@ def test_auto_gate_requires_letterpress_paper(monkeypatch):
                     deva_lines="auto")
     assert reader.calls == 1, "letterpress paper must engage auto"
     assert aged.meta["deva_line_reader"]["active"] is True
+
+
+def test_letterpress_gate_rejects_bright_tint_and_neutral_shadow():
+    """The aged-paper gate is two-sided and shadow-safe.
+
+    - saturated but bright modern cream must not count as letterpress;
+    - neutral shadows (phone-photo light) lower luminance without adding hue
+      and must not engage the reader either;
+    - only saturated *and* not-bright paper passes.
+    """
+    from veriscript.deva.reader import page_looks_letterpress
+
+    assert page_looks_letterpress(_img_tinted_bright()) is False
+    assert page_looks_letterpress(_img_shadowed_modern()) is False
+    assert page_looks_letterpress(
+        np.full((200, 200, 3), 180, dtype=np.uint8)) is False
+    assert page_looks_letterpress(_img_letterpress()) is True
+
+
+def test_auto_geometry_gate_holds_on_letterpress_paper(monkeypatch):
+    """Both gates are required: aged paper alone must not engage on cells."""
+
+    class _B:
+        name = "fake"
+
+        def run(self, img, lang=None):
+            boxes = [(0, 0, 60, 60), (100, 0, 160, 60), (200, 0, 260, 60)]
+            tokens = [Token(text="५०", conf=90.0, bbox=b, backend="fake")
+                      for b in boxes]
+            return OCRResult(text="x", tokens=tokens, backend="fake", meta={})
+
+        def recognize_crop(self, crop, lang=None):
+            return "", 0.0
+
+    reader = _FakeReader(["५०"])
+    monkeypatch.setattr(document_ocr, "get_backend", lambda name: _B())
+    monkeypatch.setattr(deva_reader, "get_reader", lambda ckpt=None: reader)
+
+    res = ocr_page(_img_letterpress(), backend="fake", lang="ne",
+                   deva_lines="auto")
+    assert reader.calls == 0, "cell-like geometry must veto aged paper"
+    assert "cell-like" in res.meta["deva_line_reader"]["reason"]
 
 
 def test_merge_line_boxes_stops_at_a_table_rule():

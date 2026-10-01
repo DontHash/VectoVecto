@@ -127,7 +127,7 @@ No number in this repo is marketing.
 |---|---|
 | Orientation (EXIF + 0/90/180/270 via OCR evidence) | 16/16 synthetic; 0/30 false rotations on upright real scans; 90/90 rotated pages decided |
 | Devanagari — modern government PDFs (raw engine) | CER **0.135 [0.097–0.186]**, exact-token recall 0.877 (n=41, Gemini-2.5-Pro anchor GT, engine-corroborated) |
-| Devanagari — letterpress books (the honest bar) | CER 0.434 [0.387–0.481], exact-token recall 0.647 (n=69, human-corrected ALTO GT) |
+| Devanagari — letterpress books (the honest bar) | CER 0.434 [0.387–0.481] raw; **0.373** under the default `auto` line reader (42/69 pages engaged, Appendix AE); exact-token recall 0.647 (n=69, human-corrected ALTO GT) |
 | Devanagari — rendered fixtures | clean CER 0.030/0.028; degraded ne 0.094 (pass) / hi 0.170 (heavy fails) |
 | Digit honesty — 2× re-pass (default ON for Devanagari) | review-queue digit recall@10 **0.88** letterpress / **0.38** PDFs (was 0.73 / 0.15), ≈ +0.4 s/page |
 | Flags + calibration | `script_mismatch`, `invalid_sequence` (impossible combining sequence), isotonic `cal_conf`; ECE 0.82 → 0.30 on scans; optional `unknown_word` lexicon flag (needs `scripts/fetch_nepali_lexicon.py`) lifts the frozen-PDF review queue R@10 **0.148 → 0.175** with the digit queue unchanged |
@@ -140,7 +140,10 @@ No number in this repo is marketing.
 
 Known limitations are listed with their evidence in
 [docs/EVALUATION.md](docs/EVALUATION.md) and the full research log in
-[docs/PLAN.md](docs/PLAN.md).
+[docs/PLAN.md](docs/PLAN.md). Since 2026-10-01 the image paths (CLI and web
+studio) default to the `auto` line-reader gate — running text + aged paper
+only. PDF inputs keep the engine reading, and the hosted document-only demo
+ships no reader checkpoint, so it stays on the engine there.
 
 ## How it compares
 

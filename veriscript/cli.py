@@ -147,7 +147,7 @@ def run_document_mode(args) -> int:
                 verifier_scope=getattr(args, "digit_verifier_scope", "flagged"),
                 mixed_router=getattr(args, "mixed_router", False),
                 deva_lines=(deva_lines if deva_lines is not None
-                            else getattr(args, "deva_lines", "off")),
+                            else getattr(args, "deva_lines", "auto")),
                 deva_ckpt=getattr(args, "deva_ckpt", None),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
@@ -191,7 +191,7 @@ def run_document_mode(args) -> int:
                 # letterpress scans -42% CER, modern PDFs +18pp without this
                 # gate) and PDFs already carry a text layer. Explicit
                 # --deva-lines on/off still wins.
-                pdf_deva_lines = getattr(args, "deva_lines", "off")
+                pdf_deva_lines = getattr(args, "deva_lines", "auto")
                 if pdf_deva_lines == "auto":
                     pdf_deva_lines = "off"
                 for idx, page_img, _gt in pages:
@@ -320,14 +320,15 @@ def main():
                      help="composite the exported page: restored text regions, "
                           "untouched non-text (logos/photos/signatures)")
     doc.add_argument("--deva-lines", choices=("off", "auto", "on"),
-                     default="off",
-                     help="Devanagari line reader (opt-in): on = use the "
-                          "trained recognizer for line crops (measured -42%% "
-                          "page CER on letterpress scans; it hurts on modern "
-                          "table pages); auto = engage only on running-text "
-                          "pages with aged/letterpress paper (clean modern "
-                          "print stays on the engine); off = backend reading "
-                          "only (default)")
+                     default="auto",
+                     help="Devanagari line reader: auto (default) = engage "
+                          "only on running-text pages with aged/letterpress "
+                          "paper - letterpress CER 0.434 -> 0.373 measured, "
+                          "zero engagement on the modern frozen sets; PDF "
+                          "inputs keep the engine reading. on = force the "
+                          "trained recognizer (letterpress -42%%, but it "
+                          "measurably hurts modern table pages). off = "
+                          "backend reading only")
     doc.add_argument("--deva-ckpt", default=None,
                      help="path to the line-reader checkpoint (defaults "
                           "to $VERISCRIPT_DEVA_CKPT or weights/)")

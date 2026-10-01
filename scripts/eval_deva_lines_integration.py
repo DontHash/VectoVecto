@@ -2,9 +2,9 @@
 eval_deva_lines_integration.py — pre-registered gate for the Devanagari line
 reader inside the pipeline (not just on ALTO crops).
 
-Compares `ocr_page(deva_lines="off")` (shipped RapidOCR) with
-`ocr_page(deva_lines="on")` (RapidOCR detection + trained recognizer) on the
-frozen sets:
+Compares `ocr_page` line-reader policies on the frozen sets: `off` (backend
+reading), `auto` (the image-path default: running text + aged paper only) and
+`on` (forced reader), on:
 
   * heiDATA letterpress  -> human-corrected ALTO page text
   * nepali_pdf_v2        -> Gemini 2.5 Pro anchor page text
@@ -176,7 +176,8 @@ def _measure(rows: List[Dict], lang: str, deva_lines: str,
 
 
 def run(data_dir: str, frozen: Optional[str], lang: str, ckpt: Optional[str],
-        readings: Optional[str], limit: int = 0) -> Dict:
+        readings: Optional[str], limit: int = 0,
+        policies: tuple = ("off", "on", "auto")) -> Dict:
     if frozen:
         from eval_freeze import verify_manifest
         ok, problems = verify_manifest(frozen, data_dir=data_dir)
@@ -191,60 +192,80 @@ def run(data_dir: str, frozen: Optional[str], lang: str, ckpt: Optional[str],
 
     rows = _page_rows(data_dir, readings, limit=limit)
     print(f"[gate] {len(rows)} pages from {os.path.basename(data_dir)}")
-    off = _measure(rows, lang, "off", ckpt)
-    print(f"  off: CER {off['cer']:.4f} bagCER {off['cer_bag']:.4f} "
-          f"digit-exact {off['digit_exact_pages']:.3f} "
-          f"{off['seconds_per_page']:.2f}s/page", flush=True)
-    # "on" is the shipped opt-in: the reader is forced on every line-shaped
-    # page (the CLI keeps it off for born-digital PDFs and by default).
-    on = _measure(rows, lang, "on", ckpt)
-    engaged = sum(1 for p in on["rows"]
-                  if (p.get("reader") or {}).get("active"))
-    print(f"  on  : CER {on['cer']:.4f} bagCER {on['cer_bag']:.4f} "
-          f"digit-exact {on['digit_exact_pages']:.3f} "
-          f"{on['seconds_per_page']:.2f}s/page "
-          f"(reader engaged on {engaged}/{len(on['rows'])} pages)", flush=True)
+    def delta_gate(cand: Dict, base: Dict):
+        delta = {
+            "cer": cand["cer"] - base["cer"],
+            "cer_bag": cand["cer_bag"] - base["cer_bag"],
+            "digit_exact_pages": (cand["digit_exact_pages"]
+                                  - base["digit_exact_pages"]),
+            "seconds_per_page": (cand["seconds_per_page"]
+                                 - base["seconds_per_page"]),
+            "flagged_total": cand["flagged_total"] - base["flagged_total"],
+            "invented_total": cand["invented_total"] - base["invented_total"],
+            "invented_digits_total": (cand["invented_digits_total"]
+                                      - base["invented_digits_total"]),
+            "invented_digits_text_area": (
+                cand["invented_digits_text_area"]
+                - base["invented_digits_text_area"]),
+            "digit_inventions": (cand["digit_inventions"]
+                                 - base["digit_inventions"]),
+            "silent_inventions": (cand["silent_inventions"]
+                                  - base["silent_inventions"]),
+        }
+        gate = {
+            "cer_not_worse": delta["cer"] <= 0.0,
+            "bagcer_not_worse": delta["cer_bag"] <= 0.0,
+            "digit_exact_not_worse": delta["digit_exact_pages"] >= 0.0,
+            "queue_not_larger": delta["flagged_total"] <= 0,
+            "no_silent_invented_digits": delta["silent_inventions"] <= 0,
+            "latency_ok": delta["seconds_per_page"] <= LATENCY_BUDGET_S,
+        }
+        gate["pass"] = all(gate.values())
+        return delta, gate
 
-    # per-page deltas (off vs on) for the honest worst-case picture
-    off_by_page = {p["page"]: p for p in off["rows"]}
-    for p in on["rows"]:
-        o = off_by_page.get(p["page"])
-        p["cer_delta"] = p["cer"] - o["cer"] if o else 0.0
-        p["cer_worse"] = p["cer_delta"] > 0.02
-    on["pages_cer_worse"] = sum(1 for p in on["rows"] if p["cer_worse"])
-    on["worst_page_cer_delta"] = max((p["cer_delta"] for p in on["rows"]),
-                                     default=0.0)
+    arms: Dict[str, Dict] = {}
+    for policy in policies:
+        arm = _measure(rows, lang, policy, ckpt)
+        arms[policy] = arm
+        engaged = sum(1 for p in arm["rows"]
+                      if (p.get("reader") or {}).get("active"))
+        print(f"  {policy:<4}: CER {arm['cer']:.4f} bagCER "
+              f"{arm['cer_bag']:.4f} digit-exact "
+              f"{arm['digit_exact_pages']:.3f} "
+              f"{arm['seconds_per_page']:.2f}s/page "
+              f"(reader engaged on {engaged}/{len(arm['rows'])} pages)",
+              flush=True)
 
-    delta = {
-        "cer": on["cer"] - off["cer"],
-        "cer_bag": on["cer_bag"] - off["cer_bag"],
-        "digit_exact_pages": on["digit_exact_pages"] - off["digit_exact_pages"],
-        "seconds_per_page": on["seconds_per_page"] - off["seconds_per_page"],
-        "flagged_total": on["flagged_total"] - off["flagged_total"],
-        "invented_total": on["invented_total"] - off["invented_total"],
-        "invented_digits_total": (on["invented_digits_total"]
-                                  - off["invented_digits_total"]),
-        "invented_digits_text_area": (on["invented_digits_text_area"]
-                                      - off["invented_digits_text_area"]),
-        "digit_inventions": on["digit_inventions"] - off["digit_inventions"],
-        "silent_inventions": (on["silent_inventions"]
-                              - off["silent_inventions"]),
-        "pages_cer_worse": on["pages_cer_worse"],
-    }
-    gate = {
-        "cer_not_worse": delta["cer"] <= 0.0,
-        "bagcer_not_worse": delta["cer_bag"] <= 0.0,
-        "digit_exact_not_worse": delta["digit_exact_pages"] >= 0.0,
-        "queue_not_larger": delta["flagged_total"] <= 0,
-        "no_silent_invented_digits": delta["silent_inventions"] <= 0,
-        "latency_ok": delta["seconds_per_page"] <= LATENCY_BUDGET_S,
-    }
-    gate["pass"] = all(gate.values())
-    print(f"[gate] deltas: {json.dumps({k: round(v, 4) for k, v in delta.items()})}")
-    print(f"[gate] {json.dumps(gate)}")
-    return {"set": os.path.basename(data_dir), "lang": lang,
-            "reader": reader_info(ckpt), "off": off, "on": on,
-            "delta": delta, "gate": gate}
+    result: Dict = {"set": os.path.basename(data_dir), "lang": lang,
+                    "reader": reader_info(ckpt)}
+    result.update(arms)
+    if "off" in arms and "on" in arms:
+        result["delta"], result["gate"] = delta_gate(arms["on"], arms["off"])
+    if "off" in arms and "auto" in arms:
+        result["delta_auto"], result["gate_auto"] = delta_gate(
+            arms["auto"], arms["off"])
+
+    # per-page deltas (off vs forced-on): the honest worst-case picture
+    if "off" in arms and "on" in arms:
+        off_by_page = {p["page"]: p for p in arms["off"]["rows"]}
+        for p in arms["on"]["rows"]:
+            o = off_by_page.get(p["page"])
+            p["cer_delta"] = p["cer"] - o["cer"] if o else 0.0
+            p["cer_worse"] = p["cer_delta"] > 0.02
+        arms["on"]["pages_cer_worse"] = sum(
+            1 for p in arms["on"]["rows"] if p["cer_worse"])
+        arms["on"]["worst_page_cer_delta"] = max(
+            (p["cer_delta"] for p in arms["on"]["rows"]), default=0.0)
+        result["delta"]["pages_cer_worse"] = arms["on"]["pages_cer_worse"]
+
+    for key in ("delta", "delta_auto"):
+        if key in result:
+            print("[gate] " + key + ": " + json.dumps(
+                {k: round(v, 4) for k, v in result[key].items()}))
+    for key in ("gate", "gate_auto"):
+        if key in result:
+            print(f"[gate] {key}: {json.dumps(result[key])}")
+    return result
 
 
 def main():
@@ -256,16 +277,20 @@ def main():
     ap.add_argument("--readings", default=None,
                     help="anchor readings JSON (for sets without ALTO GT)")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--policies", default="off,on,auto",
+                    help="comma-separated arms to measure: off,auto,on")
     ap.add_argument("--json", default=None)
     args = ap.parse_args()
+    policies = tuple(p.strip() for p in args.policies.split(",") if p.strip())
     result = run(args.data_dir, args.frozen, args.lang, args.ckpt,
-                 args.readings, limit=args.limit)
+                 args.readings, limit=args.limit, policies=policies)
     if args.json:
         os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
         with open(args.json, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
         print(f"wrote {args.json}")
-    return 0 if result["gate"]["pass"] else 1
+    gates = [result[key] for key in ("gate", "gate_auto") if key in result]
+    return 0 if gates and all(g["pass"] for g in gates) else 1
 
 
 if __name__ == "__main__":

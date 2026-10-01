@@ -98,6 +98,10 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
     started = time.time()
     pages, kind = _load_pages(upload_path, kind, all_pages)
     backend = None if ocr in (None, "auto") else ocr
+    # CLI parity: image pages get the line reader under the measured `auto`
+    # gate (running text + aged paper only); PDF pages keep the engine
+    # reading, mirroring the CLI's deliberate auto->off mapping for PDFs.
+    deva_lines = "auto" if kind == "image" else "off"
 
     stem = f"page_{run_id[:8]}"
     results = []
@@ -105,7 +109,8 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
         page_stem = stem if idx == pages[0][0] else f"{stem}_p{idx:03d}"
         results.append((page_stem, run_document_pipeline(
             img_bgr, backend=backend, deskew=deskew, lang=lang,
-            auto_rotate=auto_rotate, out_dir=run_dir, stem=page_stem,
+            auto_rotate=auto_rotate, deva_lines=deva_lines,
+            out_dir=run_dir, stem=page_stem,
             make_pdf=make_pdf, make_overlay=make_overlay,
             make_txt=make_txt, make_json=True, make_md=make_md)))
 

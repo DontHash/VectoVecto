@@ -81,7 +81,7 @@ No set is trusted without an audit:
 | Digit verifier (bodhan) auto-enable | queue R@10 +≥3pp and ≤ +1 s/page | FAIL on cost (+8.3 s/page) → stays opt-in |
 | Mixed-page router (P5) | text CER +0%, non-text PSNR pass, no invented tokens | 1 invented token on photo texture → stays opt-in |
 | Letterpress preprocessing (W2.1) | CER −≥5% relative | FAIL — sauvola invents 1754 tokens; raw stays |
-| Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | **PASS (shipped opt-in).** Frozen gate re-checked 2026-09-26: digit-exact **0.810** [0.769, 0.847], line CER 0.177, bagCER 0.235 (1451 lines); integration letterpress page CER 0.434 → **0.253**. It is letterpress-specific: it hurts modern scans (cornell 0.0541 → 0.1558 forced) and modern table pages, so `--deva-lines` stays off by default with the N0 paper gate on `auto`. Trajectory: [PLAN.md](PLAN.md) Appendix R2–R5 |
+| Devanagari line recognizer (W1) | digit-exact ≥0.75 on frozen heiDATA lines | **PASS (shipped).** Frozen gate re-checked 2026-09-26: digit-exact **0.810** [0.769, 0.847], line CER 0.177, bagCER 0.235 (1451 lines); integration letterpress page CER 0.434 → **0.253** forced-on. It is letterpress-specific: it hurts modern scans (cornell 0.0541 → 0.1558 forced) and modern table pages, so the *library* default stays `off` and the `auto` gate carries the product: since 2026-10-01 the CLI image path and the web studio default to `auto` (N0 paper gate; re-measured in Appendix AE). Trajectory: [PLAN.md](PLAN.md) Appendix R2–R5 |
 | Lexicon flag `unknown_word` (W-B) | queue R@10 +≥3pp, no digit regression | **PARTIAL — opt-in.** Frozen modern PDFs: token R@10 0.1477 → **0.1754** (+2.8pp), token P@10 +0.4pp, digit R@10 unchanged; frozen letterpress: neutral (token +0.1pp, digit R@10 0.8832 unchanged). Active only when the optional lexicon is built (`scripts/fetch_nepali_lexicon.py`); the looser `frac=0.5` config reaches +4.5pp on PDFs but costs 1.5pp letterpress digit R@10. Details: [PLAN.md](PLAN.md) Appendix T |
 | VLM page reader (Qwen3-VL-8B, Phase 1) | page CER ≤0.25, ≤8 s/page, invented ~0 | **FAIL on cost + invented.** Same 10 hard `nepali_pdf_v2` pages: CER **0.176** vs RapidOCR 0.530 (median 0.141, digBAG 0.107 vs 0.135) — but **152.7 s/page** (T4, NF4) and 224 invented tokens; lines median CER 0.0 yet digit-exact 0.077 (Bengali numerals). No VLM mode ships; hybrid is Phase 5 material at best. Details: [bakeoff_results.md](../evals/bakeoff_results.md) |
 | Table cell-major reading order (Appendix Y) | hard-10 `nepali_pdf_v2` page CER −≥15% relative; no regression elsewhere | **PASS.** Pipeline CER 0.5280 → **0.2550** on the 10 hardest pages (−51.7%; full 41: 0.3417 → 0.2751), bagCER/digBAG/invented bit-identical (order-only), grid branch fires 0× on heidata-printed/SROIE/CORD/arXiv-two-column/photo-proxy (byte-identical), s/page within budget. Details: [PLAN.md](PLAN.md) Appendix Y |
@@ -121,8 +121,9 @@ textbook ground truth.
   [0.036-0.076] (prose 0.007-0.049, table-of-contents pages 0.073-0.153) —
   clean print is a solved case; degradation and tables are the remaining gap.
   The W1 CRNN reader measurably **hurts** real scans (`deva_lines on`:
-  CER 0.0541 → 0.1558 on the same 16 pages): it is letterpress-specific and
-  stays off by default. Details: [PLAN.md](PLAN.md) Appendix Z.
+  CER 0.0541 → 0.1558 on the same 16 pages): it is letterpress-specific, and
+  the `auto` default excludes those pages (Appendix AE). Details:
+  [PLAN.md](PLAN.md) Appendix Z.
 - **>2 columns** are unsupported; the router and layout logic assume one or two.
 
 Full history, per-appendices, in [PLAN.md](PLAN.md); the bake-off table is in

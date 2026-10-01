@@ -2196,3 +2196,47 @@ Cloud Run demo with Google-managed certificates; README and `pyproject` use it
 as the canonical URL (runbook:
 [deploy/gcp-cloudrun.md](../deploy/gcp-cloudrun.md)).
 
+## Appendix AE - reader `auto` becomes the image default (2026-10-01)
+
+**Change.** The W1 reader shipped opt-in in September; the N0 `auto` gate
+(running-text geometry + aged-paper colour, Appendix AA) is now the *product*
+default for image inputs: `--deva-lines` defaults to `auto` on the CLI image
+path and the web studio passes `auto` for images / `off` for PDFs (CLI
+parity). The library defaults (`ocr_page`, `run_document_pipeline`) stay `off`
+so evaluation harnesses keep their frozen semantics, and PDF inputs keep the
+deliberate `auto -> off` mapping.
+
+**Gate re-run, frozen-verified, clean load** (`--policies off,auto`;
+`out/deva_auto_heidata_clean.json`, `out/deva_auto_cornell_clean.json`):
+
+| set | arm | CER | bagCER | engaged | s/page |
+|---|---|---|---|---|---|
+| heidata_printed (69) | off | 0.4335 | 0.5529 | 0/69 | 1.90 |
+| heidata_printed (69) | auto | **0.3730** | **0.5250** | **42/69** | 2.53 |
+| cornell_real (16) | off | 0.0541 | 0.1376 | 0/16 | 1.72 |
+| cornell_real (16) | auto | 0.0541 | 0.1376 | 0/16 | 1.48 |
+
+Pre-registered co-conditions (Appendix R5) on heidata: CER **−0.0604**,
+bagCER **−0.0279**, digit-exact unchanged, queue **−229 flags**, **silent
+invented digits 0** (the reader's +38 in-text-area digits and +33 digit
+placements are all flagged, so the honesty contract holds), latency
+**+0.62 s/page** (budget ≤ +1). All PASS. Cornell deltas are exactly 0 (zero
+engagement, identical code path). The first heidata run measured +1.94 s/page
+and failed the latency clause while the full test suite ran concurrently; the
+clean re-run above is the recorded number.
+
+**Adversarial gate tests added** (`tests/test_document_deva_lines.py`):
+saturated-but-bright modern cream must not engage (lum clamp); a neutral
+shadow over white modern paper lowers luminance without adding hue and must
+not engage; dark neutral paper must not engage; aged paper with cell-like
+geometry must not engage (geometry veto). Neither signal alone reaches `auto`
+engagement.
+
+**Decision: adopt.** Letterpress page CER 0.434 -> 0.373 under the default,
+with no change anywhere the reader was measured to hurt. Scope note: the
+hosted Cloud Run image is document-only (no torch, no reader checkpoint), so
+the web studio reports `no checkpoint` there and stays on the engine —
+graceful and unchanged. The default engages on full installs (CLI and
+self-hosted web) where the checkpoint is present; shipping the reader in the
+hosted image (torch cost) is a separate decision.
+

@@ -15,6 +15,18 @@ All notable changes to this project are documented here. The format follows
   `…run.app` URL still serves; README and package metadata use the canonical
   domain.
 
+### Changed
+
+- **The Devanagari line reader is on by default for image inputs** under the
+  measured `auto` gate (running text + aged paper only). The CLI image path
+  engages it where the reader checkpoint is installed; the web studio
+  requests the same policy and degrades gracefully to the engine where it is
+  not (the document-only hosted image ships no torch/checkpoint). PDF inputs
+  keep the engine reading and the library default stays `off` for evaluation
+  semantics. Frozen letterpress set: page CER **0.434 → 0.373** (42/69 pages)
+  at **+0.62 s/page**, with zero engagement and byte-identical output on the
+  modern scan set — [docs/PLAN.md](docs/PLAN.md) Appendix AE.
+
 ## [1.4.0] - 2026-09-30
 
 ### Added
