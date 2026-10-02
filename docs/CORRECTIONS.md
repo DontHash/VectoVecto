@@ -150,7 +150,12 @@ In the queue tab:
   exactly on corrected tokens; provenance present in `corrected.json`.
 * Privacy: an export with `share: []` contains zero crops.
 * UX: review mode ships with a 10-run beta; `≥20%` of queued tokens acted on
-  in a session is the early-usefulness bar.
+  in a session is the early-usefulness bar. **Measured 2026-10-02** (PLAN.md
+  Appendix AI): 10 sessions on real court-register pages, **99/99 queued
+  tokens acted** (88 changed / 11 confirmed / 0 skipped), every queue emptied,
+  and **46 digit-bearing labels** staged as
+  `data/doc_eval/target_domain_digit_staging_v1` (agent-reviewed, awaiting a
+  human audit pass).
 * Data: exported zips are loadable by the training pipeline
   (`scripts/build_digit_crop_sheet.py --import` after conversion to
   `lines/ + labels.tsv`; the zip already carries `labels.tsv`).

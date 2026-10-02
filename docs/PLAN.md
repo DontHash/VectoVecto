@@ -2437,3 +2437,45 @@ The modern-PDF queue ceiling is recognition, not validation - which returns the
 path to target-domain digit ground truth (the N5 need) or a stronger reader
 class. `date_flags` stays an opt-in parameter, default off.
 
+## Appendix AI - correction-loop beta (10 sessions, 2026-10-02)
+
+**Question.** Does the shipped correction loop (docs/CORRECTIONS.md) work as a
+data channel, and at what rate does it capture target-domain ground truth? The
+pre-registered bar (docs/CORRECTIONS.md section 8): >= 20% of queued tokens
+acted on per session.
+
+**Protocol.** Ten sessions on `supreme_218512.pdf` pages 8-17 (the court
+register's continuation; the frozen evaluation set is pages 0-7, and the
+harness refuses any frozen page id by manifest guard). Each session:
+`scripts/corrections_beta.py prepare` (pipeline + queue + contact sheets),
+review of every queued token using the contact sheet and the source PDF text
+layer as a word-identity cross-check (the layer is encoding-corrupt but
+systematically decodable), `compose` -> `apply`, then one `import`.
+
+**Measured.**
+
+| metric | value |
+|---|---|
+| sessions | 10 (pages 8-17, all non-frozen) |
+| queued tokens / acted | **99 / 99 (100%)** |
+| changed / confirmed / skipped | **88 / 11 / 0** |
+| queue after apply | **0 tokens on all 10 pages** |
+| sessions meeting the 20% bar | **10 / 10** |
+| target-domain digit labels captured | **46** (`data/doc_eval/target_domain_digit_staging_v1`, labels sha256 `e5c6da99af83`) |
+| review effort | ~1 page / few minutes including cross-check |
+
+**Provenance and limits.** The reviewer was the agent, not a human: labels are
+marked `reviewed_by: agent beta review - NOT human GT; audit before training
+use`. The 100% acted rate is a *ceiling* under full attention, not a human
+estimate of queue usefulness; what it proves is that the queue is actionable
+end to end and that real court-register corrections are capturable at ~10
+digit-bearing tokens per page. Residual risk: where the page is ambiguous the
+corrupt text layer can leak into a label - the audit pass over the 46 crops is
+the gate before any training use.
+
+**Decision.** The loop works as designed; it is the data-collection channel
+for the target-domain track. Next: the human audit pass over the 46 staged
+labels, then fold audited labels into the digit GT track (the bottleneck
+Appendix AG/AH measured). Harness committed; session artifacts under
+`out/beta/` (git-ignored).
+

@@ -230,6 +230,35 @@ def apply_corrections(result: OCRResult,
     return stats
 
 
+def result_from_ocr_json(path: str) -> OCRResult:
+    """Rebuild token objects from an exported `ocr.json`.
+
+    The durable input shared by the CLI, scripts and the web API: corrections
+    are always applied to the original reading, so a batch can be re-sent
+    idempotently (docs/CORRECTIONS.md §5).
+    """
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+    tokens: List[Token] = []
+    for item in payload.get("tokens", []):
+        bbox = item.get("bbox") or [0, 0, 1, 1]
+        tokens.append(Token(
+            text=str(item.get("text", "")),
+            conf=float(item.get("conf") or 0.0),
+            bbox=(int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])),
+            granularity=item.get("granularity", "line"),
+            backend=payload.get("backend", "?"),
+            flags=list(item.get("flags") or []),
+            alt_text=item.get("alt_text"),
+            repass_text=item.get("repass_text"),
+            repass_conf=item.get("repass_conf"),
+            text_source=item.get("text_source", "backend"),
+            orig_text=item.get("original_text"),
+            corrected_by=item.get("corrected_by")))
+    return OCRResult(text="\n".join(t.text for t in tokens), tokens=tokens,
+                     backend=payload.get("backend", "?"), meta={})
+
+
 def apply_and_export(out_dir: str, stem: str, image_bgr: np.ndarray,
                      result: OCRResult, corrections: Sequence[Correction],
                      dpi: Optional[int] = None, *,

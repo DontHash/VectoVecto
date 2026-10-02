@@ -66,30 +66,9 @@ def _require_run_dir(run_id: str) -> str:
 
 def _result_from_run(run_dir: str):
     """Rebuild the token objects from the run's canonical `ocr.json`."""
-    import json as _json
+    from veriscript.document.corrections import result_from_ocr_json
 
-    from veriscript.document.ocr import OCRResult, Token
-
-    with open(os.path.join(run_dir, "ocr.json"), encoding="utf-8") as f:
-        payload = _json.load(f)
-    tokens = []
-    for item in payload.get("tokens", []):
-        bbox = item.get("bbox") or [0, 0, 1, 1]
-        tokens.append(Token(
-            text=str(item.get("text", "")),
-            conf=float(item.get("conf") or 0.0),
-            bbox=(int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])),
-            granularity=item.get("granularity", "line"),
-            backend=payload.get("backend", "?"),
-            flags=list(item.get("flags") or []),
-            alt_text=item.get("alt_text"),
-            repass_text=item.get("repass_text"),
-            repass_conf=item.get("repass_conf"),
-            text_source=item.get("text_source", "backend"),
-            orig_text=item.get("original_text"),
-            corrected_by=item.get("corrected_by")))
-    return OCRResult(text="\n".join(t.text for t in tokens), tokens=tokens,
-                     backend=payload.get("backend", "?"), meta={})
+    return result_from_ocr_json(os.path.join(run_dir, "ocr.json"))
 
 
 def _parse_corrections_body(body: Optional[Dict[str, Any]]):

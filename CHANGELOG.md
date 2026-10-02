@@ -19,6 +19,12 @@ All notable changes to this project are documented here. The format follows
   otherwise. New: `veriscript/document/corrections.py`, `docs/CORRECTIONS.md`,
   `POST /api/runs/{id}/correct`, `POST /api/runs/{id}/corrections/export`.
   End-to-end walkthrough recorded 2026-10-02.
+- **Correction-loop beta + first target-domain digit batch.** Ten sessions on
+  real court-register pages (`scripts/corrections_beta.py`: prepare / compose /
+  apply / report / import) acted on **99/99 queued tokens** (88 changed, 11
+  confirmed, every queue emptied) and staged **46 digit-bearing labels** under
+  `data/doc_eval/target_domain_digit_staging_v1` (agent-reviewed; a human
+  audit is the gate before any training use). Details: PLAN.md Appendix AI.
 - **Custom domain live**: <https://veriscript.live> (and
   `https://www.veriscript.live`) mapped to the Cloud Run demo with
   Google-managed certificates over Namecheap DNS; a Cloud Monitoring uptime
