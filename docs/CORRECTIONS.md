@@ -154,8 +154,9 @@ In the queue tab:
   Appendix AI): 10 sessions on real court-register pages, **99/99 queued
   tokens acted** (88 changed / 11 confirmed / 0 skipped), every queue emptied,
   and **46 digit-bearing labels** staged as
-  `data/doc_eval/target_domain_digit_staging_v1` (agent-reviewed, awaiting a
-  human audit pass).
+  `data/doc_eval/target_domain_digit_staging_v1`. The dataset owner then
+  audited all 46 and approved them unchanged — the batch is human-audited
+  target-domain digit ground truth (internal, not a frozen eval set).
 * Data: exported zips are loadable by the training pipeline
   (`scripts/build_digit_crop_sheet.py --import` after conversion to
   `lines/ + labels.tsv`; the zip already carries `labels.tsv`).

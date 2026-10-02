@@ -2479,3 +2479,10 @@ labels, then fold audited labels into the digit GT track (the bottleneck
 Appendix AG/AH measured). Harness committed; session artifacts under
 `out/beta/` (git-ignored).
 
+**Human audit (2026-10-02, closing the gate).** The dataset owner reviewed all
+46 staged crops/labels and reported the loop "worked very well". `labels.tsv`
+was returned unchanged (sha256 `e5c6da99af83` re-verified against the import),
+so the batch is now **owner-audited target-domain digit ground truth**
+(internal; not a frozen evaluation set). This also validates the data engine's
+shape: agent pre-correction + human audit is cheap enough to scale.
+

@@ -23,8 +23,10 @@ All notable changes to this project are documented here. The format follows
   real court-register pages (`scripts/corrections_beta.py`: prepare / compose /
   apply / report / import) acted on **99/99 queued tokens** (88 changed, 11
   confirmed, every queue emptied) and staged **46 digit-bearing labels** under
-  `data/doc_eval/target_domain_digit_staging_v1` (agent-reviewed; a human
-  audit is the gate before any training use). Details: PLAN.md Appendix AI.
+  `data/doc_eval/target_domain_digit_staging_v1`. The dataset owner audited
+  all 46 and approved them unchanged (sha256 re-verified) — **human-audited
+  target-domain digit ground truth**, internal and not a frozen eval set.
+  Details: PLAN.md Appendix AI.
 - **Custom domain live**: <https://veriscript.live> (and
   `https://www.veriscript.live`) mapped to the Cloud Run demo with
   Google-managed certificates over Namecheap DNS; a Cloud Monitoring uptime
