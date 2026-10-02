@@ -81,6 +81,78 @@ def _copy_or_text(run_dir: str, name: str, src: Optional[str],
     return None
 
 
+KEY_MAP = {
+    "restored.png": "restored",
+    "overlay.png": "overlay",
+    "searchable.pdf": "pdf",
+    "transcript.txt": "txt",
+    "transcript.md": "md",
+    "ocr.json": "json",
+    "corrected.pdf": "corrected_pdf",
+    "corrected.txt": "corrected_txt",
+    "corrected.md": "corrected_md",
+    "corrected.json": "corrected_json",
+    "corrections.json": "corrections_json",
+    "corrections.zip": "corrections_zip",
+    "combined.pdf": "combined_pdf",
+    "combined.txt": "combined_txt",
+    "combined.md": "combined_md",
+}
+
+
+def collect_run_summary(run_dir: str, run_id: str) -> Dict:
+    """Review queue, flags, transcript and file links from the run directory.
+
+    The written `ocr.json` is the single source for the queue; `files` lists
+    every canonical artifact that exists, including the corrected ones after
+    the correction loop has run (docs/CORRECTIONS.md).
+    """
+    review: List[Dict] = []
+    flags_summary: Dict[str, int] = {}
+    n_tokens = 0
+    # After the correction loop has run, the corrected record is the truth
+    # (the originals stay downloadable under their own names).
+    ocr_name = ("corrected.json"
+                if os.path.isfile(os.path.join(run_dir, "corrected.json"))
+                else "ocr.json")
+    try:
+        with open(os.path.join(run_dir, ocr_name), encoding="utf-8") as f:
+            payload = json.load(f)
+        n_tokens = len(payload.get("tokens", []))
+        for item in payload.get("review", []):
+            entry = {
+                "index": item.get("index"),
+                "text": item.get("text", ""),
+                "alt_text": item.get("alt_text"),
+                "flags": item.get("flags", []),
+                "conf": item.get("conf"),
+                "risk": item.get("risk"),
+                "bbox": item.get("bbox"),
+            }
+            review.append(entry)
+            for flag in entry["flags"]:
+                flags_summary[flag] = flags_summary.get(flag, 0) + 1
+    except (OSError, ValueError):
+        pass
+
+    transcript = ""
+    transcript_name = ("corrected.txt"
+                       if os.path.isfile(os.path.join(run_dir, "corrected.txt"))
+                       else "transcript.txt")
+    try:
+        with open(os.path.join(run_dir, transcript_name),
+                  encoding="utf-8") as f:
+            transcript = f.read()
+    except OSError:
+        pass
+
+    files = {key: f"/api/runs/{run_id}/files/{name}"
+             for name, key in KEY_MAP.items()
+             if os.path.isfile(os.path.join(run_dir, name))}
+    return {"review": review, "flags_summary": flags_summary,
+            "transcript": transcript, "files": files, "n_tokens": n_tokens}
+
+
 def process_page(upload_path: str, run_dir: str, run_id: str, *,
                  lang: Optional[str], deskew: bool,
                  kind: Optional[str] = None, ocr: Optional[str] = None,
@@ -153,35 +225,7 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
             files["combined.md"] = os.path.join(run_dir, "combined.md")
 
     # Review queue + summary from the written ocr.json (single source) -----
-    review: List[Dict] = []
-    summary: Dict[str, int] = {}
-    n_tokens = 0
-    try:
-        with open(os.path.join(run_dir, "ocr.json"), encoding="utf-8") as f:
-            payload = json.load(f)
-        n_tokens = len(payload.get("tokens", []))
-        for item in payload.get("review", []):
-            entry = {
-                "text": item.get("text", ""),
-                "alt_text": item.get("alt_text"),
-                "flags": item.get("flags", []),
-                "conf": item.get("conf"),
-                "risk": item.get("risk"),
-                "bbox": item.get("bbox"),
-            }
-            review.append(entry)
-            for flag in entry["flags"]:
-                summary[flag] = summary.get(flag, 0) + 1
-    except (OSError, ValueError):
-        pass
-
-    transcript = ""
-    try:
-        with open(os.path.join(run_dir, "transcript.txt"),
-                  encoding="utf-8") as f:
-            transcript = f.read()
-    except OSError:
-        pass
+    summary = collect_run_summary(run_dir, run_id)
 
     meta_src = dict(getattr(result, "meta", {}) or {})
     meta = {
@@ -190,9 +234,9 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
         "primary_stream": meta_src.get("primary_stream"),
         "skew_angle": meta_src.get("skew_angle", 0.0),
         "resized": bool(meta_src.get("resized", False)),
-        "n_tokens": n_tokens,
-        "flagged": len(review),
-        "digit_conflicts": summary.get("digit_conflict", 0),
+        "n_tokens": summary["n_tokens"],
+        "flagged": len(summary["review"]),
+        "digit_conflicts": summary["flags_summary"].get("digit_conflict", 0),
         "lang": lang or "default",
         "input_kind": kind,
         "deskew": deskew,
@@ -203,26 +247,12 @@ def process_page(upload_path: str, run_dir: str, run_id: str, *,
         "page_cap": PAGE_CAP,
     }
 
-    key_map = {
-        "restored.png": "restored",
-        "overlay.png": "overlay",
-        "searchable.pdf": "pdf",
-        "transcript.txt": "txt",
-        "transcript.md": "md",
-        "ocr.json": "json",
-        "combined.pdf": "combined_pdf",
-        "combined.txt": "combined_txt",
-        "combined.md": "combined_md",
-    }
     return {
         "run_id": run_id,
         "meta": meta,
-        "flags_summary": summary,
-        "review": review,
-        "transcript": transcript,
+        "flags_summary": summary["flags_summary"],
+        "review": summary["review"],
+        "transcript": summary["transcript"],
         "status_line": getattr(result, "status_line", ""),
-        "files": {
-            key_map[key]: f"/api/runs/{run_id}/files/{key}"
-            for key, path in files.items() if path and key in key_map
-        },
+        "files": summary["files"],
     }

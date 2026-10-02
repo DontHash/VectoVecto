@@ -39,6 +39,12 @@ PUBLIC_FILES = {
     "combined.txt": {"media": "text/plain; charset=utf-8", "download": "combined.txt"},
     "combined.md": {"media": "text/markdown; charset=utf-8", "download": "combined.md"},
     "ocr.json": {"media": "application/json", "download": "ocr.json"},
+    "corrected.pdf": {"media": "application/pdf", "download": "corrected.pdf"},
+    "corrected.txt": {"media": "text/plain; charset=utf-8", "download": "corrected.txt"},
+    "corrected.md": {"media": "text/markdown; charset=utf-8", "download": "corrected.md"},
+    "corrected.json": {"media": "application/json", "download": "corrected.json"},
+    "corrections.json": {"media": "application/json", "download": "corrections.json"},
+    "corrections.zip": {"media": "application/zip", "download": "corrections.zip"},
 }
 
 

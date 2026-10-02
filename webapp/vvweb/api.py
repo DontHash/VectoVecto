@@ -14,13 +14,15 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import (Body, Depends, FastAPI, File, Form, HTTPException, Request,
+                     UploadFile, status)
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .compression import SelectiveGZipMiddleware
-from .pipeline import PAGE_CAP, PipelineError, process_page
+from .pipeline import (PAGE_CAP, PipelineError, collect_run_summary,
+                       process_page)
 from .security import (DailyKeyedQuota, DailyQuota, RateLimiter,
                        SecurityHeadersMiddleware, client_key,
                        http_exception_handler, new_run_id, require_auth,
@@ -47,6 +49,62 @@ def _flag(value: str, default: bool = True) -> bool:
     if text in ("0", "false", "off", "no"):
         return False
     return default
+
+
+def _require_run_dir(run_id: str) -> str:
+    """The run's directory, or a 404 when it expired / never existed."""
+    manifest = store.read_manifest(run_id)
+    try:
+        run_dir = store.run_dir(run_id)
+    except KeyError:
+        run_dir = ""
+    if manifest is None or not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="This result has expired. Run the page again.")
+    return run_dir
+
+
+def _result_from_run(run_dir: str):
+    """Rebuild the token objects from the run's canonical `ocr.json`."""
+    import json as _json
+
+    from veriscript.document.ocr import OCRResult, Token
+
+    with open(os.path.join(run_dir, "ocr.json"), encoding="utf-8") as f:
+        payload = _json.load(f)
+    tokens = []
+    for item in payload.get("tokens", []):
+        bbox = item.get("bbox") or [0, 0, 1, 1]
+        tokens.append(Token(
+            text=str(item.get("text", "")),
+            conf=float(item.get("conf") or 0.0),
+            bbox=(int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])),
+            granularity=item.get("granularity", "line"),
+            backend=payload.get("backend", "?"),
+            flags=list(item.get("flags") or []),
+            alt_text=item.get("alt_text"),
+            repass_text=item.get("repass_text"),
+            repass_conf=item.get("repass_conf"),
+            text_source=item.get("text_source", "backend"),
+            orig_text=item.get("original_text"),
+            corrected_by=item.get("corrected_by")))
+    return OCRResult(text="\n".join(t.text for t in tokens), tokens=tokens,
+                     backend=payload.get("backend", "?"), meta={})
+
+
+def _parse_corrections_body(body: Optional[Dict[str, Any]]):
+    from veriscript.document.corrections import MAX_CORRECTIONS, load_corrections
+
+    raw = (body or {}).get("corrections") or []
+    if not isinstance(raw, list) or len(raw) > MAX_CORRECTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"corrections must be a list of at most {MAX_CORRECTIONS} entries")
+    try:
+        doc = load_corrections({"pages": {"*": raw}})
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return doc.pages["*"]
 
 
 def _count_pages(kind: str, path: str, all_pages: bool) -> int:
@@ -319,6 +377,79 @@ def create_app() -> FastAPI:
             filename=PUBLIC_FILES[name]["download"] if download else None,
             headers={"Cache-Control": "private, max-age=300"},
         )
+
+    # -- correction loop (docs/CORRECTIONS.md) ------------------------------
+    @app.post("/api/runs/{run_id}/correct", dependencies=[Depends(require_auth)])
+    async def correct(run_id: str, body: Dict[str, Any] = Body(...)) -> JSONResponse:
+        import cv2
+
+        from veriscript.document.corrections import (apply_and_export,
+                                                     corrections_record,
+                                                     write_corrections_record)
+
+        run_dir = _require_run_dir(run_id)
+        corrections = _parse_corrections_body(body)
+        if not corrections:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="no corrections supplied")
+        image = cv2.imread(os.path.join(run_dir, "restored.png"))
+        if image is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The run image is no longer available. Run the page again.")
+        result = _result_from_run(run_dir)
+        applied = apply_and_export(
+            run_dir, "corrected", image, result, corrections,
+            make_pdf=True, make_overlay=False, make_txt=True,
+            make_json=True, make_md=True, overlay_source=image)
+        stats = applied["stats"]
+        page_stem = f"page_{run_id[:8]}"
+        if stats["reviewed"]:
+            write_corrections_record(
+                os.path.join(run_dir, "corrections.json"),
+                corrections_record(page_stem, corrections, stats, run_id))
+        summary = collect_run_summary(run_dir, run_id)
+        return JSONResponse({"run_id": run_id, "stats": stats, **summary})
+
+    @app.post("/api/runs/{run_id}/corrections/export",
+              dependencies=[Depends(require_auth)])
+    async def corrections_export(run_id: str,
+                                 body: Dict[str, Any] = Body(...)) -> JSONResponse:
+        import cv2
+
+        from veriscript.document.corrections import build_corrections_zip
+
+        run_dir = _require_run_dir(run_id)
+        corrections = _parse_corrections_body(body)
+        share_raw = (body or {}).get("share") or []
+        if not isinstance(share_raw, list):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="share must be a list of indices")
+        try:
+            share = [int(i) for i in share_raw]
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="share must be a list of indices")
+        known = {c.index for c in corrections}
+        if not set(share) <= known:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="share contains indices that are not in corrections")
+        image = cv2.imread(os.path.join(run_dir, "restored.png"))
+        if image is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The run image is no longer available. Run the page again.")
+        page_stem = f"page_{run_id[:8]}"
+        build_corrections_zip(os.path.join(run_dir, "corrections.zip"),
+                              image, page_stem, corrections, share)
+        n_shared = sum(1 for c in corrections
+                       if c.index in set(share) and c.bbox is not None)
+        return JSONResponse({
+            "run_id": run_id,
+            "file": f"/api/runs/{run_id}/files/corrections.zip",
+            "shared": n_shared,
+        })
 
     # -- frontend ----------------------------------------------------------
     if os.path.isdir(FRONTEND_DIST):

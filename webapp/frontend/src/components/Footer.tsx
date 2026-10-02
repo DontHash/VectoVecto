@@ -51,9 +51,9 @@ export function Footer() {
         </div>
       </div>
 
-      <div class="container" style={{ "margin-top": "40px" }}>
+      <div class="container footer__meta">
         <hr class="rule" />
-        <p class="eyebrow" style={{ "margin-top": "16px" }}>
+        <p class="eyebrow footer__note footer__note--top">
           This demo deletes every upload after its retention window · the offline guarantee belongs
           to the local app
         </p>

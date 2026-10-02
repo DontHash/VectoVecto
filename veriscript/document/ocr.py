@@ -80,7 +80,9 @@ class Token:
     repass_text: Optional[str] = None  # recognition-only re-read on a 2x crop
     repass_conf: Optional[float] = None
     cal_conf: Optional[float] = None  # calibrated confidence (0-100), when fitted
-    text_source: str = "backend"  # "backend" | "deva_crnn" (line reader)
+    text_source: str = "backend"  # "backend" | "deva_crnn" | "split" | "human"
+    orig_text: Optional[str] = None       # pre-correction reading (human review)
+    corrected_by: Optional[str] = None    # "human" once reviewed in place
 
     @property
     def has_digits(self) -> bool:

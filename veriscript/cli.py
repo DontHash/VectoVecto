@@ -156,6 +156,31 @@ def run_document_mode(args) -> int:
                 make_pdf=not args.no_pdf, make_overlay=not args.no_overlay,
                 make_txt=not args.no_txt, make_json=True,
                 make_md=not getattr(args, "no_md", False))
+            apply_stats = None
+            corrections_path = getattr(args, "apply_corrections", None)
+            if corrections_path:
+                from veriscript.document.corrections import (
+                    apply_and_export, corrections_record, load_corrections,
+                    write_corrections_record)
+                cdoc = load_corrections(corrections_path)
+                page_corr = cdoc.for_page(name)
+                if page_corr:
+                    applied = apply_and_export(
+                        args.output, f"{name}_corrected", res.display_bgr,
+                        res.ocr, page_corr, dpi=dpi,
+                        make_pdf=not args.no_pdf, make_overlay=False,
+                        make_txt=not args.no_txt, make_json=True,
+                        make_md=not getattr(args, "no_md", False),
+                        overlay_source=res.display_bgr)
+                    apply_stats = applied["stats"]
+                    if apply_stats["reviewed"]:
+                        write_corrections_record(
+                            os.path.join(args.output, f"{name}_corrections.json"),
+                            corrections_record(name, page_corr, apply_stats))
+                        print(f"  {name}: corrections "
+                              f"{apply_stats['changed']} changed / "
+                              f"{apply_stats['confirmed']} confirmed / "
+                              f"{apply_stats['skipped']} skipped")
             ok += 1
             low = sum(1 for t in res.ocr.tokens if "low_conf" in t.flags)
             review = res.review_list
@@ -166,6 +191,7 @@ def run_document_mode(args) -> int:
                                        for t in review[:5]],
                             "seconds": res.meta["seconds"],
                             "skew_angle": res.meta["skew_angle"],
+                            "corrections": apply_stats,
                             "outputs": res.outputs})
             print(f"  {name}: {res.status_line}")
             for tok in review[:3]:
@@ -338,6 +364,12 @@ def main():
                      help="FAILED its frozen gate (Appendix AG): on ruled "
                           "tables it fragments valid dates; kept for "
                           "reference only - do not enable")
+    doc.add_argument("--apply-corrections", default=None,
+                     dest="apply_corrections",
+                     help="apply a corrections JSON (docs/CORRECTIONS.md) "
+                          "after OCR and write {stem}_corrected.pdf/.txt/.md/"
+                          ".json plus {stem}_corrections.json; unmatched "
+                          "entries are reported, never silently dropped")
     doc.add_argument("--no-pdf", action="store_true", dest="no_pdf")
     doc.add_argument("--no-overlay", action="store_true", dest="no_overlay")
     doc.add_argument("--no-txt", action="store_true", dest="no_txt")

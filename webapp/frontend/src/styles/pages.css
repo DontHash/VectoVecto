@@ -1040,3 +1040,17 @@
 .risk__fill--mid {
   background: var(--data-amber);
 }
+
+/* CSP-safe spacing (no inline styles; style-src is 'self') */
+
+.footer__meta {
+  margin-top: var(--space-10);
+}
+
+.footer__note--top {
+  margin-top: var(--space-4);
+}
+
+.landing__note {
+  margin-top: var(--space-6);
+}

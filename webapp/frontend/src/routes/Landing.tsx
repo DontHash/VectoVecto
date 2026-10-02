@@ -143,7 +143,7 @@ python -m veriscript --mode document --input page.jpg --output out/run1
 python webapp/server.py   # → http://127.0.0.1:8000`}
           />
 
-          <p class="eyebrow" style={{ "margin-top": "24px" }}>
+          <p class="eyebrow landing__note">
             the pipeline runs with networking disabled — nothing reaches out
           </p>
         </div>

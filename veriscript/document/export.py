@@ -286,11 +286,13 @@ def write_ocr_json(path: str, result: OCRResult) -> str:
     from veriscript.document.ocr import review_queue, token_risk
 
     review = review_queue(result.tokens)
+    index_of = {id(t): i for i, t in enumerate(result.tokens)}
     payload = {
         "backend": result.backend,
         "meta": {k: v for k, v in result.meta.items()},
         "review": [
             {
+                "index": index_of[id(t)],
                 "text": t.text,
                 "bbox": list(t.bbox),
                 "conf": round(t.conf, 2),
@@ -310,6 +312,9 @@ def write_ocr_json(path: str, result: OCRResult) -> str:
                 "alt_text": t.alt_text,
                 "repass_text": t.repass_text,
                 "repass_conf": t.repass_conf,
+                "original_text": t.orig_text,
+                "text_source": t.text_source,
+                "corrected_by": t.corrected_by,
             }
             for t in result.tokens
         ],

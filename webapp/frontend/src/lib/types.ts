@@ -10,6 +10,7 @@ export type FlagName =
   | (string & {});
 
 export interface QueueItem {
+  index: number | null;
   text: string;
   alt_text: string | null;
   flags: FlagName[];
@@ -47,6 +48,12 @@ export interface RunFiles {
   combined_pdf?: string;
   combined_txt?: string;
   combined_md?: string;
+  corrected_pdf?: string;
+  corrected_txt?: string;
+  corrected_md?: string;
+  corrected_json?: string;
+  corrections_json?: string;
+  corrections_zip?: string;
 }
 
 export interface RunPayload {
@@ -58,6 +65,38 @@ export interface RunPayload {
   status_line: string;
   files: RunFiles;
   expires_in: number;
+}
+
+/** docs/CORRECTIONS.md — one staged fix, keyed to a token index. */
+export interface CorrectionInput {
+  index: number;
+  bbox: [number, number, number, number] | null;
+  original: string;
+  corrected: string;
+  action: "changed" | "confirmed";
+}
+
+export interface CorrectionStats {
+  changed: number;
+  confirmed: number;
+  skipped: number;
+  skipped_indices: number[];
+  reviewed: number;
+}
+
+export interface CorrectResponse {
+  run_id: string;
+  stats: CorrectionStats;
+  flags_summary: Record<string, number>;
+  review: QueueItem[];
+  transcript: string;
+  files: RunFiles;
+}
+
+export interface ExportResponse {
+  run_id: string;
+  file: string;
+  shared: number;
 }
 
 export interface Health {

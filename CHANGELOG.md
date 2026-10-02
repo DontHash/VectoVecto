@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **The correction loop (Track 2): verify → fix → re-export.** Human
+  corrections can now be applied to a run and re-exported as
+  `corrected.pdf/.txt/.md/.json` with per-token provenance (`original_text`,
+  `corrected_by`, `text_source`) while the originals stay untouched; CLI
+  `--apply-corrections`; a keyboard-first studio review mode (confirm / use
+  alternative / free text) that posts the batch and shows the corrected
+  artifacts; and a privacy-first training export that packs ONLY explicitly
+  marked token crops + labels — no page images, nothing leaves the machine
+  otherwise. New: `veriscript/document/corrections.py`, `docs/CORRECTIONS.md`,
+  `POST /api/runs/{id}/correct`, `POST /api/runs/{id}/corrections/export`.
+  End-to-end walkthrough recorded 2026-10-02.
 - **Custom domain live**: <https://veriscript.live> (and
   `https://www.veriscript.live`) mapped to the Cloud Run demo with
   Google-managed certificates over Namecheap DNS; a Cloud Monitoring uptime
@@ -46,6 +57,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **Inline-style CSP violations removed** from the footer and the landing
+  note (`style=` attributes were silently blocked by `style-src 'self'`; moved
+  to classes). The superseded static `ReviewTable` component was removed — the
+  review queue is now the interactive correction review.
 - **Crawler fallback no longer renders above the app.** The static SEO
   fallback in `index.html` was removed by an inline script, which the
   production CSP (`script-src 'self'`) blocks; it now stays in the raw HTML

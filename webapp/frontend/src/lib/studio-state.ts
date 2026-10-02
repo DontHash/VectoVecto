@@ -1,8 +1,16 @@
 /** Studio state — one factory, used by the homepage hero and the full studio
  *  page, so the product behaves identically wherever it is embedded. */
 import { createSignal, onCleanup } from "solid-js";
-import { fetchHealth, runRestore } from "./api";
-import type { Health, Lang, OcrEngine, RunPayload } from "./types";
+import { correctRun, exportRunCorrections, fetchHealth, runRestore } from "./api";
+import type {
+  CorrectionInput,
+  CorrectionStats,
+  ExportResponse,
+  Health,
+  Lang,
+  OcrEngine,
+  RunPayload,
+} from "./types";
 
 export type StudioPhase = "idle" | "running" | "done" | "error";
 
@@ -25,6 +33,18 @@ export function createStudioState() {
   const [health, setHealth] = createSignal<Health | null>(null);
   const [inputUrl, setInputUrl] = createSignal<string | null>(null);
   const [showBoxes, setShowBoxes] = createSignal(true);
+  const [corrections, setCorrections] = createSignal<CorrectionInput[]>([]);
+  const [correcting, setCorrecting] = createSignal(false);
+  const [correctionError, setCorrectionError] = createSignal<string | null>(null);
+  const [lastStats, setLastStats] = createSignal<CorrectionStats | null>(null);
+  const [exportResult, setExportResult] = createSignal<ExportResponse | null>(null);
+
+  const resetCorrections = () => {
+    setCorrections([]);
+    setCorrectionError(null);
+    setLastStats(null);
+    setExportResult(null);
+  };
 
   let timer: number | undefined;
 
@@ -44,6 +64,7 @@ export function createStudioState() {
     setResult(null);
     setError(null);
     setPhase("idle");
+    resetCorrections();
   };
 
   const clearFile = () => {
@@ -53,6 +74,7 @@ export function createStudioState() {
     setResult(null);
     setError(null);
     setPhase("idle");
+    resetCorrections();
   };
 
   const pickExample = async (path: string, name: string) => {
@@ -91,11 +113,68 @@ export function createStudioState() {
       });
       setResult(payload);
       setPhase("done");
+      resetCorrections();
     } catch (e) {
       setError(e instanceof Error ? e.message : "The run failed.");
       setPhase("error");
     } finally {
       if (timer) window.clearInterval(timer);
+    }
+  };
+
+  const stageCorrection = (correction: CorrectionInput) => {
+    setCorrectionError(null);
+    setCorrections((prev) => [
+      ...prev.filter((c) => c.index !== correction.index),
+      correction,
+    ]);
+  };
+
+  const unstageCorrection = (index: number) => {
+    setCorrections((prev) => prev.filter((c) => c.index !== index));
+  };
+
+  const correctionFor = (index: number) =>
+    corrections().find((c) => c.index === index);
+
+  const applyCorrections = async () => {
+    const p = result();
+    const list = corrections();
+    if (!p || !list.length || correcting()) return;
+    setCorrecting(true);
+    setCorrectionError(null);
+    try {
+      const res = await correctRun(p.run_id, list);
+      setResult({
+        ...p,
+        review: res.review,
+        flags_summary: res.flags_summary,
+        transcript: res.transcript,
+        files: { ...p.files, ...res.files },
+      });
+      setLastStats(res.stats);
+      setExportResult(null);
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : "Could not apply the corrections.");
+    } finally {
+      setCorrecting(false);
+    }
+  };
+
+  const exportCorrections = async (share: number[]) => {
+    const p = result();
+    const list = corrections();
+    if (!p || !list.length || correcting()) return;
+    setCorrecting(true);
+    setCorrectionError(null);
+    try {
+      setExportResult(await exportRunCorrections(p.run_id, list, share));
+    } catch (e) {
+      setCorrectionError(
+        e instanceof Error ? e.message : "Could not build the corrections archive.",
+      );
+    } finally {
+      setCorrecting(false);
     }
   };
 
@@ -133,6 +212,16 @@ export function createStudioState() {
     clearFile,
     pickExample,
     start,
+    corrections,
+    correcting,
+    correctionError,
+    lastStats,
+    exportResult,
+    stageCorrection,
+    unstageCorrection,
+    correctionFor,
+    applyCorrections,
+    exportCorrections,
   };
 }
 

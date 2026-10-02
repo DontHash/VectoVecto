@@ -54,7 +54,8 @@ def _fake_pipeline(captured: dict | None = None):
         def __init__(self):
             self.display_bgr = np.full((64, 64, 3), 255, np.uint8)
             self.ocr = OCRResult(text="HELLO", tokens=[
-                Token(text="HELLO", conf=99, bbox=(1, 1, 30, 20))],
+                Token(text="HELLO", conf=99, bbox=(1, 1, 30, 20),
+                      flags=["low_conf"])],
                 backend="fake")
             self.meta = {"seconds": 0.05, "backend": "fake",
                          "primary_stream": "raw", "skew_angle": 0.0,
@@ -67,6 +68,7 @@ def _fake_pipeline(captured: dict | None = None):
             captured.setdefault("calls", []).append(dict(kw))
         out_dir, stem = kw["out_dir"], kw["stem"]
         outputs = {}
+        result = _FakeResult()
         if kw.get("make_txt", True):
             path = os.path.join(out_dir, f"{stem}.txt")
             with open(path, "w", encoding="utf-8") as f:
@@ -87,7 +89,11 @@ def _fake_pipeline(captured: dict | None = None):
             with open(path, "wb") as f:
                 f.write(b"%PDF-1.4 fake")
             outputs["pdf"] = path
-        result = _FakeResult()
+        if kw.get("make_json", True):
+            from veriscript.document.export import write_ocr_json
+            path = os.path.join(out_dir, f"{stem}.json")
+            write_ocr_json(path, result.ocr)
+            outputs["json"] = path
         result.outputs = outputs
         return result
 
@@ -293,3 +299,111 @@ def test_restore_failure_is_logged(client, monkeypatch, caplog):
               if rec.name == "vectovecto.web" and rec.levelno == logging.ERROR]
     assert errors, "the server side must log the failure"
     assert errors[0].exc_info and "pipeline exploded" in str(errors[0].exc_info[1])
+
+
+# ---------------------------------------------------------------------------
+# correction loop (docs/CORRECTIONS.md)
+# ---------------------------------------------------------------------------
+
+def _restore_once(client, monkeypatch, data=None):
+    """A finished run with the fake pipeline (canonical artifacts, ocr.json)."""
+    from veriscript.document import pipeline as document_pipeline
+
+    monkeypatch.setattr(document_pipeline, "run_document_pipeline",
+                        _fake_pipeline())
+    r = client.post("/api/restore",
+                    files={"file": ("page.png", _png_bytes(), "image/png")},
+                    data={"lang": "en", **(data or {})})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_correct_applies_and_serves_corrected_files(client, monkeypatch):
+    payload = _restore_once(client, monkeypatch)
+    r = client.post(f"/api/runs/{payload['run_id']}/correct", json={
+        "corrections": [{"index": 0, "bbox": [1, 1, 30, 20],
+                         "original": "HELLO", "corrected": "HELLO2"}]})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["stats"]["changed"] == 1
+    assert out["review"] == []
+    # the corrected record is the truth once it exists
+    assert out["transcript"] == "HELLO2\n"
+    for key in ("corrected_pdf", "corrected_txt", "corrected_json",
+                "corrections_json"):
+        assert key in out["files"], key
+
+    corrected = client.get(out["files"]["corrected_json"]).json()
+    entry = corrected["tokens"][0]
+    assert entry["text"] == "HELLO2"
+    assert entry["original_text"] == "HELLO"
+    assert entry["text_source"] == "human" and entry["corrected_by"] == "human"
+
+    # the originals are never overwritten
+    original = client.get(out["files"]["json"]).json()
+    assert original["tokens"][0]["text"] == "HELLO"
+    assert original["tokens"][0]["original_text"] is None
+
+
+def test_correct_reports_stale_entries_as_skipped(client, monkeypatch):
+    payload = _restore_once(client, monkeypatch)
+    r = client.post(f"/api/runs/{payload['run_id']}/correct", json={
+        "corrections": [{"index": 0, "bbox": [9000, 9000, 9100, 9040],
+                         "original": "SOMETHING ELSE", "corrected": "X"}]})
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["stats"]["skipped"] == 1 and out["stats"]["reviewed"] == 0
+    assert "corrected_json" not in out["files"]
+
+
+def test_correct_rejects_malformed_bodies(client, monkeypatch):
+    payload = _restore_once(client, monkeypatch)
+    run = payload["run_id"]
+    assert client.post(f"/api/runs/{run}/correct",
+                       json={"corrections": [{"corrected": "no index"}]}
+                       ).status_code == 400
+    assert client.post(f"/api/runs/{run}/correct",
+                       json={"corrections": []}).status_code == 400
+    assert client.post("/api/runs/0000000000000000/correct",
+                       json={"corrections": [{"index": 0, "corrected": "x"}]}
+                       ).status_code == 404
+
+
+def test_corrections_export_contains_only_shared_crops(client, monkeypatch):
+    import io
+    import zipfile
+
+    payload = _restore_once(client, monkeypatch)
+    body = {"corrections": [
+        {"index": 0, "bbox": [1, 1, 30, 20], "original": "HELLO",
+         "corrected": "HELLO2"}],
+        "share": [0]}
+    r = client.post(f"/api/runs/{payload['run_id']}/corrections/export",
+                    json=body)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["shared"] == 1
+    z = client.get(out["file"])
+    assert z.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(z.content)) as zf:
+        names = set(zf.namelist())
+        assert {"README.txt", "corrections.json", "labels.tsv"} <= names
+        assert any(n.startswith("crops/") for n in names)
+        assert "HELLO2" in zf.read("labels.tsv").decode("utf-8")
+
+    # nothing marked -> no crops, still an explicit file
+    body["share"] = []
+    r2 = client.post(f"/api/runs/{payload['run_id']}/corrections/export",
+                     json=body)
+    assert r2.status_code == 200
+    assert r2.json()["shared"] == 0
+    z2 = client.get(r2.json()["file"])
+    with zipfile.ZipFile(io.BytesIO(z2.content)) as zf:
+        assert not [n for n in zf.namelist() if n.startswith("crops/")]
+
+
+def test_corrections_export_rejects_unknown_share(client, monkeypatch):
+    payload = _restore_once(client, monkeypatch)
+    r = client.post(f"/api/runs/{payload['run_id']}/corrections/export",
+                    json={"corrections": [], "share": [7]})
+    assert r.status_code == 400

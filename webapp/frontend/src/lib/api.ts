@@ -1,5 +1,13 @@
 /** Typed API client. Same-origin; the dev server proxies /api to :8000. */
-import type { Health, Lang, OcrEngine, RunPayload } from "./types";
+import type {
+  CorrectResponse,
+  CorrectionInput,
+  ExportResponse,
+  Health,
+  Lang,
+  OcrEngine,
+  RunPayload,
+} from "./types";
 
 class ApiError extends Error {
   constructor(
@@ -64,6 +72,35 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** docs/CORRECTIONS.md — apply staged fixes; returns the updated run. */
+export async function correctRun(
+  runId: string,
+  corrections: CorrectionInput[],
+): Promise<CorrectResponse> {
+  const res = await fetch(`/api/runs/${runId}/correct`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ corrections }),
+  });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as CorrectResponse;
+}
+
+/** Explicit, privacy-first training export: only `share` indices are packed. */
+export async function exportRunCorrections(
+  runId: string,
+  corrections: CorrectionInput[],
+  share: number[],
+): Promise<ExportResponse> {
+  const res = await fetch(`/api/runs/${runId}/corrections/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ corrections, share }),
+  });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as ExportResponse;
 }
 
 export { ApiError };

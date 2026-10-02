@@ -1,7 +1,7 @@
 import { createMemo, For, Show, createSignal } from "solid-js";
 import { CodeBlock } from "./CodeBlock";
 import { CompareSlider } from "./CompareSlider";
-import { ReviewTable } from "./ReviewTable";
+import { CorrectionReview } from "./CorrectionReview";
 import { type StudioState } from "../lib/studio-state";
 
 type Tab = "compare" | "queue" | "transcript" | "files";
@@ -127,24 +127,12 @@ export function StudioResults(props: { state: StudioState }) {
 
           <Show when={tab() === "queue"}>
             <div class="stack-16">
-              <Show
-                when={result().review.length > 0}
-                fallback={
-                  <p class="lede">
-                    Nothing was flagged on this page — every token was accepted. That is the easy
-                    case.
-                  </p>
-                }
-              >
-                <ReviewTable rows={result().review} />
-              </Show>
-              <div class="results__actions">
-                <Show when={result().files.json}>
-                  <a class="download" href={`${result().files.json}?download=1`}>
-                    ↓ ocr.json
-                  </a>
-                </Show>
-              </div>
+              <CorrectionReview state={s} />
+              <p class="field__hint">
+                Confirm or fix each queued token; the corrected artifacts and
+                the optional training export appear here. Corrections stay in
+                this run until you download them.
+              </p>
             </div>
           </Show>
 

@@ -92,6 +92,15 @@ Weight validator hits and split uncertainty into `token_risk`.
 
 ## 3. Track 2 — The correction loop (weeks 2–5, the flywheel)
 
+**Status 2026-10-02: v1 shipped and verified end-to-end** — core
+(`veriscript/document/corrections.py`), CLI `--apply-corrections`, web
+`POST /correct` + `POST /corrections/export`, studio review mode
+(keyboard-first confirm/alternative/free-text), corrected artifacts with
+provenance, and a privacy-first training export (only explicitly ticked
+crops). Design + browser walkthrough evidence:
+[CORRECTIONS.md](CORRECTIONS.md). Next: beta usage and the target-domain digit
+ground-truth track it feeds.
+
 **Why:** today the queue informs and stops there. Making it actionable is the
 product; the same corrections, exported explicitly, are exactly the
 target-domain data that model attempts kept lacking.
