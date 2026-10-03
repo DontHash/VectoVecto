@@ -169,6 +169,62 @@ def test_augment_review_falls_back_to_value(tmp_path, monkeypatch):
     assert review[0]["suggestions"][0]["source"] == "memory:value"
 
 
+def _fake_global(monkeypatch):
+    monkeypatch.setattr(memory, "_global_words", lambda: frozenset({"राम"}))
+
+
+def test_word_memory_suggests_confirmed_term(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    _fake_global(monkeypatch)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "पौड्यालसमेत आए", "action": "changed"}],
+        {0: ("पौड्यालसमे आए", ["low_conf"])}, path=path)
+
+    suggestion = memory.suggest_word("पौड्यालसमे विरुद्ध", path=path)
+    assert suggestion is not None and suggestion["source"] == "memory:word"
+    assert suggestion["text"] == "पौड्यालसमेत विरुद्ध"
+    assert suggestion["word"] == "पौड्यालसमेत"
+
+
+def test_word_memory_skips_in_lexicon_words(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    _fake_global(monkeypatch)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "राम आए", "action": "changed"}],
+        {0: ("राम आए", ["low_conf"])}, path=path)
+
+    assert memory.suggest_word("राम विरुद्ध", path=path) is None
+
+
+def test_word_feedback_suppresses(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    _fake_global(monkeypatch)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "पौड्यालसमेत आए", "action": "changed"}],
+        {0: ("पौड्यालसमे आए", ["low_conf"])}, path=path)
+    assert memory.suggest_word("पौड्यालसमे विरुद्ध", path=path) is not None
+
+    for _ in range(2):  # the human rejected the term and kept the reading
+        memory.record_corrections(
+            [{"index": 0, "corrected": "पौड्यालसमे आए", "action": "confirmed",
+              "suggested": "पौड्यालसमेत आए"}],
+            {0: ("पौड्यालसमे आए", ["low_conf"])}, path=path)
+
+    assert memory.suggest_word("पौड्यालसमे विरुद्ध", path=path) is None
+
+
+def test_augment_review_falls_back_to_word(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    _fake_global(monkeypatch)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "पौड्यालसमेत आए", "action": "changed"}],
+        {0: ("पौड्यालसमे आए", ["low_conf"])}, path=path)
+    review = [{"text": "पौड्यालसमे विरुद्ध", "flags": ["low_conf"]}]
+
+    assert memory.augment_review(review, path=path) == 1
+    assert review[0]["suggestions"][0]["source"] == "memory:word"
+
+
 def test_clear_and_stats(tmp_path, monkeypatch):
     path = _enable(monkeypatch, tmp_path)
     memory.record_corrections(

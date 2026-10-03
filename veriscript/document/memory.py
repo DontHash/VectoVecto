@@ -14,17 +14,21 @@ The store is append-only JSONL:
    "engine": ..., "lang": ..., "created": ...}
   {"kind": "value", "value": "00962", "display": "०-०९६२",
    "corrected": "०९६२", "created": ...}
+  {"kind": "word", "word": "पौड्यालसमेत", "created": ...}
   {"kind": "accept"|"reject", "key": <flags signature>,
    "digits": <digits of the original reading>, "corrected": <suggested text>,
    "created": ...}
   {"kind": "value_accept"|"value_reject", "value": ..., "corrected": ...}
+  {"kind": "word_accept"|"word_reject", "word": ...}
 
 Suggestion matching: line level - same flags signature, exact full reading
 first, else same skeleton and Hamming <= 1; value level - a repeated wrong
-digit run (>= 4 digits, one edit from its correction) is substituted in place.
-Line-level is preferred when both exist. A record whose feedback is
-net-negative is suppressed. Suggestions are never auto-applied: the human
-confirms and the web layer records the accept/reject.
+digit run (>= 4 digits, one edit from its correction) is substituted in place;
+word level - a human-confirmed OOV word (>= 4 chars, one edit from its
+correction) replaces the engine's variant. Line is preferred, then value,
+then word (up to two chips per row). A record whose feedback is net-negative
+is suppressed. Suggestions are never auto-applied: the human confirms and the
+web layer records the accept/reject.
 """
 from __future__ import annotations
 
@@ -33,6 +37,8 @@ import os
 import re
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
+
+from veriscript.lexicon import load_lexicon, normalize_word
 
 MEMORY_ENV = "VERISCRIPT_MEMORY"
 DIR_ENV = "VERISCRIPT_MEMORY_DIR"
@@ -45,9 +51,11 @@ NEAR_HAMMING = 1
 ACCEPT_FLOOR = 0.5
 VALUE_MIN_DIGITS = 4      # value-level memory only for distinctive runs
 VALUE_NEAR_HAMMING = 1
+WORD_MIN_LEN = 4          # word-level memory only for distinctive words
 
 _RUN_RE = re.compile(
     r"[0-9\u0966-\u096f](?:[0-9\u0966-\u096f.,:/-]*[0-9\u0966-\u096f])?")
+_WORD_RE = re.compile(r"[\u0900-\u0963\u0970-\u097f]+")
 
 
 def memory_enabled() -> bool:
@@ -205,6 +213,84 @@ def _value_suggest(index: Dict[str, Dict[str, Dict]],
     return best[1] if best else None
 
 
+def _global_words() -> Optional[frozenset]:
+    """The global lexicon words, or None when no lexicon is installed."""
+    data = load_lexicon()
+    return data["words"] if data else None
+
+
+def _word_spans(text: str) -> List[Tuple[str, int, int]]:
+    return [(m.group(0), m.start(), m.end())
+            for m in _WORD_RE.finditer(text or "")]
+
+
+def _word_index(events: Sequence[Dict]) -> Dict[str, Dict]:
+    """word -> {count, accepted, rejected} from learned words + feedback."""
+    index: Dict[str, Dict] = {}
+    for event in events:
+        kind = event.get("kind")
+        if kind == "word":
+            word = event.get("word")
+            if not word:
+                continue
+            rec = index.setdefault(str(word), {"count": 0, "accepted": 0,
+                                               "rejected": 0})
+            rec["count"] += 1
+        elif kind in ("word_accept", "word_reject"):
+            rec = index.get(str(event.get("word")))
+            if rec is not None:
+                rec["accepted" if kind == "word_accept" else "rejected"] += 1
+    return index
+
+
+def _word_buckets(index: Dict[str, Dict]
+                  ) -> Dict[Tuple[int, str], List[Tuple[str, Dict]]]:
+    buckets: Dict[Tuple[int, str], List[Tuple[str, Dict]]] = {}
+    for word, rec in index.items():
+        buckets.setdefault((len(word), word[0]), []).append((word, rec))
+    return buckets
+
+
+def _word_suggest(buckets: Dict[Tuple[int, str], List[Tuple[str, Dict]]],
+                  text: str,
+                  global_words: Optional[frozenset]) -> Optional[Dict]:
+    """Replace the best-supported OOV word with a human-confirmed one."""
+    if not buckets or not global_words:
+        return None
+    normalized = normalize_word(text or "")
+    best: Optional[Tuple[int, Dict]] = None
+    for raw, start, end in _word_spans(normalized):
+        if len(raw) < WORD_MIN_LEN or raw in global_words:
+            continue
+        candidates = []
+        for length in (len(raw) - 1, len(raw), len(raw) + 1):
+            for candidate, rec in buckets.get((length, raw[0]), ()):
+                if (candidate != raw and _usable(rec)
+                        and _edit_distance_le1(raw, candidate)):
+                    candidates.append((rec["count"], candidate, rec))
+        if not candidates:
+            continue
+        count, candidate, rec = max(candidates, key=lambda item: item[0])
+        suggestion = {
+            "text": normalized[:start] + candidate + normalized[end:],
+            "source": "memory:word", "word": candidate,
+            "why": f"word {raw} confirmed {rec['count']}x before",
+        }
+        if best is None or count > best[0]:
+            best = (count, suggestion)
+    return best[1] if best else None
+
+
+def _learn_words(text: str,
+                 global_words: Optional[frozenset]) -> List[str]:
+    """OOV words in human-confirmed text (the local vocabulary)."""
+    if not global_words:
+        return []
+    words = set(_WORD_RE.findall(normalize_word(text or "")))
+    return [w for w in words
+            if len(w) >= WORD_MIN_LEN and w not in global_words]
+
+
 def _iter_events(path: Optional[str] = None) -> List[Dict]:
     p = path or memory_path()
     if not os.path.isfile(p):
@@ -328,31 +414,53 @@ def suggest(text: str, flags: Sequence[str],
 def augment_review(review: List[Dict], path: Optional[str] = None) -> int:
     """Append memory suggestions to review rows in place. Returns rows gained.
 
-    Line-level (exact reading) first; when there is none, a value-level
-    suggestion substitutes the best-supported wrong digit run.
+    Channels in priority order: line (exact reading), value (wrong digit run),
+    word (human-confirmed vocabulary). Up to SUGGEST_LIMIT chips per row; every
+    chip is a candidate the human must accept.
     """
     if not memory_enabled() or not review:
         return 0
     events = _iter_events(path)
     index = _index(events)
     values = _value_index(events)
+    words = _word_buckets(_word_index(events))
+    global_words = _global_words()
     added = 0
     for item in review:
         if not isinstance(item, dict):
             continue
-        match = _lookup(index, item.get("text") or "", item.get("flags") or [])
-        if match is None:
-            match = _value_suggest(values, item.get("text") or "")
-        if match is None:
+        text = item.get("text") or ""
+        candidates = []
+        line = _lookup(index, text, item.get("flags") or [])
+        if line is not None:
+            candidates.append(line)
+        value = _value_suggest(values, text)
+        if value is not None:
+            candidates.append(value)
+        word = _word_suggest(words, text, global_words)
+        if word is not None:
+            candidates.append(word)
+        if not candidates:
             continue
         suggestions = item.setdefault("suggestions", [])
-        if any(str(s.get("text")) == match["text"] for s in suggestions):
-            continue
-        if len(suggestions) >= SUGGEST_LIMIT:
-            continue
-        suggestions.append(match)
-        added += 1
+        for candidate in candidates:
+            if len(suggestions) >= SUGGEST_LIMIT:
+                break
+            if any(str(s.get("text")) == candidate["text"]
+                   for s in suggestions):
+                continue
+            suggestions.append(candidate)
+            added += 1
     return added
+
+
+def suggest_word(text: str, path: Optional[str] = None) -> Optional[Dict]:
+    """A word-level suggestion (an OOV word replaced by a confirmed one)."""
+    if not memory_enabled():
+        return None
+    events = _iter_events(path)
+    return _word_suggest(_word_buckets(_word_index(events)), text,
+                         _global_words())
 
 
 def suggest_value(text: str, path: Optional[str] = None) -> Optional[Dict]:
@@ -375,6 +483,7 @@ def record_corrections(entries: Sequence[Dict],
     """
     if not memory_enabled():
         return 0
+    global_words = _global_words()
     written = 0
     for entry in entries:
         if not isinstance(entry, dict):
@@ -400,6 +509,10 @@ def record_corrections(entries: Sequence[Dict],
                          "display": display, "corrected": replacement,
                          "created": _now()}, path=path)
             written += 1
+        if action == "changed" and corrected:
+            for word in _learn_words(corrected, global_words):
+                _append({"kind": "word", "word": word, "created": _now()},
+                        path=path)
         suggested = entry.get("suggested")
         if suggested:
             accepted = str(suggested) == corrected
@@ -413,6 +526,14 @@ def record_corrections(entries: Sequence[Dict],
                                   else "value_reject"),
                          "value": digits, "corrected": replacement,
                          "created": _now()}, path=path)
+            proposed = (set(_WORD_RE.findall(normalize_word(str(suggested))))
+                        - set(_WORD_RE.findall(normalize_word(original))))
+            for word in proposed:
+                if (len(word) >= WORD_MIN_LEN and global_words
+                        and word not in global_words):
+                    _append({"kind": ("word_accept" if accepted
+                                      else "word_reject"),
+                             "word": word, "created": _now()}, path=path)
     _trim(path)
     return written
 
@@ -436,4 +557,5 @@ def stats(path: Optional[str] = None) -> Dict:
         "corrections": sum(1 for e in events
                            if e.get("kind") == "correction"),
         "values": sum(1 for e in events if e.get("kind") == "value"),
+        "words": sum(1 for e in events if e.get("kind") == "word"),
     }

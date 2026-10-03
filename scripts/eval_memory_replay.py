@@ -35,6 +35,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from veriscript.document import memory  # noqa: E402
+from veriscript.lexicon import deva_words  # noqa: E402
 
 _RUN_RE = re.compile(
     r"[0-9\u0966-\u096f](?:[0-9\u0966-\u096f.,:/-]*[0-9\u0966-\u096f])?")
@@ -60,6 +61,7 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
     totals = {"queued": 0,
               "line_suggested": 0, "line_hits": 0,
               "value_suggested": 0, "value_hits": 0, "value_run_hits": 0,
+              "word_suggested": 0, "word_hits": 0, "word_word_hits": 0,
               "combined_suggested": 0, "combined_hits": 0}
     for session in sessions:
         queue = json.load(open(os.path.join(sessions_dir, session, "queue.json"),
@@ -76,7 +78,8 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
             flags = item.get("flags") or []
             line = memory.suggest(text, flags, path=memory_file)
             value = memory.suggest_value(text, path=memory_file)
-            combined = line or value
+            word = memory.suggest_word(text, path=memory_file)
+            combined = line or value or word
             entry = applied.get(item["index"])
             target = None
             if entry is not None:
@@ -85,6 +88,7 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
                           else entry.get("original", text))
 
             for channel, suggestion in (("line", line), ("value", value),
+                                        ("word", word),
                                         ("combined", combined)):
                 if suggestion is None:
                     continue
@@ -98,6 +102,10 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
                 if _runs(value["text"]) == _runs(target):
                     totals["value_run_hits"] += 1
                     counts["value_run_hits"] += 1
+            if word is not None and target is not None:
+                if word.get("word") in set(deva_words(target)):
+                    totals["word_word_hits"] += 1
+                    counts["word_word_hits"] += 1
         rows.append({"session": session, **counts})
 
         entries = [{"index": e["index"], "corrected": e.get("corrected", ""),
@@ -130,6 +138,15 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
                                      totals["value_suggested"]),
                   "run_precision": _rate(totals["value_run_hits"],
                                          totals["value_suggested"])},
+        "word": {"suggested": totals["word_suggested"],
+                 "hits": totals["word_hits"],
+                 "word_hits": totals["word_word_hits"],
+                 "coverage": _rate(totals["word_suggested"],
+                                   totals["queued"]),
+                 "precision": _rate(totals["word_hits"],
+                                    totals["word_suggested"]),
+                 "word_precision": _rate(totals["word_word_hits"],
+                                         totals["word_suggested"])},
         "combined": {"suggested": totals["combined_suggested"],
                      "hits": totals["combined_hits"],
                      "coverage": _rate(totals["combined_suggested"],
@@ -151,14 +168,18 @@ def main() -> None:
         print(f"  {row['session']}: queued {row['queued']}, "
               f"line {row['line_suggested']}/{row['line_hits']}, "
               f"value {row['value_suggested']}/{row['value_hits']} "
-              f"(runs {row['value_run_hits']})")
+              f"(runs {row['value_run_hits']}), "
+              f"word {row['word_suggested']}/{row['word_word_hits']}")
     s = result["summary"]
     print(f"TOTAL queued {s['queued']}")
-    for channel in ("line", "value", "combined"):
+    for channel in ("line", "value", "word", "combined"):
         c = s[channel]
-        extra = (f" run-precision {c['run_precision']:.1%}"
-                 if "run_precision" in c and c["run_precision"] is not None
-                 else "")
+        extras = []
+        if c.get("run_precision") is not None:
+            extras.append(f"run-precision {c['run_precision']:.1%}")
+        if c.get("word_precision") is not None:
+            extras.append(f"word-precision {c['word_precision']:.1%}")
+        extra = (" " + " ".join(extras)) if extras else ""
         print(f"  {channel:<8}: suggested {c['suggested']} "
               f"({c['coverage']:.1%}), full hits {c['hits']} "
               f"(precision {c['precision']:.1%}){extra}")

@@ -317,6 +317,19 @@ errors too; the value channel's job is the value, and it is right every
 time. Line-level remains preferred when both fire. Still opt-in; real-use
 acceptance remains to be measured.
 
+**Follow-up 2 (word-level memory, same day).** Human corrections teach a
+local vocabulary: OOV words from changed corrections (>= 4 chars) are stored;
+later engine words within one edit (same first char, length ±1) are suggested
+as in-place replacements (`memory:word`), with word-level accept/reject
+suppression. Screen upper bound under looser rules (2-char words, any
+candidate): 18/99 suggestions, 16/18 (89%) matching the human's correction.
+Shipped strict rules measure **10/99 (10.1%) suggestions, 7/10 (70%) word
+precision**; loosening (confirmed-reading learning) measurably hurt (63.6%),
+so it stays out. Combined channels now offer chips on **11/99 (11.1%)** of
+queued tokens. The `unknown_word` flag angle was measured and is nil on this
+corpus (0 tokens would stop being flagged), so the value is entirely in
+suggestions.
+
 ## 6. Sequencing
 
 | Step | Work | Size | Gate / exit |

@@ -210,8 +210,10 @@ first, then same skeleton (digits masked) + same digit length + Hamming ≤ 1;
 records with net-negative feedback are suppressed. Corrections also align
 their digit runs positionally, so a repeated wrong value (`०-०९६२` →
 `०९६२`, ≥ 4 digits, one edit apart) is stored and substituted in place on
-later tokens. Nothing leaves the machine: no page images, no crops, no
-bboxes, no run ids. The studio shows a "local correction memory is on" line
+later tokens; human-corrected OOV words (≥ 4 chars) form a local vocabulary
+whose one-edit variants are suggested as in-place word replacements. Nothing
+leaves the machine: no page images, no crops, no bboxes, no run ids. The
+studio shows a "local correction memory is on" line
 with a **clear memory** action; `GET /api/memory` reports the count and
 `POST /api/memory/clear` removes it. Hosted multi-tenant deployments leave it
 off (the default), so no visitor's corrections can leak into another
@@ -223,8 +225,10 @@ later ones against the human's actual outcome: line level **1 suggestion in 91
 queries (1.0% coverage), 1 hit (100% precision when it fires)**; value level
 **9 suggestions (9.1% coverage), 9/9 digit-run precision (100%)** — the
 corpus's dominant repeated error (`०-०९६२` → `०९६२`, corrected by hand 10
-times) is fixed on every later occurrence. Full-text hits are 0 there because
-those lines carried other errors too; the value channel's job is the value.
-Within-page duplicates were 0/99, so D1 does not fire on this corpus. D2
-stays opt-in and unproven in real use: the ≥60% suggestion-acceptance bar
-needs human sessions, not a replay.
+times) is fixed on every later occurrence; word level **10 suggestions
+(10.1% coverage), 7/10 (70%) matching the human's correction**. Combined, the
+channels offer chips on **11/99 (11.1%)** of queued tokens. Full-text hits are
+0 for value and 1/10 for word because those lines carried other errors too;
+each channel's job is its own unit. Within-page duplicates were 0/99, so D1
+does not fire on this corpus. D2 stays opt-in and unproven in real use: the
+≥60% suggestion-acceptance bar needs human sessions, not a replay.

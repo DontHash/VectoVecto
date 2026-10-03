@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Word-level correction memory (track D follow-up, opt-in).** Human-corrected
+  OOV words (≥ 4 chars) form a local vocabulary; later engine words within one
+  edit (same first char, length ±1) are suggested as in-place replacements,
+  with word-level accept/reject suppression. Replay over the 10 beta sessions:
+  **10/99 suggestions (10.1% coverage), 7/10 (70%) matching the human's
+  correction** — the screen's looser bound was 18/89%, but 2-char words and
+  confirmed-reading learning measurably hurt precision and stay out. Combined
+  channels now chip **11/99 (11.1%)** of queued tokens. Recorded in
+  [docs/PLAN.md](docs/PLAN.md) Appendix AL.
 - **Value-level correction memory (track D follow-up, opt-in).** Corrections
   align their digit runs positionally (equal run counts, digits within one
   edit); a repeated wrong value (≥ 4 digits) is stored and substituted in

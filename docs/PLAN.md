@@ -2658,3 +2658,21 @@ because those lines carried other errors too; the value channel's job is the
 value and it is right every time. Line-level is preferred when both fire.
 Still opt-in; real-use acceptance remains to be measured.
 
+**Follow-up 2, same day - word-level memory (implemented).** Human
+corrections teach a local vocabulary: OOV words from changed corrections
+(>= 4 chars) are stored; later engine words within one edit (same first char,
+length +/-1) are suggested as in-place replacements, with word-level
+accept/reject suppression. The screen's upper bound under looser rules
+(2-char words, any candidate) was 18/99 suggestions at 16/18 = 89% matching
+the human's correction. The shipped strict rules measure:
+
+| channel | suggested | coverage | word precision |
+|---|---|---|---|
+| word (shipped) | **10 (10.1%)** | 10.1% | **70% (7/10)** |
+| combined (line/value/word) | **11 (11.1%)** | 11.1% | 18.2% full-text |
+
+Loosening the rules (learning from confirmed readings) measurably hurt
+precision (70% -> 63.6%), so it was reverted. The `unknown_word` flag angle
+is nil on this corpus (0 tokens would stop being flagged); the value is
+entirely in suggestions. Real-use acceptance remains to be measured.
+
