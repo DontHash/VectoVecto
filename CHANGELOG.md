@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-03
+
 ### Added
 
 - **Digit-confusion chips (suggestion-only, opt-in).** `--digit-confusions`
@@ -127,6 +129,13 @@ All notable changes to this project are documented here. The format follows
   (flag precision 1.0) but catches only 3 of 156 v2 digit errors (+1.9 pp vs
   the +3 pp bar) and displaced one true error on cornell — FAIL. The residual
   is recognition inside correctly boxed cells.
+- **PyPI-ready Python packaging (P0 of docs/PACKAGING_PLAN.md).** The wheel
+  ships the calibration JSON + Devanagari font as data-files (installed
+  resolution verified), the core dependencies are torch-free (`photo` and
+  `verifier` extras carry torch / transformers / huggingface_hub), and CI
+  gained a wheel job that builds, installs cleanly and asserts the shipped
+  data. The lexicon stays out of the wheel by policy (graceful absence;
+  `sys.prefix` probe if a distribution bundles it).
 
 ### Changed
 
@@ -151,6 +160,14 @@ All notable changes to this project are documented here. The format follows
   production CSP (`script-src 'self'`) blocks; it now stays in the raw HTML
   for crawlers, is hidden by the bundled stylesheet, and is removed by the app
   bundle before mount (`tests/test_frontend_shell.py` guards this).
+- **Studio layout no longer overlaps below 1000px.** The sticky panel is
+  scoped to the two-column layout; in single-column mode it slid over the
+  results (753×613 px overlap at 816 px wide).
+- **Corrections are cumulative, and applying is not double-counted.**
+  `/correct` applies each batch on top of the run's `corrected.json`; the
+  studio posts only pending corrections; memory recording skips entries
+  already in the run's `corrections.json`; and "apply to N identical" mirrors
+  the staged text into every sibling input (new webapp test).
 
 ## [1.4.0] - 2026-09-30
 

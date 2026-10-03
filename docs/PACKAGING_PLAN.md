@@ -1,8 +1,9 @@
 # Packaging plan — Python distribution (and the Node SDK question)
 
-Status: **P0 implemented 2026-10-03** (data shipping, extras split, wheel
-smoke in CI). P1 (release plumbing) and P2 (Node client) are planned, not
-started. Feasibility was tested by building and installing the wheel, not by
+Status: **P0 + P1 implemented 2026-10-03** (data shipping, extras split,
+wheel smoke in CI, version cut 1.5.0, release workflow). Publishing itself
+waits on the PyPI trusted-publisher setup on the account. P2 planned.
+Feasibility was tested by building and installing the wheel, not by
 inspection alone.
 
 ## 1. Verdict
@@ -38,18 +39,35 @@ Verified locally:
 - `load_calibration()` and `unicode_font_path()` resolve from the installed
   data; `load_lexicon()` is absent-but-graceful.
 
-## 3. P1 — release plumbing (planned)
+## 3. P1 — release plumbing (implemented 2026-10-03)
 
-1. Version/changelog discipline: cut `[Unreleased]` into a version, bump
-   `pyproject.toml`, tag.
-2. Build `sdist` + wheel; Publish to **TestPyPI** and run the same smoke on
-   the published artifact (`pip install --index-url test.pypi.org/...`).
-3. PyPI **Trusted Publishing** (no API tokens) from a `release` workflow
-   triggered by tag push.
-4. README/package metadata: add the PyPI install line and extras once live.
-5. Optional: ship the lexicon as a separately-fetched extra or a
-   `veriscript fetch-lexicon` command (licenses are clean; the policy
-   decision is whether to distribute the 2.9 MB file on PyPI).
+Done:
+
+1. Version cut: `1.4.0` → `1.5.0` in `pyproject.toml`; CHANGELOG content moved
+   from `[Unreleased]` to `## [1.5.0] - 2026-10-03`.
+2. `sdist + wheel` build verified locally (`python -m build`), `twine check`
+   passes on both, the sdist carries `calibration/` + `fonts/`, and the wheel
+   built **from the sdist** installs and resolves its data from a clean venv.
+3. `.github/workflows/release.yml`: tag pushes (`v*`) build → smoke → publish
+   to PyPI (trusted publishing, PEP 740 attestations) → attach artifacts to a
+   GitHub Release. Manual runs can dry-run against TestPyPI (`skip-existing`)
+   or build only.
+4. `veriscript.__version__` now comes from installed package metadata.
+5. README documents package installs + extras.
+
+Left (account-side, once, then releases are one tag away):
+
+- Create the pending publishers — PyPI project `veriscript`, owner
+  `DontHash`, repo `VeriScript`, workflow `release.yml`, environments
+  `pypi` / `testpypi`.
+- Dry run: Actions → Release → Run workflow → `testpypi`, then
+  `pip install --index-url https://test.pypi.org/simple/ veriscript`.
+- Tag a release: bump `pyproject.toml` + CHANGELOG on `main`, then
+  `git tag v1.5.0 && git push origin v1.5.0`.
+
+Open item: the lexicon stays out of the wheel (2.9 MB, `data/` is gitignored
+by policy). If distribution is wanted, the licenses are clean — ship it, or
+add a `veriscript fetch-lexicon` command that downloads and verifies it.
 
 ## 4. P2 — Node client (planned)
 

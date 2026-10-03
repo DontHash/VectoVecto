@@ -1,0 +1,123 @@
+name: Release
+
+# Publishes the Python package (sdist + wheel).
+#
+# Tag pushes (`v*`) publish to PyPI and attach the artifacts to a GitHub
+# Release; a manual run can dry-run against TestPyPI or just build.
+#
+# PyPI Trusted Publishing (no API tokens) — configure the pending publishers:
+#   * https://pypi.org/manage/account/publishing/       environment: pypi
+#   * https://test.pypi.org/manage/account/publishing/  environment: testpypi
+#     owner: DontHash  repo: VeriScript  workflow: release.yml
+#
+# Release procedure: bump pyproject.toml + CHANGELOG.md on main, then
+#   git tag v1.5.0 && git push origin v1.5.0
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish"
+        type: choice
+        options: [testpypi, none]
+        default: testpypi
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build sdist + wheel and check the metadata
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Wheel installs clean and ships its data (no photo/verifier)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglib2.0-0 libgomp1
+          python -m venv /tmp/relvenv
+          /tmp/relvenv/bin/pip install --quiet dist/*.whl
+          cd /tmp   # neutral cwd: the repo source must not shadow the wheel
+          /tmp/relvenv/bin/python - <<'PY'
+          from veriscript.calibration import load_calibration
+          from veriscript.document.export import unicode_font_path
+          from veriscript.lexicon import load_lexicon
+
+          assert load_calibration(), "calibration JSON missing from the wheel"
+          assert unicode_font_path(), "Devanagari font missing from the wheel"
+          load_lexicon()  # optional data: absence is allowed, must not raise
+          print("release wheel smoke ok")
+          PY
+          /tmp/relvenv/bin/veriscript --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  testpypi:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  pypi:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
