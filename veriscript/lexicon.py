@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import unicodedata
 from typing import Collection, Dict, List, Optional
 
@@ -66,7 +67,17 @@ def unknown_words(text: str, lexicon: Optional[Collection[str]]) -> List[str]:
 
 
 def resolve_path(path: Optional[str] = None) -> str:
-    return os.path.abspath(path or branding.env("LEXICON") or DEFAULT_LEXICON)
+    """First existing lexicon file (explicit/env, repo copy, data-files)."""
+    if path:
+        return os.path.abspath(path)
+    env = branding.env("LEXICON")
+    if env:
+        return os.path.abspath(env)
+    installed = os.path.join(sys.prefix, "lexicon",
+                             os.path.basename(DEFAULT_LEXICON))
+    if os.path.isfile(installed):
+        return installed
+    return DEFAULT_LEXICON
 
 
 def load_lexicon(path: Optional[str] = None) -> Optional[Dict]:

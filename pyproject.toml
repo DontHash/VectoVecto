@@ -27,22 +27,25 @@ dependencies = [
   "opencv-python",
   "scipy",
   "scikit-image",
-  "torch",
   "onnxruntime",
   "Pillow",
   "jiwer",
   "rapidocr==3.9.*",
   "reportlab",
   "pypdfium2",
-  "huggingface_hub",
 ]
 
 [project.optional-dependencies]
+# Photo upscaling (RRDBNet / SRVGGNetCompact) runs on torch.
+photo = ["torch"]
+# The optional bodhan digit verifier (HF IndicOCR): torch + transformers.
+verifier = ["torch", "transformers", "huggingface_hub"]
 dev = [
   "pytest",
   "httpx",
   "matplotlib",
   "scipy",
+  "torch",
   "pyiqa",
   "datasets",
   "transformers",
@@ -78,3 +81,4 @@ addopts = "-q"
 
 [tool.setuptools.data-files]
 "fonts" = ["fonts/Mukta-Regular.ttf", "fonts/OFL.txt"]
+"calibration" = ["calibration/rapidocr_devanagari_v1.json"]

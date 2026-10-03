@@ -43,9 +43,20 @@ with `python scripts/make_demo_image.py`.
 
 ## Install
 
+From a source checkout (the package is not on PyPI yet):
+
 ```bash
-pip install -r requirements.txt        # runtime
+pip install -r requirements.txt        # full runtime (includes torch)
 pip install -r requirements-dev.txt    # + dev/eval tooling (optional)
+```
+
+Or install the Python package itself — the document pipeline is torch-free
+(`photo`/`verifier` are opt-in extras):
+
+```bash
+pip install -e .                  # document pipeline + web/CLI
+pip install -e ".[photo]"         # + photo upscaling (torch)
+pip install -e ".[verifier]"      # + the optional bodhan digit verifier
 ```
 
 Optional: [Tesseract 5](https://github.com/UB-Mannheim/tesseract/wiki) as a
