@@ -118,6 +118,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           deva_ckpt: Optional[str] = None,
                           split_numbers: bool = False,
                           multi_read: str = "off",
+                          reconcile: bool = False,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -145,7 +146,12 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     `multi_read` ("off"|"panel", track A of docs/HARNESS_PLAN.md) runs on the
     primary pass only: flagged digit tokens are re-read under fixed transforms
     and panel disagreements become `multi_read_conflict` with candidate
-    suggestions. Flag-only; opt-in until its frozen gate."""
+    suggestions. Flag-only; opt-in until its frozen gate.
+
+    `reconcile` runs the track-B page-level constraint pass after reading
+    order: a candidate reading that page context (date columns, prefix groups)
+    prefers over the engine reading becomes `context_conflict` plus a
+    suggestion. Flag-only, deterministic, opt-in until its frozen gate."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -273,6 +279,10 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
         result.meta["reading_order_changed"] = \
             [t.text for t in result.tokens] != before
     result.meta["reading_order"] = reading_order
+
+    if reconcile:
+        from veriscript.document.reconcile import reconcile_page
+        result.meta["reconcile"] = reconcile_page(result.tokens)
 
     vfinal = vertical_fraction(result.tokens)
     suspect = bool(

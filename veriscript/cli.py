@@ -151,6 +151,7 @@ def run_document_mode(args) -> int:
                 deva_ckpt=getattr(args, "deva_ckpt", None),
                 split_numbers=getattr(args, "split_numbers", False),
                 multi_read=getattr(args, "multi_read", "off"),
+                reconcile=getattr(args, "reconcile", False),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -372,6 +373,12 @@ def main():
                           "Otsu) and record candidate suggestions; a panel "
                           "disagreement raises multi_read_conflict. Flag-only; "
                           "opt-in until its frozen gate")
+    doc.add_argument("--reconcile", action="store_true", dest="reconcile",
+                     default=False,
+                     help="track B (docs/HARNESS_PLAN.md): use page context "
+                          "(date columns, number prefixes) to prefer a "
+                          "candidate reading; flag-only context_conflict plus "
+                          "suggestions. Opt-in until its frozen gate")
     doc.add_argument("--apply-corrections", default=None,
                      dest="apply_corrections",
                      help="apply a corrections JSON (docs/CORRECTIONS.md) "

@@ -238,6 +238,19 @@ gate is expected to fail on arithmetic and the run is still recorded.
 Run the gate twice: with A `off`, then with A `panel` on, to show whether B
 composes with A. Adopt policy identical to A.
 
+**Status 2026-10-03: attempted — gate FAILED** (PLAN.md Appendix AK). v2
+digit R@10 0.4161 → 0.4161 (product-pipeline convention), zero flags, so the
+precision clause cannot pass; identity/CER/invented clauses passed, cornell
+non-target clauses passed; direct cost 0.6 ms/page. **Reachability killed it:
+of 149 v2 digit errors, 35 had any candidate, only 3 had a ground-truth
+candidate, and those 3 are whole-line mixed-text tokens, not date/prefix
+fields.** For 146/149 errors no reader in the stack produced the correct
+alternative, so no constraint could choose it. The structural premise is
+falsified for this dataset; the A+B composition run was skipped as bounded by
+the same line. `reconcile` ships as opt-in reference only; a future attempt
+needs a reader that produces the correct alternative (model/data or a stronger
+verifier), not more reconciliation logic.
+
 ## 5. D — correction memory
 
 D has no frozen-set gate (it is **offline-inert**: no memory ships in frozen
@@ -283,7 +296,7 @@ parity for memory is deferred.
 |---|---|---|---|
 | 0 | Contract fields (`reads`, `suggestions`) + export/review plumbing + tests; reproduce frozen baselines (§0b). Gate scripts land with their features (steps 1–2) so they can never score a nonexistent flag. | **done 2026-10-03** | baselines match EVALUATION ✓ |
 | 1 | A: panel + `multi_read_conflict` + `scripts/eval_multi_read.py` | 3–5 d | **done 2026-10-03 — gate FAILED** (Appendix AJ); opt-in reference only |
-| 2 | B: `reconcile.py` + `scripts/eval_context_reconcile.py` | 4–6 d | B gate, A off and on |
+| 2 | B: `reconcile.py` + `scripts/eval_context_reconcile.py` | 4–6 d | **done 2026-10-03 — gate FAILED** (Appendix AK); opt-in reference only |
 | 3 | D1: repeat grouping + suggestion chips in the studio | 2–3 d | invariants + beta metrics |
 | 4 | D2: opt-in local memory + lifecycle + clear + docs | 3–4 d | product metrics |
 | 5 | Republish BENCHMARK/README numbers for whatever passed; record failures as appendices | 1 d | docs updated |

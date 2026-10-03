@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Track B page-level constraint reconciliation (opt-in reference;
+  pre-registered gate FAILED).** `--reconcile` prefers a candidate reading
+  when page context agrees with it (date-column year/month majority,
+  number-prefix groups; ties are never flagged), raising `context_conflict`
+  (weight 2.0) plus a `suggestions` entry — never edits text or `alt_text`;
+  direct cost 0.6 ms/page. Gate result: v2 digit R@10 0.4161 → 0.4161 and
+  **zero flags**; reachability showed 35/149 digit errors with any candidate
+  and only 3 with a ground-truth candidate, all whole-line mixed-text tokens
+  outside the registered constraints — for 146/149 errors no reader in the
+  stack produced the correct alternative. Identity/CER/invented clauses and
+  cornell non-target clauses passed. Kept opt-in (default `off`); full record
+  in [docs/PLAN.md](docs/PLAN.md) Appendix AK and
+  [docs/HARNESS_PLAN.md](docs/HARNESS_PLAN.md) §4. New gate tooling:
+  `scripts/eval_context_reconcile.py`.
 - **Track A multi-read panel (opt-in reference; pre-registered gate FAILED).**
   `--multi-read panel` re-reads flagged digit tokens under fixed transforms
   (2x, +1.5°, Otsu), records every independent read in `ocr.json` (`reads`)

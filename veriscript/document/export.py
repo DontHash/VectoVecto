@@ -40,6 +40,8 @@ FLAG_COLORS = {  # BGR
     "low_conf": (0, 191, 255),          # amber
     "digit_uncertain": (0, 191, 255),   # amber
     "unknown_word": (0, 191, 255),      # amber: out-of-lexicon Devanagari word
+    "multi_read_conflict": (0, 191, 255),  # amber: panel re-read disagrees (A)
+    "context_conflict": (0, 191, 255),     # amber: page context prefers a candidate (B)
 }
 OK_COLOR = (0, 180, 0)                  # green
 

@@ -2534,3 +2534,68 @@ data/doc_eval/nepali_pdf_v2 --frozen evals/manifests/nepali_pdf_v2.json
 --role target` (`--limit 10` for hard-10); cornell `--role other`. Raw JSON
 under `out/harness_baselines/` (git-ignored).
 
+## Appendix AK - track B page-level constraint reconciliation: pre-registered gate (FAILED, 2026-10-03)
+
+**Question.** Can page context (date-column year/month majority, number-prefix
+groups) choose the correct reading among candidates the readers already
+produced? Pre-registration: [HARNESS_PLAN.md](HARNESS_PLAN.md) section 4,
+including the mandatory reachability disclosure.
+
+**Protocol.** `scripts/eval_context_reconcile.py` (off/on arms on the product
+pipeline; queue metrics read from the pipeline's own tokens so audit-stream
+candidates are visible; `_queue_metrics` definitions; `context_conflict`
+weight 2.0; never edits text or `alt_text`).
+
+**Convention note.** Measuring the queue on the product pipeline (which
+downscales to MAX_SIDE and runs the audit stream) gives a different absolute
+level than the published `eval_flags` number: off-arm full-41 R@10 **0.4161**
+vs 0.3846, hard-10 0.4211 vs 0.3478. The gate decision is off-relative; the
+published baseline is quoted here for comparability only.
+
+**Measured.**
+
+| set / role | arm | digit R@10 | ctx flags (true, precision) | text | s/page |
+|---|---|---|---|---|---|
+| v2 hard-10, target | off | 0.4211 | - | - | 4.16 |
+| v2 hard-10, target | on | 0.4211 | 0 (0, n/a) | identical | 3.57 |
+| v2 full-41, target | off | 0.4161 | - | - | 3.92 |
+| v2 full-41, target | on | 0.4161 | 0 (0, n/a) | identical | 4.47 |
+| cornell, other | off/on | 0.2809 | 0 (0, n/a) | identical | 4.28 / 3.92 |
+
+Target clauses FAIL (R@10 +0.0 pp vs the +3 pp bar; no flags, so the precision
+clause cannot pass). Identity, CER, bagCER, digit-exact and invented clauses
+PASS; the cornell non-target clauses PASS (R@10/P@10 and queue unchanged).
+The full-run latency clause read +0.55 s/page, but a direct microbenchmark of
+`reconcile_page` over all 41 pages measures **0.608 ms/page** - the delta is
+machine noise, not pass cost.
+
+**Reachability (the decisive number).** v2 full-41: **149** digit errors, only
+**35** have any candidate reading at all, and only **3** have a candidate that
+matches the ground truth; **0** were flagged. The 3 GT candidates are
+whole-line mixed-text tokens, not fields: `(9१)` -> `(१)`, `(६)` -> `(6)`,
+`'४. अख्तयारी...'` -> a corrected full-line reading. None is date-shaped and
+none forms a same-shape prefix column, so the registered constraints cannot
+apply. The hard-10 (the table-heavy hardest pages) is worse: 2 of 19 errors
+with any candidate, 0 with a GT candidate.
+
+**Diagnosis.** For 146 of 149 v2 digit errors **no reader in the shipped stack
+produced the correct alternative** - re-pass, audit stream and (in the track-A
+runs) the panel all agree with the wrong, valid-looking digits. B can only
+choose among candidates; it cannot invent the right one. This sharpens the
+AG/AH finding: the modern-PDF residual is not field structure that context can
+repair, it is line-level recognition error where every available reader is
+wrong together. The structural-constraint premise is falsified for this
+dataset.
+
+**Decision.** Gate FAILED -> `reconcile` stays opt-in reference only (library
+and CLI default off). A future attempt needs a reader that actually produces
+the correct alternative (model/data work, or a stronger second reader whose
+precision clears the verifier gate), not more reconciliation logic. The A+B
+composition run was skipped: both tracks failed independently and the
+reachability line bounds any combination.
+
+**Reproduce.** `python scripts/eval_context_reconcile.py --data-dir
+data/doc_eval/nepali_pdf_v2 --frozen evals/manifests/nepali_pdf_v2.json
+--role target`; cornell `--role other`. Raw JSON under `out/harness_baselines/`
+(git-ignored).
+

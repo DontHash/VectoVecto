@@ -877,6 +877,7 @@ RISK_WEIGHTS: Dict[str, float] = {
     "digit_conflict": 3.0,   # two independent streams read different digits
     "cross_model_conflict": 3.0,  # a second model read different digits (Appendix L/M)
     "multi_read_conflict": 2.5,   # a panel re-read disagrees (track A; HARNESS_PLAN §3)
+    "context_conflict": 2.0,      # page context prefers a candidate (track B; HARNESS_PLAN §4)
     "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
     "invalid_sequence": 1.0,  # impossible Devanagari sequence; dev-tuned to
                               # not displace digit signals in the top-10
