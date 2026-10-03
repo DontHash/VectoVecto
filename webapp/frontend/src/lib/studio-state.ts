@@ -1,6 +1,6 @@
 /** Studio state — one factory, used by the homepage hero and the full studio
  *  page, so the product behaves identically wherever it is embedded. */
-import { createSignal, onCleanup } from "solid-js";
+import { createMemo, createSignal, onCleanup } from "solid-js";
 import { clearMemory as clearMemoryApi, correctRun, exportRunCorrections, fetchHealth, runRestore } from "./api";
 import type {
   CorrectionInput,
@@ -39,9 +39,22 @@ export function createStudioState() {
   const [lastStats, setLastStats] = createSignal<CorrectionStats | null>(null);
   const [exportResult, setExportResult] = createSignal<ExportResponse | null>(null);
   const [memoryCleared, setMemoryCleared] = createSignal<number | null>(null);
+  // Signature of every correction that has already been applied. The batch is
+  // kept after applying (the export panel and the next POST need it), so the
+  // pending count must ignore what was already sent — otherwise "apply" stays
+  // enabled and re-posts the same corrections.
+  const [appliedSigs, setAppliedSigs] = createSignal<Record<number, string>>({});
+
+  const correctionSig = (c: CorrectionInput) =>
+    [c.index, c.corrected, c.action, c.suggested ?? "", c.suggestion_source ?? ""].join("\u0000");
+
+  const pendingCorrections = createMemo(() =>
+    corrections().filter((c) => appliedSigs()[c.index] !== correctionSig(c)),
+  );
 
   const resetCorrections = () => {
     setCorrections([]);
+    setAppliedSigs({});
     setCorrectionError(null);
     setLastStats(null);
     setExportResult(null);
@@ -140,7 +153,10 @@ export function createStudioState() {
 
   const applyCorrections = async () => {
     const p = result();
-    const list = corrections();
+    // Post only what is new; the server applies it on top of the run's
+    // current corrected state (cumulative), so already-applied corrections
+    // are neither re-counted nor re-recorded.
+    const list = pendingCorrections();
     if (!p || !list.length || correcting()) return;
     setCorrecting(true);
     setCorrectionError(null);
@@ -155,6 +171,10 @@ export function createStudioState() {
       });
       setLastStats(res.stats);
       setExportResult(null);
+      setAppliedSigs((prev) => ({
+        ...prev,
+        ...Object.fromEntries(list.map((c) => [c.index, correctionSig(c)])),
+      }));
     } catch (e) {
       setCorrectionError(e instanceof Error ? e.message : "Could not apply the corrections.");
     } finally {
@@ -226,6 +246,7 @@ export function createStudioState() {
     pickExample,
     start,
     corrections,
+    pendingCorrections,
     correcting,
     correctionError,
     lastStats,

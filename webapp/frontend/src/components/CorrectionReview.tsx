@@ -18,6 +18,7 @@ export function CorrectionReview(props: { state: StudioState }) {
   const [share, setShare] = createSignal<Record<number, boolean>>({});
 
   const clampActive = () => Math.min(active(), Math.max(0, rows().length - 1));
+  const pendingCount = () => s.pendingCorrections().length;
 
   const draftText = (row: QueueItem): string => {
     if (row.index === null) return row.text;
@@ -115,7 +116,14 @@ export function CorrectionReview(props: { state: StudioState }) {
     const draft = draftText(row).trim();
     const corrected = draft && draft !== row.text ? draft : row.text;
     const action: "changed" | "confirmed" = corrected !== row.text ? "changed" : "confirmed";
-    for (const r of [row, ...identicalFor(row)]) {
+    const targets = [row, ...identicalFor(row)];
+    // Every staged row's input should show the text that was actually staged.
+    setEdited((prev) => {
+      const next = { ...prev };
+      for (const r of targets) if (r.index !== null) next[r.index] = corrected;
+      return next;
+    });
+    for (const r of targets) {
       if (r.index === null) continue;
       s.stageCorrection({
         index: r.index,
@@ -138,14 +146,17 @@ export function CorrectionReview(props: { state: StudioState }) {
     <div class="review">
       <div class="review__bar">
         <span class="field__hint">
-          {s.corrections().length} staged · {rows().length} still in the queue
+          {pendingCount() > 0 || !s.corrections().length
+            ? `${pendingCount()} staged`
+            : `${s.corrections().length} applied`}{" "}
+          · {rows().length} still in the queue
         </span>
         <button
           class="btn btn--primary btn--small"
-          disabled={!s.corrections().length || s.correcting()}
+          disabled={!pendingCount() || s.correcting()}
           onClick={() => void s.applyCorrections()}
         >
-          {s.correcting() ? "applying…" : `apply corrections (${s.corrections().length})`}
+          {s.correcting() ? "applying…" : `apply corrections (${pendingCount()})`}
         </button>
       </div>
 

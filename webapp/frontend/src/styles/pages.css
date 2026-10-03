@@ -775,19 +775,24 @@
   align-items: start;
 }
 
+.studio__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* The panel only sticks next to the results column; in the single-column
+   layout (below 1000px) sticky slides it over the results. */
 @media (min-width: 1000px) {
   .studio__grid {
     grid-template-columns: 400px minmax(0, 1fr);
     gap: var(--space-12);
   }
-}
 
-.studio__panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  position: sticky;
-  top: calc(var(--space-16) + var(--space-4));
+  .studio__panel {
+    position: sticky;
+    top: calc(var(--space-16) + var(--space-4));
+  }
 }
 
 /* dropzone */

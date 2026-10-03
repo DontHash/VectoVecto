@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 import threading
@@ -65,10 +66,58 @@ def _require_run_dir(run_id: str) -> str:
 
 
 def _result_from_run(run_dir: str):
-    """Rebuild the token objects from the run's canonical `ocr.json`."""
+    """Rebuild the token objects from the run's current state.
+
+    Corrections are cumulative: once `corrected.json` exists it is the truth,
+    and the next batch applies on top of it (falling back to the canonical
+    `ocr.json` before the first call).
+    """
     from veriscript.document.corrections import result_from_ocr_json
 
-    return result_from_ocr_json(os.path.join(run_dir, "ocr.json"))
+    name = ("corrected.json"
+            if os.path.isfile(os.path.join(run_dir, "corrected.json"))
+            else "ocr.json")
+    return result_from_ocr_json(os.path.join(run_dir, name))
+
+
+def _previously_applied(run_dir: str) -> set:
+    """(index, original, corrected, action) already in `corrections.json`."""
+    try:
+        with open(os.path.join(run_dir, "corrections.json"),
+                  encoding="utf-8") as f:
+            payload = json.load(f)
+    except (OSError, ValueError):
+        return set()
+    out = set()
+    for item in payload.get("applied") or []:
+        if isinstance(item, dict):
+            out.add((item.get("index"), item.get("original"),
+                     item.get("corrected"), item.get("action")))
+    return out
+
+
+def _new_correction_entries(raw: list, parsed: list, seen: set) -> list:
+    """Raw body entries for corrections not already in the run's record.
+
+    `corrections.json` is the source of truth for dedupe; suggestion metadata
+    (`suggested`) only exists in the raw body, so raw entries are matched back
+    by index.
+    """
+    raw_by_index = {}
+    for entry in raw:
+        if isinstance(entry, dict) and entry.get("index") is not None:
+            try:
+                raw_by_index[int(entry["index"])] = entry
+            except (TypeError, ValueError):
+                continue
+    fresh = []
+    for c in parsed:
+        if (c.index, c.original, c.corrected, c.action) in seen:
+            continue
+        fresh.append(raw_by_index.get(c.index, {
+            "index": c.index, "original": c.original,
+            "corrected": c.corrected, "action": c.action}))
+    return fresh
 
 
 def _memory_enabled() -> bool:
@@ -386,6 +435,7 @@ def create_app() -> FastAPI:
         result = _result_from_run(run_dir)
         snapshots = {i: (t.text, list(t.flags))
                      for i, t in enumerate(result.tokens)}
+        seen = _previously_applied(run_dir)
         applied = apply_and_export(
             run_dir, "corrected", image, result, corrections,
             make_pdf=True, make_overlay=False, make_txt=True,
@@ -398,9 +448,10 @@ def create_app() -> FastAPI:
                 corrections_record(page_stem, corrections, stats, run_id))
             try:  # track D2: text-only local memory (best-effort)
                 from veriscript.document import memory as correction_memory
+                raw = (body or {}).get("corrections") or []
+                fresh = _new_correction_entries(raw, corrections, seen)
                 correction_memory.record_corrections(
-                    (body or {}).get("corrections") or [], snapshots,
-                    engine=result.backend)
+                    fresh, snapshots, engine=result.backend)
             except Exception:  # noqa: BLE001
                 pass
         summary = collect_run_summary(run_dir, run_id)

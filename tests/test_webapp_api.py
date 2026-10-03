@@ -345,6 +345,42 @@ def test_correct_applies_and_serves_corrected_files(client, monkeypatch):
     assert original["tokens"][0]["original_text"] is None
 
 
+def test_correct_is_cumulative_and_memory_records_once(client, monkeypatch,
+                                                       tmp_path):
+    """A new batch builds on the run's corrected state; memory never dupes."""
+    monkeypatch.setenv("VERISCRIPT_MEMORY", "1")
+    monkeypatch.setenv("VERISCRIPT_MEMORY_DIR", str(tmp_path / "mem.jsonl"))
+    from veriscript.document import memory
+
+    payload = _restore_once(client, monkeypatch)
+    run = payload["run_id"]
+    first = {"index": 0, "bbox": [1, 1, 30, 20], "original": "HELLO",
+             "corrected": "HELLO2"}
+    r = client.post(f"/api/runs/{run}/correct", json={"corrections": [first]})
+    assert r.status_code == 200 and r.json()["stats"]["changed"] == 1
+    assert sum(1 for e in memory._iter_events()
+               if e.get("kind") == "correction") == 1
+
+    # Re-posting an already-applied batch is idempotent and not re-recorded.
+    r = client.post(f"/api/runs/{run}/correct", json={"corrections": [first]})
+    assert r.status_code == 200 and r.json()["review"] == []
+    assert sum(1 for e in memory._iter_events()
+               if e.get("kind") == "correction") == 1
+
+    # A new correction applies on top (cumulative corrected.json), reports
+    # only itself, and lands in memory once.
+    second = {"index": 0, "bbox": [1, 1, 30, 20], "original": "HELLO2",
+              "corrected": "HELLO3"}
+    r = client.post(f"/api/runs/{run}/correct", json={"corrections": [second]})
+    assert r.status_code == 200
+    out = r.json()
+    assert out["stats"]["changed"] == 1 and out["stats"]["reviewed"] == 1
+    corrected = client.get(out["files"]["corrected_json"]).json()
+    assert corrected["tokens"][0]["text"] == "HELLO3"
+    assert sum(1 for e in memory._iter_events()
+               if e.get("kind") == "correction") == 2
+
+
 def test_correct_reports_stale_entries_as_skipped(client, monkeypatch):
     payload = _restore_once(client, monkeypatch)
     r = client.post(f"/api/runs/{payload['run_id']}/correct", json={

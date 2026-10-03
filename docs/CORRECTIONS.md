@@ -113,6 +113,11 @@ printing `changed / confirmed / skipped`.
 * `POST /api/runs/{run_id}/correct` — body `{"corrections": […]}`; applies to
   the served page, writes the corrected artifacts + `corrections.json`, and
   returns the updated review queue, transcript, flags summary and file links.
+  Corrections are **cumulative**: the batch applies on top of the run's
+  current `corrected.json` (the original `ocr.json` before the first call), so
+  the studio posts only newly staged corrections. Applying is idempotent for
+  an already-applied entry, and entries already present in the run's
+  `corrections.json` are never re-recorded in local memory.
 * `POST /api/runs/{run_id}/corrections/export` — body
   `{"corrections": […], "share": [indices]}`; writes `corrections.zip`
   containing `corrections.json`, `labels.tsv`, `crops/<page>_<index>.png` for
