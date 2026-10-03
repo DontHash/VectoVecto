@@ -8,6 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Track A multi-read panel (opt-in reference; pre-registered gate FAILED).**
+  `--multi-read panel` re-reads flagged digit tokens under fixed transforms
+  (2x, +1.5°, Otsu), records every independent read in `ocr.json` (`reads`)
+  and surfaces disagreeing readings as `suggestions` with a
+  `multi_read_conflict` flag (weight 2.5) — flag/evidence-only, never edits
+  text, never writes `alt_text`. Gate result: v2 digit R@10 0.3846 → 0.3846
+  (target bar +3 pp), new-flag precision 0.20 vs the 0.5 bar; identity, CER,
+  bagCER, digit-exact, invented and latency clauses passed, cornell non-target
+  clauses passed. The lone disagreements were Otsu/rotation artifacts and 9 of
+  13 splits were tokens already flagged `digit_conflict`. Kept opt-in
+  (default `off`); diagnosis and redesign direction in
+  [docs/PLAN.md](docs/PLAN.md) Appendix AJ and
+  [docs/HARNESS_PLAN.md](docs/HARNESS_PLAN.md) §3. New gate tooling:
+  `scripts/eval_multi_read.py`.
 - **Harness evidence contract (step 0 of [docs/HARNESS_PLAN.md](docs/HARNESS_PLAN.md)).**
   `Token` gains additive `reads` (independent re-reads: source/text/conf) and
   `suggestions` (candidate labels: text/source/why); `ocr.json` serializes

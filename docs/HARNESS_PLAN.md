@@ -165,6 +165,17 @@ Decision: all pass → adopt (policy default mirrors repass: ON for Devanagari
 images, PDFs keep their current policy); any fail → opt-in reference only,
 record in PLAN appendix, stop.
 
+**Status 2026-10-03: attempted — gate FAILED** (PLAN.md Appendix AJ). v2 digit
+R@10 0.3478 → 0.3478 (hard-10) and 0.3846 → 0.3846 (full-41); new-flag
+precision 0.00 / 0.20 vs the 0.5 bar; identity, CER, invented and latency
+clauses passed; cornell non-target clauses passed. Diagnosis: 9/13 splits were
+tokens already `digit_conflict`, and the new disagreements were transform
+artifacts (mostly Otsu) — the "any single read disagrees" rule is too weak and
+the suspects were already-flagged tokens. `multi_read="panel"` ships as
+opt-in reference only. Redesign direction for a future attempt: ≥ 2 disagreeing
+reads (Otsu recorded but not flag-bearing) and wider suspects, tuned on
+`heidata_dev_v1`.
+
 ## 4. B — page-level constraint reconciliation
 
 **What changed vs today.** AH proved single-token format rules cannot see
@@ -271,7 +282,7 @@ parity for memory is deferred.
 | Step | Work | Size | Gate / exit |
 |---|---|---|---|
 | 0 | Contract fields (`reads`, `suggestions`) + export/review plumbing + tests; reproduce frozen baselines (§0b). Gate scripts land with their features (steps 1–2) so they can never score a nonexistent flag. | **done 2026-10-03** | baselines match EVALUATION ✓ |
-| 1 | A: panel + `multi_read_conflict` + `scripts/eval_multi_read.py` | 3–5 d | A gate (all clauses) |
+| 1 | A: panel + `multi_read_conflict` + `scripts/eval_multi_read.py` | 3–5 d | **done 2026-10-03 — gate FAILED** (Appendix AJ); opt-in reference only |
 | 2 | B: `reconcile.py` + `scripts/eval_context_reconcile.py` | 4–6 d | B gate, A off and on |
 | 3 | D1: repeat grouping + suggestion chips in the studio | 2–3 d | invariants + beta metrics |
 | 4 | D2: opt-in local memory + lifecycle + clear + docs | 3–4 d | product metrics |

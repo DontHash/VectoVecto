@@ -2486,3 +2486,51 @@ so the batch is now **owner-audited target-domain digit ground truth**
 (internal; not a frozen evaluation set). This also validates the data engine's
 shape: agent pre-correction + human audit is cheap enough to scale.
 
+## Appendix AJ - track A multi-read panel: pre-registered gate (FAILED, 2026-10-03)
+
+**Question.** Can re-reading already-flagged digit tokens under deterministic
+transforms (2x, +1.5 deg, Otsu) surface candidates that lift the digit review
+queue, without touching text? Pre-registration: [HARNESS_PLAN.md](HARNESS_PLAN.md)
+section 3.
+
+**Protocol.** `scripts/eval_multi_read.py` (off/on arms; the AG/AH
+`_queue_metrics` convention; `run_document_pipeline` + `ocr_page` per arm).
+Suspects = flagged digit tokens, aspect <= 8, riskiest-first, cap 12/page;
+every read lands in `Token.reads`; a non-repass read that disagrees with the
+engine raises `multi_read_conflict` (weight 2.5) and becomes a `suggestion`;
+tokens already carrying `digit_conflict` are never re-flagged.
+
+**Measured.**
+
+| set / role | arm | digit R@10 | new flags (true, precision) | text | CER / bagCER | invented | s/page |
+|---|---|---|---|---|---|---|---|
+| v2 hard-10, target | off | 0.3478 | - | - | 0.2550 / 0.3758 | 665 | 4.21 |
+| v2 hard-10, target | panel | 0.3478 | 3 (0, 0.00) | identical | 0.2550 / 0.3758 | 665 | 4.43 |
+| v2 full-41, target | off | 0.3846 | - | - | - | - | 3.80 |
+| v2 full-41, target | panel | 0.3846 | 5 (1, 0.20) | identical | - | - | 4.04 |
+| cornell, other | off/on | 0.2472 | 4 (2, 0.50) | identical | - | - | 3.04 / 3.42 |
+
+Target clauses FAIL (R@10 +0.0 pp vs the +3 pp bar; flag precision 0.2 vs
+0.5). Identity, invented, CER/bagCER, digit-exact and latency clauses PASS;
+the cornell non-target clauses PASS (R@10/P@10 and queue unchanged).
+
+**Diagnosis (one-off read dump).** Across v2: 13 split tokens, 9 of them
+already `digit_conflict` (the panel adds no signal there); 4 new flags, all
+false. The lone disagreeing read was `panel:otsu` in 2 of 3
+single-disagreement cases - one junk (`'म'`), two glyph corruptions
+(`३१३` -> `३९३`, `२११३१` -> `२११३९`) - and `panel:rot+1.5` once dropped a
+leading zero (`079-DP-0252` -> `79-DP-0252`). The panel never saw the errors
+that needed promotion: suspects were already-flagged tokens and 55/70 reads
+agreed.
+
+**Decision.** Gate FAILED -> `multi_read="panel"` stays opt-in reference only
+(library and CLI default `off`), per the pre-registration. A future attempt
+needs a dev-tuned rule (require >= 2 disagreeing reads, or record Otsu without
+letting it flag) and wider suspects (unflagged low-margin digit tokens), tuned
+on `heidata_dev_v1` only. Track B proceeds independently.
+
+**Reproduce.** `python scripts/eval_multi_read.py --data-dir
+data/doc_eval/nepali_pdf_v2 --frozen evals/manifests/nepali_pdf_v2.json
+--role target` (`--limit 10` for hard-10); cornell `--role other`. Raw JSON
+under `out/harness_baselines/` (git-ignored).
+

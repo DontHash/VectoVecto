@@ -117,6 +117,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           deva_lines: str = "off",
                           deva_ckpt: Optional[str] = None,
                           split_numbers: bool = False,
+                          multi_read: str = "off",
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -139,7 +140,12 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     `split_numbers` enables merged-number splitting (Appendix AG) on both OCR
     passes: digit-dominant tokens are cut at wide internal gaps / drawn rules
     and the segments re-read. Opt-in until its frozen gate; counters land in
-    `meta["number_split"]`."""
+    `meta["number_split"]`.
+
+    `multi_read` ("off"|"panel", track A of docs/HARNESS_PLAN.md) runs on the
+    primary pass only: flagged digit tokens are re-read under fixed transforms
+    and panel disagreements become `multi_read_conflict` with candidate
+    suggestions. Flag-only; opt-in until its frozen gate."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -170,7 +176,8 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           conf_threshold=conf_threshold,
                           recheck_digits=repass_effective,
                           deva_lines=deva_lines, deva_ckpt=deva_ckpt,
-                          split_numbers=split_numbers)
+                          split_numbers=split_numbers,
+                          multi_read=multi_read)
         conflicts = 0
         audit_error = None
         try:

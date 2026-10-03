@@ -150,6 +150,7 @@ def run_document_mode(args) -> int:
                             else getattr(args, "deva_lines", "auto")),
                 deva_ckpt=getattr(args, "deva_ckpt", None),
                 split_numbers=getattr(args, "split_numbers", False),
+                multi_read=getattr(args, "multi_read", "off"),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -364,6 +365,13 @@ def main():
                      help="FAILED its frozen gate (Appendix AG): on ruled "
                           "tables it fragments valid dates; kept for "
                           "reference only - do not enable")
+    doc.add_argument("--multi-read", choices=("off", "panel"), default="off",
+                     dest="multi_read",
+                     help="track A (docs/HARNESS_PLAN.md): re-read flagged "
+                          "digit tokens under fixed transforms (2x, +1.5 deg, "
+                          "Otsu) and record candidate suggestions; a panel "
+                          "disagreement raises multi_read_conflict. Flag-only; "
+                          "opt-in until its frozen gate")
     doc.add_argument("--apply-corrections", default=None,
                      dest="apply_corrections",
                      help="apply a corrections JSON (docs/CORRECTIONS.md) "

@@ -450,7 +450,8 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
              deva_lines: str = "off",
              deva_ckpt: Optional[str] = None,
              split_numbers: bool = False,
-             date_flags: bool = False) -> OCRResult:
+             date_flags: bool = False,
+             multi_read: str = "off") -> OCRResult:
     """Run OCR, attach flags, optionally re-read digit tokens on 2x crops.
 
     The re-pass never replaces text; it records `repass_text`/`repass_conf` and
@@ -479,6 +480,11 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
     whose text parses as a date with a provably impossible component (day 39,
     month 13, year out of range) is flagged `invalid_format`, flag-only.
     Opt-in until its frozen gate.
+
+    `multi_read` ("off"|"panel", track A of docs/HARNESS_PLAN.md) re-reads
+    flagged digit tokens under fixed transforms (2x, +1.5 deg, Otsu) and
+    records every read plus candidate suggestions; a panel disagreement raises
+    `multi_read_conflict`. Flag/evidence-only, opt-in until its frozen gate.
     """
     be = get_backend(backend)
     result = be.run(img_bgr, lang=lang)
@@ -516,6 +522,9 @@ def ocr_page(img_bgr: np.ndarray, backend: str = "rapidocr",
                                        lang=lang, conf_below=repass_conf_below)
         result.meta["digit_repass_conflicts"] = conflicts
         result.meta["repass_conf_below"] = repass_conf_below
+    if multi_read == "panel":
+        result.meta["multi_read"] = apply_multi_read(
+            result.tokens, img_bgr, be.recognize_crop, lang=lang)
     result.meta["flagged"] = sum(1 for t in result.tokens if t.flags)
     return result
 
@@ -867,6 +876,7 @@ def apply_digit_repass(tokens: List[Token], img_bgr: np.ndarray,
 RISK_WEIGHTS: Dict[str, float] = {
     "digit_conflict": 3.0,   # two independent streams read different digits
     "cross_model_conflict": 3.0,  # a second model read different digits (Appendix L/M)
+    "multi_read_conflict": 2.5,   # a panel re-read disagrees (track A; HARNESS_PLAN §3)
     "script_mismatch": 2.5,  # Latin token on a Devanagari page: measured ~100% junk
     "invalid_sequence": 1.0,  # impossible Devanagari sequence; dev-tuned to
                               # not displace digit signals in the top-10
@@ -1045,6 +1055,130 @@ def apply_digit_verifier(tokens: List["Token"], img_bgr: np.ndarray,
             tok.alt_text = str(text).strip()
             conflicts += 1
     return conflicts
+
+
+# ---------------------------------------------------------------------------
+# multi-read consensus (docs/HARNESS_PLAN.md track A)
+# ---------------------------------------------------------------------------
+
+MULTI_READ_MAX_TOKENS = 12
+MULTI_READ_ASPECT_MAX = 8.0
+MULTI_READ_PAD = 0.15
+MULTI_READ_SCALE = 2.0
+MULTI_READ_ANGLE = 1.5  # degrees; a small, deterministic skew correction
+
+
+def _panel_variants(big: np.ndarray) -> List[Tuple[str, np.ndarray]]:
+    """Deterministic transforms of one 2x crop: +1.5 deg rotation and Otsu."""
+    h, w = big.shape[:2]
+    m = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), MULTI_READ_ANGLE, 1.0)
+    rotated = cv2.warpAffine(big, m, (w, h), flags=cv2.INTER_LINEAR,
+                             borderMode=cv2.BORDER_REPLICATE)
+    gray = cv2.cvtColor(big, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255,
+                              cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    otsu = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+    return [(f"panel:rot+{MULTI_READ_ANGLE:g}", rotated), ("panel:otsu", otsu)]
+
+
+def _add_suggestions(tok: "Token", valid_reads: List[Dict],
+                     base_digits: str, budget: int = 3) -> int:
+    """Record distinct disagreeing panel readings as candidate labels."""
+    seen = {s.get("text") for s in tok.suggestions}
+    agree = sum(1 for r in valid_reads
+                if _digits_of(r["text"]) == base_digits)
+    added = 0
+    for r in valid_reads:
+        if budget <= 0:
+            break
+        text = r["text"]
+        if _digits_of(text) == base_digits or text in seen:
+            continue
+        tok.suggestions.append({
+            "text": text, "source": r["source"],
+            "why": f"{agree}/{len(valid_reads)} panel reads agree with the engine",
+        })
+        seen.add(text)
+        budget -= 1
+        added += 1
+    return added
+
+
+def apply_multi_read(tokens: List["Token"], img_bgr: np.ndarray,
+                     recognize_crop, lang: Optional[str] = None,
+                     max_tokens: int = MULTI_READ_MAX_TOKENS) -> Dict:
+    """Re-read flagged digit tokens under deterministic small transforms.
+
+    Track A of docs/HARNESS_PLAN.md. Flag/evidence-only: every independent read
+    lands in `tok.reads` [{"source", "text", "conf"}]; a panel read that
+    disagrees with the engine reading raises `multi_read_conflict` (once, and
+    only when `digit_conflict` is not already present) and becomes a
+    `suggestions` entry for the human. `text`, `conf` and `alt_text` are never
+    touched; agreement adds no flag (coverage metrics stay honest).
+
+    Suspects are flagged digit tokens with a plausible aspect ratio, ordered
+    riskiest-first and capped at `max_tokens` (recognition calls are the only
+    cost). An existing `repass_text` is reused as the first read instead of a
+    repeat call. A read that fails or returns no digits is recorded but does
+    not count as evidence. Returns per-page counters for `meta["multi_read"]`.
+    """
+    suspects = [t for t in tokens
+                if t.has_digits and t.flags
+                and (t.bbox[3] - t.bbox[1]) > 0
+                and (t.bbox[2] - t.bbox[0])
+                / (t.bbox[3] - t.bbox[1]) <= MULTI_READ_ASPECT_MAX]
+    suspects.sort(key=lambda t: (-token_risk(t), t.bbox[1], t.bbox[0]))
+    if max_tokens:
+        suspects = suspects[:max_tokens]
+
+    stats = {"checked": 0, "agree": 0, "split": 0, "unreadable": 0,
+             "conflicts": 0}
+    for tok in suspects:
+        base_digits = _digits_of(tok.text)
+        reads: List[Dict] = []
+        if tok.repass_text is not None:
+            reads.append({"source": "repass", "text": tok.repass_text,
+                          "conf": (round(float(tok.repass_conf), 2)
+                                   if tok.repass_conf is not None else None)})
+        crop = _crop_with_pad(img_bgr, tok.bbox, pad_ratio=MULTI_READ_PAD)
+        if crop.size == 0:
+            continue
+        big = cv2.resize(crop, None, fx=MULTI_READ_SCALE,
+                         fy=MULTI_READ_SCALE,
+                         interpolation=cv2.INTER_LANCZOS4)
+        panel: List[Tuple[str, np.ndarray]] = []
+        if tok.repass_text is None:
+            panel.append(("panel:2x", big))
+        panel.extend(_panel_variants(big))
+        for source, image in panel:
+            try:
+                text, conf = (recognize_crop(image, lang) if lang
+                              else recognize_crop(image))
+            except TypeError:
+                text, conf = recognize_crop(image)
+            except Exception:  # noqa: BLE001 - one read must never fail the page
+                continue
+            reads.append({"source": source, "text": (text or "").strip(),
+                          "conf": (round(float(conf), 2)
+                                   if conf is not None else None)})
+        if not reads:
+            continue
+        stats["checked"] += 1
+        tok.reads = reads
+        valid = [r for r in reads if _digits_of(r["text"])]
+        if not valid:
+            stats["unreadable"] += 1
+            continue
+        if not any(_digits_of(r["text"]) != base_digits for r in valid):
+            stats["agree"] += 1
+            continue
+        stats["split"] += 1
+        if "digit_conflict" not in tok.flags:
+            if "multi_read_conflict" not in tok.flags:
+                tok.flags.append("multi_read_conflict")
+            stats["conflicts"] += 1
+        _add_suggestions(tok, valid, base_digits)
+    return stats
 
 
 def token_risk(tok: "Token") -> float:
