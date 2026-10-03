@@ -1,10 +1,9 @@
 # Packaging plan — Python distribution (and the Node SDK question)
 
-Status: **P0 + P1 implemented 2026-10-03** (data shipping, extras split,
-wheel smoke in CI, version cut 1.5.0, release workflow). Publishing itself
-waits on the PyPI trusted-publisher setup on the account. P2 planned.
-Feasibility was tested by building and installing the wheel, not by
-inspection alone.
+Status: **P0–P2 shipped 2026-10-03.** `veriscript 1.5.0` is live on PyPI
+(TestPyPI dry run verified first) with a GitHub Release; the Node client is
+implemented and CI-tested, its npm publish pending. Feasibility was tested
+by building and installing the wheel, not by inspection alone.
 
 ## 1. Verdict
 
@@ -64,6 +63,11 @@ Left (account-side, once, then releases are one tag away):
   `pip install --index-url https://test.pypi.org/simple/ veriscript`.
 - Tag a release: bump `pyproject.toml` + CHANGELOG on `main`, then
   `git tag v1.5.0 && git push origin v1.5.0`.
+
+**Released 2026-10-03:** TestPyPI dry run (run 37111900214) passed, then
+the `v1.5.0` tag published to PyPI + created the GitHub Release (run
+37112093288). A clean venv installs `veriscript==1.5.0` from PyPI and
+resolves the shipped calibration file.
 
 Open item: the lexicon stays out of the wheel (2.9 MB, `data/` is gitignored
 by policy). If distribution is wanted, the licenses are clean — ship it, or
