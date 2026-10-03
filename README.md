@@ -109,6 +109,10 @@ the pipeline, models and any training artifacts stay server-side. The photo
 upscaler is CLI-only (its weights are non-commercial); the web studio is
 document-only — see [docs/PLAN_WEB_FULL.md](docs/PLAN_WEB_FULL.md).
 
+For JS/TS integrations there is a typed HTTP client in
+[`packages/veriscript-client`](packages/veriscript-client) (npm:
+`veriscript-client`; not published yet).
+
 ### Outputs (per page)
 
 For an input `page.jpg`, every run writes:

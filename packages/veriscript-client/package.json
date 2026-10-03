@@ -1,0 +1,38 @@
+{
+  "name": "veriscript-client",
+  "version": "0.1.0",
+  "description": "Typed API client for a VeriScript server: upload a page, read the review queue, apply corrections, export marked crops. Zero runtime dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "ocr",
+    "devanagari",
+    "nepali",
+    "document",
+    "searchable-pdf",
+    "veriscript"
+  ]
+}

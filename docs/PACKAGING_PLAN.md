@@ -69,17 +69,22 @@ Open item: the lexicon stays out of the wheel (2.9 MB, `data/` is gitignored
 by policy). If distribution is wanted, the licenses are clean — ship it, or
 add a `veriscript fetch-lexicon` command that downloads and verifies it.
 
-## 4. P2 — Node client (planned)
+## 4. P2 — Node client (implemented 2026-10-03)
 
-- `packages/veriscript-client`: TypeScript, ESM, `fetch`-based, zero runtime
-  deps (Node >= 18). Surface: `health`, `restore` (multipart upload +
-  polling), `files`, `correct`, `exportCorrections`, `memory`.
-- Tests: vitest against a mocked fetch; one optional integration test
-  against a locally started `webapp/server.py`.
-- Publish scoped to npm (name TBD: `@veriscript/client` or similar); document
-  the hosted demo's rate/quota limits (429 + `Retry-After` handling is part
-  of the client).
-- Explicit non-goal: no local OCR in Node; the client targets a VeriScript
+`packages/veriscript-client` — TypeScript ESM, zero runtime dependencies,
+Node >= 18 (or any modern browser) over the HTTP surface: `health`,
+`restore` (multipart upload), `correct`, `exportCorrections`, `memory`,
+`clearMemory`, `fileUrl`, `downloadFile`. Errors surface as
+`VeriScriptError` with `status` and (429) `retryAfter`.
+
+- Tests: vitest offline suite (5 tests) plus a live smoke gated on
+  `VERISCRIPT_BASE_URL`; `npm run typecheck`/`build` clean; `npm pack`
+  produces an 8 kB tarball. CI runs typecheck + tests + build.
+- Hosted demo limits (429 + `Retry-After`, run TTL) are documented as part
+  of the client contract.
+- Left: the npm name/account decision (currently `veriscript-client`) and
+  the first `npm publish`.
+- Explicit non-goal: local OCR in Node — the client targets a VeriScript
   server (hosted or self-hosted).
 
 ## 5. Open decisions

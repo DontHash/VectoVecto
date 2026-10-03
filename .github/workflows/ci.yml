@@ -85,6 +85,28 @@ jobs:
         if: always()
         run: docker rm -f veriscript-ci || true
 
+  client:
+    name: node client typechecks, tests, builds
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/veriscript-client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: packages/veriscript-client/package-lock.json
+
+      - name: Typecheck, test, build
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
   wheel:
     name: python wheel builds and ships its data
     runs-on: ubuntu-latest
