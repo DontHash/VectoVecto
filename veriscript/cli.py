@@ -152,6 +152,7 @@ def run_document_mode(args) -> int:
                 split_numbers=getattr(args, "split_numbers", False),
                 multi_read=getattr(args, "multi_read", "off"),
                 reconcile=getattr(args, "reconcile", False),
+                digit_confusions=getattr(args, "digit_confusions", False),
                 reading_order=not getattr(args, "no_reading_order", False),
                 auto_rotate=getattr(args, "rotate", "auto") != "off",
                 out_dir=args.output, stem=name,
@@ -379,6 +380,11 @@ def main():
                           "(date columns, number prefixes) to prefer a "
                           "candidate reading; flag-only context_conflict plus "
                           "suggestions. Opt-in until its frozen gate")
+    doc.add_argument("--digit-confusions", action="store_true",
+                     dest="digit_confusions", default=False,
+                     help="append measured digit-confusion chips (9 vs 1/2/0, "
+                          "...) to the riskiest queued digit tokens; "
+                          "suggestion-only, cannot change text or the queue")
     doc.add_argument("--apply-corrections", default=None,
                      dest="apply_corrections",
                      help="apply a corrections JSON (docs/CORRECTIONS.md) "

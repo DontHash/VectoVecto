@@ -192,10 +192,10 @@ when they exist (the originals stay downloadable). Regression test:
 ## 11. Suggestions and correction memory (track D, docs/HARNESS_PLAN.md §5)
 
 Review rows may carry `suggestions: [{text, source, why}]` — candidate labels
-the human can accept with one click (`source` is `consensus`, `context` or
-`memory`). Suggestions are **never auto-applied**; accepting one stages a
-normal correction, and the correction payload then carries `suggested` +
-`suggestion_source` so the outcome can be measured.
+the human can accept with one click (`source` is `consensus`, `context`,
+`confusion` or `memory`). Suggestions are **never auto-applied**; accepting
+one stages a normal correction, and the correction payload then carries
+`suggested` + `suggestion_source` so the outcome can be measured.
 
 **D1 — identical repeats.** Rows whose reading is identical to another row in
 the queue show `apply to N identical`, which stages the same fix (or

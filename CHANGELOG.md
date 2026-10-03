@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Digit-confusion chips (suggestion-only, opt-in).** `--digit-confusions`
+  appends measured single-digit alternatives (9 vs 1/2/0, 3/2 vs 1, 0 vs
+  6/8, 4 vs 2) to the riskiest queued digit tokens, context-supported values
+  first; at most 2 chips per token, 10 tokens/page; never edits text or
+  flags, so frozen metrics cannot move. Measured on v2: 55% of counted digit
+  errors are insert/delete (mostly box-segmentation artifacts), 22% complex,
+  only 6% substitutions; tiered chips are 8.2% precise and cover ~2 error
+  tokens per 41 pages. Kept default off, not enabled in the studio; full
+  taxonomy in [docs/PLAN.md](docs/PLAN.md) Appendix AM. New:
+  `veriscript/document/confusions.py`.
 - **Word-level correction memory (track D follow-up, opt-in).** Human-corrected
   OOV words (≥ 4 chars) form a local vocabulary; later engine words within one
   edit (same first char, length ±1) are suggested as in-place replacements,

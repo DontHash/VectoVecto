@@ -2676,3 +2676,50 @@ precision (70% -> 63.6%), so it was reverted. The `unknown_word` flag angle
 is nil on this corpus (0 tokens would stop being flagged); the value is
 entirely in suggestions. Real-use acceptance remains to be measured.
 
+## Appendix AM - digit-error taxonomy and confusion chips (2026-10-03)
+
+**Question.** What are the modern-PDF digit errors actually made of, and can a
+measured digit-confusion table (the 1/9 family) generate the candidates the
+readers never produce?
+
+**Taxonomy.** 154 counted v2 digit errors, each matched to its closest page
+GT value by edit distance:
+
+| mode | count | share | what it is |
+|---|---|---|---|
+| insert/delete | 85 | 55% | length changes; examples show most are segmentation artifacts - list markers / paragraph numbers merged into the box (`३.` + `कोभिड-१९` -> digits `319` vs GT `19`; `076009621` -> `0760962`) |
+| complex (>= 2 edits) | 34 | 22% | the same merging plus real multi-digit damage |
+| substitution | 9 | 6% | true confusions: 9->1 (4), 9->2 (2), 0->8, 3->1, 4->2; includes the AH date cases (३९ -> ३२ / ३०) |
+| no GT within 2 edits | 26 | 17% | unmatched |
+
+The owner-audited staging labels agree: all 11 changed digit runs there are
+`०-०९६२` -> `०९६२` (an insert/delete), zero substitutions - and the value
+memory already covers that pair.
+
+**Confusion chips (implemented, opt-in).** `veriscript/document/confusions.py`
+generates single-digit alternatives from the measured table, context-supported
+candidates first (the value already appears elsewhere on the page), then
+measured pair frequency; at most 2 chips per token, 10 tokens/page;
+suggestion-only (`--digit-confusions`), never edits text or flags, so frozen
+metrics cannot move. Measured on v2:
+
+| ranking | chips | in GT | precision | error tokens covered | chips per hit |
+|---|---|---|---|---|---|
+| raw frequency | 160 | 8 | 5.0% | 2 | 80.0 |
+| context-only | 10 | 4 | 40.0% | 1 | 10.0 |
+| tiered (shipped) | 97 | 8 | 8.2% | 2 | 48.5 |
+
+Real wins exist (a `10` -> `18` case via 0->8; a date `...१९` -> `...११`), but
+the layer is low-yield: it reaches a handful of otherwise-unreachable
+substitution errors at the cost of noisy chips. **Decision:** kept opt-in and
+default off (CLI `--digit-confusions`), not enabled in the studio. The
+dominant length/segmentation mode is not chip-fixable - it is the box/token
+segmentation problem AG attacked (and the metric counts multi-run tokens
+against single-run GT, which inflates the error count), not a
+confusion-table problem.
+
+**Reproduce.** `python cli.py --mode document --input page.pdf --output out
+--digit-confusions`; the taxonomy numbers come from the closest-GT analysis
+described above (one-off; audited labels under
+`data/doc_eval/target_domain_digit_staging_v1`).
+

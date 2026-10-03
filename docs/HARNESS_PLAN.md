@@ -238,6 +238,22 @@ gate is expected to fail on arithmetic and the run is still recorded.
 Run the gate twice: with A `off`, then with A `panel` on, to show whether B
 composes with A. Adopt policy identical to A.
 
+## 4b. Digit-confusion chips (suggestion-only, opt-in)
+
+A measured confusion table (9 vs 1/2/0, 3/2 vs 1, 0 vs 6/8, 4 vs 2) generates
+single-digit alternatives for queued digit tokens, context-supported values
+first (the candidate already appears elsewhere on the page), then measured
+pair frequency; max 2 chips per token, 10 tokens per page. Suggestion-only:
+no flags, no text edits, no queue-order changes, so frozen metrics cannot
+move. Measured on `nepali_pdf_v2`: 55% of counted digit errors are
+insert/delete (mostly box-segmentation artifacts), 22% complex, only 6%
+substitutions; tiered chips are 8.2% precise and cover ~2 error tokens per 41
+pages (context-only ranking: 40% precise but 1 token). Real wins exist (a
+`10` -> `18` via 0->8, a date `...१९` -> `...११`) but the layer is low-yield.
+Shipped as `--digit-confusions`, default off, not enabled in the studio; see
+PLAN.md Appendix AM. The dominant length/segmentation mode is not
+chip-fixable - it is the box/token segmentation problem AG attacked.
+
 **Status 2026-10-03: attempted — gate FAILED** (PLAN.md Appendix AK). v2
 digit R@10 0.4161 → 0.4161 (product-pipeline convention), zero flags, so the
 precision clause cannot pass; identity/CER/invented clauses passed, cornell

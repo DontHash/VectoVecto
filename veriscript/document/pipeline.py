@@ -119,6 +119,7 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
                           split_numbers: bool = False,
                           multi_read: str = "off",
                           reconcile: bool = False,
+                          digit_confusions: bool = False,
                           dpi: Optional[int] = None,
                           out_dir: Optional[str] = None, stem: str = "page",
                           make_pdf: bool = True, make_overlay: bool = True,
@@ -151,7 +152,11 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     `reconcile` runs the track-B page-level constraint pass after reading
     order: a candidate reading that page context (date columns, prefix groups)
     prefers over the engine reading becomes `context_conflict` plus a
-    suggestion. Flag-only, deterministic, opt-in until its frozen gate."""
+    suggestion. Flag-only, deterministic, opt-in until its frozen gate.
+
+    `digit_confusions` appends measured digit-confusion chips (9 vs 1/2/0,
+    ...) to the riskiest queued digit tokens. Suggestion-only: no flags, no
+    text changes, no queue order changes - it cannot move frozen metrics."""
     t0 = time.time()
     backend = pick_backend(backend)
     be = get_backend(backend)
@@ -283,6 +288,10 @@ def run_document_pipeline(img_bgr: np.ndarray, *, backend: Optional[str] = None,
     if reconcile:
         from veriscript.document.reconcile import reconcile_page
         result.meta["reconcile"] = reconcile_page(result.tokens)
+
+    if digit_confusions:
+        from veriscript.document.confusions import add_confusions
+        result.meta["digit_confusions"] = add_confusions(result.tokens)
 
     vfinal = vertical_fraction(result.tokens)
     suspect = bool(
