@@ -290,6 +290,21 @@ the gate. Two levels, shipped in order:
 non-goal); D1 across PDF pages waits on multi-page correction plumbing. CLI
 parity for memory is deferred.
 
+**Status 2026-10-03: D1 + D2 implemented and shipped opt-in.** Studio
+suggestion chips + `apply to N identical`; text-only local memory with
+exact/skeleton-Hamming matching, accept/reject feedback, clear action,
+`GET /api/memory` + `POST /api/memory/clear`, health flag, and tests (core +
+web; frontend builds). Offline replay over the 10 beta sessions
+(`scripts/eval_memory_replay.py`): **1 suggestion / 91 later-session queries
+(1.0% coverage), 1 hit (100% precision when it fires)**; within-page
+duplicates 0/99. The line-level value hypothesis is not supported on this
+corpus — the queue holds long unique lines, not repeated values; digit-value
+repeats exist but modestly (4 values / 18 occurrences). The ≥60%
+suggestion-acceptance bar was not assessable (too few suggestions), so D2
+stays opt-in and unproven; the plausible next step is digit-value-level
+memory, not more line matching. D1 costs nothing and helps corpora with
+duplicate rows.
+
 ## 6. Sequencing
 
 | Step | Work | Size | Gate / exit |
@@ -297,8 +312,8 @@ parity for memory is deferred.
 | 0 | Contract fields (`reads`, `suggestions`) + export/review plumbing + tests; reproduce frozen baselines (§0b). Gate scripts land with their features (steps 1–2) so they can never score a nonexistent flag. | **done 2026-10-03** | baselines match EVALUATION ✓ |
 | 1 | A: panel + `multi_read_conflict` + `scripts/eval_multi_read.py` | 3–5 d | **done 2026-10-03 — gate FAILED** (Appendix AJ); opt-in reference only |
 | 2 | B: `reconcile.py` + `scripts/eval_context_reconcile.py` | 4–6 d | **done 2026-10-03 — gate FAILED** (Appendix AK); opt-in reference only |
-| 3 | D1: repeat grouping + suggestion chips in the studio | 2–3 d | invariants + beta metrics |
-| 4 | D2: opt-in local memory + lifecycle + clear + docs | 3–4 d | product metrics |
+| 3 | D1: repeat grouping + suggestion chips in the studio | 2–3 d | **done 2026-10-03** — invariants pass; 0 duplicates on beta corpus |
+| 4 | D2: opt-in local memory + lifecycle + clear + docs | 3–4 d | **done 2026-10-03** — shipped opt-in; replay 1/91 coverage, product bar not assessable |
 | 5 | Republish BENCHMARK/README numbers for whatever passed; record failures as appendices | 1 d | docs updated |
 
 Failures at step 1/2 do not block D (independent), and B can run without A

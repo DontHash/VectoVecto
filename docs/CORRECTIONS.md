@@ -188,3 +188,40 @@ reading `ocr.json` after corrections, so the queue still showed the reviewed
 token; `collect_run_summary` now prefers `corrected.json` / `corrected.txt`
 when they exist (the originals stay downloadable). Regression test:
 `tests/test_webapp_api.py::test_correct_applies_and_serves_corrected_files`.
+
+## 11. Suggestions and correction memory (track D, docs/HARNESS_PLAN.md §5)
+
+Review rows may carry `suggestions: [{text, source, why}]` — candidate labels
+the human can accept with one click (`source` is `consensus`, `context` or
+`memory`). Suggestions are **never auto-applied**; accepting one stages a
+normal correction, and the correction payload then carries `suggested` +
+`suggestion_source` so the outcome can be measured.
+
+**D1 — identical repeats.** Rows whose reading is identical to another row in
+the queue show `apply to N identical`, which stages the same fix (or
+confirmation) for every copy in one click. No persistence, works on the hosted
+demo.
+
+**D2 — local correction memory (opt-in).** `VERISCRIPT_MEMORY=1` enables a
+text-only JSONL store (`VERISCRIPT_MEMORY_DIR`, default
+`~/.veriscript/memory.jsonl`); it records accepted corrections and
+accept/reject feedback. Matching is exact full-reading + flags signature
+first, then same skeleton (digits masked) + same digit length + Hamming ≤ 1;
+records with net-negative feedback are suppressed. Nothing leaves the machine:
+no page images, no crops, no bboxes, no run ids. The studio shows a "local
+correction memory is on" line with a **clear memory** action; `GET /api/memory`
+reports the count and `POST /api/memory/clear` removes it. Hosted multi-tenant
+deployments leave it off (the default), so no visitor's corrections can leak
+into another visitor's suggestions.
+
+**Measured (2026-10-03, offline replay of the 10 beta sessions,
+`scripts/eval_memory_replay.py`).** Memory from earlier pages, queried on
+later ones against the human's actual outcome: **1 suggestion in 91 queries
+(1.0% coverage), 1 hit (100% precision when it fires), 1.0% resolved**. The
+court-register queue tokens are long, mostly unique lines, so value repetition
+does not translate into line-level suggestions; within-page duplicates were
+0/99. The mechanics are precise but the value hypothesis at line granularity
+is not supported by this corpus — the plausible next direction is a
+digit-value-level memory (4 repeated digit values covered 18/99 occurrences),
+not more line matching. D2 therefore stays opt-in and unproven; the ≥60%
+suggestion-acceptance bar could not be assessed on this data.

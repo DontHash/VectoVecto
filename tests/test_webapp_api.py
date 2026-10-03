@@ -426,3 +426,35 @@ def test_collect_run_summary_passes_suggestions(tmp_path):
 
     out = collect_run_summary(str(run_dir), "a" * 16)
     assert out["review"][0]["suggestions"][0]["source"] == "memory"
+
+
+def test_memory_suggestions_feedback_and_clear(client, monkeypatch, tmp_path):
+    """Track D2 end to end: suggest -> accept -> feedback -> clear."""
+    monkeypatch.setenv("VERISCRIPT_MEMORY", "1")
+    monkeypatch.setenv("VERISCRIPT_MEMORY_DIR", str(tmp_path / "mem.jsonl"))
+    from veriscript.document import memory
+
+    memory.record_corrections(
+        [{"index": 0, "corrected": "HELLO2", "action": "changed"}],
+        {0: ("HELLO", ["low_conf"])})
+
+    payload = _restore_once(client, monkeypatch)
+    suggestion = payload["review"][0]["suggestions"][0]
+    assert suggestion["text"] == "HELLO2" and suggestion["source"] == "memory"
+
+    r = client.post(f"/api/runs/{payload['run_id']}/correct", json={
+        "corrections": [{"index": 0, "bbox": [1, 1, 30, 20], "original": "HELLO",
+                         "corrected": "HELLO2", "suggested": "HELLO2",
+                         "suggestion_source": "memory"}]})
+    assert r.status_code == 200, r.text
+    assert any(e.get("kind") == "accept" for e in memory._iter_events())
+
+    assert client.get("/api/health").json()["limits"]["memory"] is True
+    cleared = client.post("/api/memory/clear")
+    assert cleared.status_code == 200 and cleared.json()["removed"] >= 1
+    assert not os.path.exists(str(tmp_path / "mem.jsonl"))
+
+
+def test_memory_off_by_default(client, monkeypatch):
+    monkeypatch.delenv("VERISCRIPT_MEMORY", raising=False)
+    assert client.get("/api/health").json()["limits"]["memory"] is False

@@ -39,6 +39,8 @@ Environment knobs:
 | `VERISCRIPT_WEB_TTL_MINUTES` | `60` | artifact retention before the periodic sweep |
 | `VERISCRIPT_WEB_RATE_MAX` / `VERISCRIPT_WEB_RATE_WINDOW_S` | `6` / `120` | per-IP sliding window |
 | `VERISCRIPT_LEXICON` | `data/lexicon/nepali_lexicon_v1.txt` | optional `unknown_word` lexicon; not in the image (see `scripts/fetch_nepali_lexicon.py`) |
+| `VERISCRIPT_MEMORY` | unset (off) | local correction memory (track D2): `1` records accepted fixes in a text-only JSONL and suggests them on later runs. **Leave off on multi-tenant demos** — no visitor isolation without accounts |
+| `VERISCRIPT_MEMORY_DIR` | `~/.veriscript/memory.jsonl` | memory store path when enabled |
 | `VERISCRIPT_LOG_LEVEL` | `INFO` | stderr log level (`DEBUG`, `WARNING`, ...) |
 
 Legacy `VECTOVECTO_*` names (the former brand) keep working as a fallback.

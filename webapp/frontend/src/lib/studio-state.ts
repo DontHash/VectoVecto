@@ -1,7 +1,7 @@
 /** Studio state — one factory, used by the homepage hero and the full studio
  *  page, so the product behaves identically wherever it is embedded. */
 import { createSignal, onCleanup } from "solid-js";
-import { correctRun, exportRunCorrections, fetchHealth, runRestore } from "./api";
+import { clearMemory as clearMemoryApi, correctRun, exportRunCorrections, fetchHealth, runRestore } from "./api";
 import type {
   CorrectionInput,
   CorrectionStats,
@@ -38,6 +38,7 @@ export function createStudioState() {
   const [correctionError, setCorrectionError] = createSignal<string | null>(null);
   const [lastStats, setLastStats] = createSignal<CorrectionStats | null>(null);
   const [exportResult, setExportResult] = createSignal<ExportResponse | null>(null);
+  const [memoryCleared, setMemoryCleared] = createSignal<number | null>(null);
 
   const resetCorrections = () => {
     setCorrections([]);
@@ -178,6 +179,18 @@ export function createStudioState() {
     }
   };
 
+  const clearMemory = async () => {
+    setCorrectionError(null);
+    try {
+      const out = await clearMemoryApi();
+      setMemoryCleared(out.removed);
+    } catch (e) {
+      setCorrectionError(
+        e instanceof Error ? e.message : "Could not clear the local memory.",
+      );
+    }
+  };
+
   return {
     file,
     lang,
@@ -222,6 +235,8 @@ export function createStudioState() {
     correctionFor,
     applyCorrections,
     exportCorrections,
+    memoryCleared,
+    clearMemory,
   };
 }
 

@@ -2599,3 +2599,44 @@ data/doc_eval/nepali_pdf_v2 --frozen evals/manifests/nepali_pdf_v2.json
 --role target`; cornell `--role other`. Raw JSON under `out/harness_baselines/`
 (git-ignored).
 
+## Appendix AL - track D correction memory: shipped opt-in, offline replay (2026-10-03)
+
+**Question.** Does a local, text-only correction memory turn previous human
+fixes into useful suggestions, and does the shipped loop stay privacy-safe?
+Pre-registration: [HARNESS_PLAN.md](HARNESS_PLAN.md) section 5 (D1 in-run
+repeats; D2 opt-in memory; product metrics, no frozen gate).
+
+**Shipped.** D1: identical readings group in the studio and stage together
+("apply to N identical"). D2: `veriscript/document/memory.py` - text-only
+JSONL, `VERISCRIPT_MEMORY=1` opt-in, exact full-reading + flags match, then
+same-skeleton Hamming <= 1; accept/reject feedback with net-negative
+suppression; clear action plus `GET /api/memory` and `POST /api/memory/clear`;
+studio suggestion chips and a memory banner; hosted default off. Tests:
+`tests/test_document_memory.py`, web tests in `tests/test_webapp_api.py`, and
+the frontend build.
+
+**Measured (offline replay, `scripts/eval_memory_replay.py`, 10 beta
+sessions).** Memory from earlier pages, queried on later pages against the
+human's actual outcome:
+
+| metric | value |
+|---|---|
+| later-session queries | 91 |
+| suggestions | **1 (1.0% coverage)** |
+| hits (suggestion == human outcome) | **1 (100% precision when it fires)** |
+| resolved share | 1.0% |
+| within-page duplicate readings | 0 / 99 |
+
+The earlier loose matcher (same flags + digit Hamming only) suggested on 64.6%
+of tokens at 10.9% precision; requiring the same non-digit skeleton raised
+precision to 100% while dropping coverage to 1%. The queue's tokens are long,
+mostly unique register lines, so repeated *values* (4 digit values cover 18 of
+99 occurrences) do not become repeated *readings*. The >= 60% suggestion
+acceptance bar is not assessable on this corpus.
+
+**Decision.** D1/D2 ship as opt-in product infrastructure; D2's value
+hypothesis at line granularity is not supported by the beta corpus. Next
+plausible step (not started): digit-value-level memory (suggest a corrected
+date/amount inside a token) or a corpus with repeated line templates. No
+frozen metric can move: the memory is empty in frozen runs.
+

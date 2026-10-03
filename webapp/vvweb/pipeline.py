@@ -136,6 +136,12 @@ def collect_run_summary(run_dir: str, run_id: str) -> Dict:
     except (OSError, ValueError):
         pass
 
+    try:  # track D2: local correction memory suggestions (best-effort)
+        from veriscript.document import memory as correction_memory
+        correction_memory.augment_review(review)
+    except Exception:  # noqa: BLE001
+        pass
+
     transcript = ""
     transcript_name = ("corrected.txt"
                        if os.path.isfile(os.path.join(run_dir, "corrected.txt"))

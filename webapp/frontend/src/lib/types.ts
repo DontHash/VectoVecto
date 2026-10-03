@@ -83,6 +83,9 @@ export interface CorrectionInput {
   original: string;
   corrected: string;
   action: "changed" | "confirmed";
+  /** The suggestion the human accepted, when one was used (track D2). */
+  suggested?: string;
+  suggestion_source?: string;
 }
 
 export interface CorrectionStats {
@@ -120,6 +123,7 @@ export interface Health {
     rate_max: number;
     rate_window_s: number;
     auth: boolean;
+    memory: boolean;
   };
 }
 

@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Correction memory + suggestions (track D, opt-in).** The studio review
+  queue renders candidate chips (`suggestions`; sources consensus/context/
+  memory), batches identical readings with "apply to N identical", and — with
+  `VERISCRIPT_MEMORY=1` — suggests labels from a text-only local memory of
+  past corrections: exact full-reading match first, then same-skeleton
+  Hamming ≤ 1, accept/reject feedback with net-negative suppression, a clear
+  action, and `GET /api/memory` / `POST /api/memory/clear`. Off by default, so
+  hosted multi-tenant stays off; no crops, bboxes or run ids are stored.
+  Offline replay over the 10 beta sessions: 1 suggestion / 91 later-session
+  queries (1.0% coverage) at 100% precision when it fires — the line-level
+  value hypothesis is not supported on the court-register corpus; full record
+  in [docs/PLAN.md](docs/PLAN.md) Appendix AL. New:
+  `veriscript/document/memory.py`, `scripts/eval_memory_replay.py`.
 - **Track B page-level constraint reconciliation (opt-in reference;
   pre-registered gate FAILED).** `--reconcile` prefers a candidate reading
   when page context agrees with it (date-column year/month majority,

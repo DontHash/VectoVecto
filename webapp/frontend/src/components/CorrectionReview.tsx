@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { flagMeta } from "../lib/flags";
-import type { QueueItem } from "../lib/types";
+import type { QueueItem, Suggestion } from "../lib/types";
 import { type StudioState } from "../lib/studio-state";
 
 /** Review mode: verify -> fix -> re-export (docs/CORRECTIONS.md).
@@ -87,6 +87,47 @@ export function CorrectionReview(props: { state: StudioState }) {
     move(1);
   };
 
+  /** Track D2: accept a candidate chip; the source is recorded for feedback. */
+  const useSuggestion = (row: QueueItem, suggestion: Suggestion) => {
+    const key = row.index;
+    if (key === null || !suggestion.text) return;
+    setEdited((prev) => ({ ...prev, [key]: suggestion.text }));
+    s.stageCorrection({
+      index: key,
+      bbox: row.bbox,
+      original: row.text,
+      corrected: suggestion.text,
+      action: "changed",
+      suggested: suggestion.text,
+      suggestion_source: suggestion.source,
+    });
+    move(1);
+  };
+
+  /** Track D1: rows whose reading is identical to this one. */
+  const identicalFor = (row: QueueItem) =>
+    rows().filter(
+      (r) => r.index !== null && r.index !== row.index && r.text.trim() === row.text.trim(),
+    );
+
+  /** Track D1: stage the same fix (or confirmation) for every identical row. */
+  const applyToIdentical = (row: QueueItem) => {
+    const draft = draftText(row).trim();
+    const corrected = draft && draft !== row.text ? draft : row.text;
+    const action: "changed" | "confirmed" = corrected !== row.text ? "changed" : "confirmed";
+    for (const r of [row, ...identicalFor(row)]) {
+      if (r.index === null) continue;
+      s.stageCorrection({
+        index: r.index,
+        bbox: r.bbox,
+        original: r.text,
+        corrected,
+        action,
+      });
+    }
+    move(1);
+  };
+
   const shared = createMemo(() =>
     Object.entries(share())
       .filter(([, on]) => on)
@@ -107,6 +148,23 @@ export function CorrectionReview(props: { state: StudioState }) {
           {s.correcting() ? "applying…" : `apply corrections (${s.corrections().length})`}
         </button>
       </div>
+
+      <Show when={s.health()?.limits.memory}>
+        <p class="field__hint">
+          Local correction memory is on: suggestions come from your own previous
+          fixes and never leave this machine.{" "}
+          <button
+            class="btn btn--ghost btn--small"
+            disabled={s.correcting()}
+            onClick={() => void s.clearMemory()}
+          >
+            clear memory
+          </button>
+          <Show when={s.memoryCleared() !== null}>
+            <span> removed {s.memoryCleared()} records.</span>
+          </Show>
+        </p>
+      </Show>
 
       <Show when={s.correctionError()}>
         <p class="field__hint field__hint--error">{s.correctionError()}</p>
@@ -172,12 +230,32 @@ export function CorrectionReview(props: { state: StudioState }) {
                     />
                   </div>
                   <div class="review__actions">
+                    <For each={row.suggestions ?? []}>
+                      {(suggestion) => (
+                        <button
+                          class="btn btn--ghost btn--small"
+                          title={suggestion.why ?? ""}
+                          onClick={() => useSuggestion(row, suggestion)}
+                        >
+                          → {suggestion.text}
+                        </button>
+                      )}
+                    </For>
                     <Show when={row.alt_text}>
                       <button
                         class="btn btn--ghost btn--small"
                         onClick={() => useAlternative(row)}
                       >
                         use alternative
+                      </button>
+                    </Show>
+                    <Show when={identicalFor(row).length > 0}>
+                      <button
+                        class="btn btn--ghost btn--small"
+                        title="stage the same reading for every identical token"
+                        onClick={() => applyToIdentical(row)}
+                      >
+                        apply to {identicalFor(row).length + 1} identical
                       </button>
                     </Show>
                     <button

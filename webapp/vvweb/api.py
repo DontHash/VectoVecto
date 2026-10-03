@@ -71,6 +71,12 @@ def _result_from_run(run_dir: str):
     return result_from_ocr_json(os.path.join(run_dir, "ocr.json"))
 
 
+def _memory_enabled() -> bool:
+    from veriscript.document import memory as correction_memory
+
+    return correction_memory.memory_enabled()
+
+
 def _parse_corrections_body(body: Optional[Dict[str, Any]]):
     from veriscript.document.corrections import MAX_CORRECTIONS, load_corrections
 
@@ -195,6 +201,7 @@ def create_app() -> FastAPI:
                 "daily_pages": page_quota.state()["limit"],
                 "daily_pages_used": page_quota.state()["used"],
                 "pages_per_client": settings.pages_per_client,
+                "memory": _memory_enabled(),
             },
         }
 
@@ -377,6 +384,8 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="The run image is no longer available. Run the page again.")
         result = _result_from_run(run_dir)
+        snapshots = {i: (t.text, list(t.flags))
+                     for i, t in enumerate(result.tokens)}
         applied = apply_and_export(
             run_dir, "corrected", image, result, corrections,
             make_pdf=True, make_overlay=False, make_txt=True,
@@ -387,6 +396,13 @@ def create_app() -> FastAPI:
             write_corrections_record(
                 os.path.join(run_dir, "corrections.json"),
                 corrections_record(page_stem, corrections, stats, run_id))
+            try:  # track D2: text-only local memory (best-effort)
+                from veriscript.document import memory as correction_memory
+                correction_memory.record_corrections(
+                    (body or {}).get("corrections") or [], snapshots,
+                    engine=result.backend)
+            except Exception:  # noqa: BLE001
+                pass
         summary = collect_run_summary(run_dir, run_id)
         return JSONResponse({"run_id": run_id, "stats": stats, **summary})
 
@@ -429,6 +445,20 @@ def create_app() -> FastAPI:
             "file": f"/api/runs/{run_id}/files/corrections.zip",
             "shared": n_shared,
         })
+
+    # -- local correction memory (track D2, docs/HARNESS_PLAN.md) -----------
+    @app.get("/api/memory", dependencies=[Depends(require_auth)])
+    async def memory_status() -> Dict[str, Any]:
+        from veriscript.document import memory as correction_memory
+
+        return correction_memory.stats()
+
+    @app.post("/api/memory/clear", dependencies=[Depends(require_auth)])
+    async def memory_clear() -> Dict[str, Any]:
+        from veriscript.document import memory as correction_memory
+
+        return {"removed": correction_memory.clear(),
+                "enabled": correction_memory.memory_enabled()}
 
     # -- frontend ----------------------------------------------------------
     if os.path.isdir(FRONTEND_DIST):

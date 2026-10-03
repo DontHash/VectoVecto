@@ -1,0 +1,131 @@
+"""
+test_document_memory.py — track D2: local, text-only correction memory
+(docs/HARNESS_PLAN.md §5).
+
+Contracts under test: disabled by default; text-only (no bbox, run id or crop
+references); exact and near (Hamming <= 1) matching under the same flags
+signature; suggestions suppressed after net-negative feedback; accept/reject
+recorded from the raw correction entries; idempotent review augmentation;
+clear removes the store.
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+from veriscript.document import memory  # noqa: E402
+
+
+def _enable(monkeypatch, tmp_path) -> str:
+    monkeypatch.setenv("VERISCRIPT_MEMORY", "1")
+    path = str(tmp_path / "mem.jsonl")
+    monkeypatch.setenv("VERISCRIPT_MEMORY_DIR", path)
+    return path
+
+
+def test_disabled_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("VERISCRIPT_MEMORY", raising=False)
+    path = str(tmp_path / "mem.jsonl")
+    written = memory.record_corrections(
+        [{"index": 0, "corrected": "X", "action": "changed"}],
+        {0: ("Y", ["low_conf"])}, path=path)
+
+    assert written == 0 and not os.path.exists(path)
+    assert memory.suggest("Y", ["low_conf"], path=path) is None
+    assert memory.augment_review([{"text": "Y", "flags": ["low_conf"]}],
+                                 path=path) == 0
+
+
+def test_exact_and_near_match(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "मिति २०८१-०४-३२", "action": "changed"}],
+        {0: ("मिति २०८१-०४-३९", ["digit_conflict"])}, path=path)
+
+    exact = memory.suggest("मिति २०८१-०४-३९", ["digit_conflict"], path=path)
+    assert exact is not None and exact["text"] == "मिति २०८१-०४-३२"
+    assert exact["source"] == "memory" and exact["why"]
+
+    near = memory.suggest("मिति २०८१-०४-३८", ["digit_conflict"], path=path)
+    assert near is not None and near["text"] == "मिति २०८१-०४-३२", \
+        "Hamming distance 1 must match"
+
+    assert memory.suggest("भिन्न २०८१-०४-३८", ["digit_conflict"], path=path) is None, \
+        "a near match must share the non-digit skeleton"
+
+    assert memory.suggest("अर्को २०८१-०४-३९", ["digit_conflict"], path=path) is None, \
+        "same digits in a different reading must not match exactly"
+
+    assert memory.suggest("मिति २०८१-०४-३९", ["low_conf"], path=path) is None, \
+        "the flags signature is part of the key"
+
+
+def test_feedback_suppresses_net_negative(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "१२३", "action": "changed"}],
+        {0: ("१२४", ["digit_uncertain"])}, path=path)
+    assert memory.suggest("१२४", ["digit_uncertain"], path=path) is not None
+
+    for _ in range(2):  # the human corrected the memory suggestion away
+        memory.record_corrections(
+            [{"index": 0, "corrected": "१२५", "action": "changed",
+              "suggested": "१२३"}],
+            {0: ("१२४", ["digit_uncertain"])}, path=path)
+
+    assert memory.suggest("१२४", ["digit_uncertain"], path=path) is None, \
+        "net-negative feedback must suppress the record"
+
+
+def test_accept_feedback_recorded(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "१२३", "action": "changed"}],
+        {0: ("१२४", ["digit_uncertain"])}, path=path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "१२३", "action": "changed",
+          "suggested": "१२३"}],
+        {0: ("१२४", ["digit_uncertain"])}, path=path)
+
+    suggestion = memory.suggest("१२४", ["digit_uncertain"], path=path)
+    assert suggestion is not None and "accepted" in suggestion["why"]
+
+
+def test_store_is_text_only(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "X", "action": "changed"}],
+        {0: ("Y", ["low_conf"])}, path=path)
+
+    line = json.loads(open(path, encoding="utf-8").readline())
+    assert line["kind"] == "correction" and line["original"] == "Y"
+    for forbidden in ("bbox", "run_id", "crop", "image", "page"):
+        assert forbidden not in line, f"the store must stay text-only ({forbidden})"
+
+
+def test_augment_review_is_idempotent(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "X2", "action": "changed"}],
+        {0: ("X", ["low_conf"])}, path=path)
+    review = [{"text": "X", "flags": ["low_conf"]}]
+
+    assert memory.augment_review(review, path=path) == 1
+    assert review[0]["suggestions"][0]["text"] == "X2"
+    assert memory.augment_review(review, path=path) == 0
+
+
+def test_clear_and_stats(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "X", "action": "changed"}],
+        {0: ("Y", ["low_conf"])}, path=path)
+
+    assert memory.stats(path=path)["corrections"] == 1
+    assert memory.clear(path=path) == 1
+    assert not os.path.exists(path)
+    assert memory.stats(path=path)["events"] == 0

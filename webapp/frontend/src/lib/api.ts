@@ -103,4 +103,11 @@ export async function exportRunCorrections(
   return (await res.json()) as ExportResponse;
 }
 
+/** track D2: clear the local correction memory (opt-in, local-only). */
+export async function clearMemory(): Promise<{ removed: number; enabled: boolean }> {
+  const res = await fetch("/api/memory/clear", { method: "POST" });
+  if (!res.ok) throw await parseError(res);
+  return (await res.json()) as { removed: number; enabled: boolean };
+}
+
 export { ApiError };
