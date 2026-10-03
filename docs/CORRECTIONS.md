@@ -207,21 +207,24 @@ text-only JSONL store (`VERISCRIPT_MEMORY_DIR`, default
 `~/.veriscript/memory.jsonl`); it records accepted corrections and
 accept/reject feedback. Matching is exact full-reading + flags signature
 first, then same skeleton (digits masked) + same digit length + Hamming ≤ 1;
-records with net-negative feedback are suppressed. Nothing leaves the machine:
-no page images, no crops, no bboxes, no run ids. The studio shows a "local
-correction memory is on" line with a **clear memory** action; `GET /api/memory`
-reports the count and `POST /api/memory/clear` removes it. Hosted multi-tenant
-deployments leave it off (the default), so no visitor's corrections can leak
-into another visitor's suggestions.
+records with net-negative feedback are suppressed. Corrections also align
+their digit runs positionally, so a repeated wrong value (`०-०९६२` →
+`०९६२`, ≥ 4 digits, one edit apart) is stored and substituted in place on
+later tokens. Nothing leaves the machine: no page images, no crops, no
+bboxes, no run ids. The studio shows a "local correction memory is on" line
+with a **clear memory** action; `GET /api/memory` reports the count and
+`POST /api/memory/clear` removes it. Hosted multi-tenant deployments leave it
+off (the default), so no visitor's corrections can leak into another
+visitor's suggestions.
 
 **Measured (2026-10-03, offline replay of the 10 beta sessions,
 `scripts/eval_memory_replay.py`).** Memory from earlier pages, queried on
-later ones against the human's actual outcome: **1 suggestion in 91 queries
-(1.0% coverage), 1 hit (100% precision when it fires), 1.0% resolved**. The
-court-register queue tokens are long, mostly unique lines, so value repetition
-does not translate into line-level suggestions; within-page duplicates were
-0/99. The mechanics are precise but the value hypothesis at line granularity
-is not supported by this corpus — the plausible next direction is a
-digit-value-level memory (4 repeated digit values covered 18/99 occurrences),
-not more line matching. D2 therefore stays opt-in and unproven; the ≥60%
-suggestion-acceptance bar could not be assessed on this data.
+later ones against the human's actual outcome: line level **1 suggestion in 91
+queries (1.0% coverage), 1 hit (100% precision when it fires)**; value level
+**9 suggestions (9.1% coverage), 9/9 digit-run precision (100%)** — the
+corpus's dominant repeated error (`०-०९६२` → `०९६२`, corrected by hand 10
+times) is fixed on every later occurrence. Full-text hits are 0 there because
+those lines carried other errors too; the value channel's job is the value.
+Within-page duplicates were 0/99, so D1 does not fire on this corpus. D2
+stays opt-in and unproven in real use: the ≥60% suggestion-acceptance bar
+needs human sessions, not a replay.

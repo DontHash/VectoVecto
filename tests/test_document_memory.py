@@ -119,6 +119,56 @@ def test_augment_review_is_idempotent(tmp_path, monkeypatch):
     assert memory.augment_review(review, path=path) == 0
 
 
+def test_value_memory_substitutes_repeated_run(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    # the human removed a spurious prefix from the case number
+    memory.record_corrections(
+        [{"index": 0, "corrected": "मुद्दा नं ०९६२ को", "action": "changed"}],
+        {0: ("मुद्दा नं ०-०९६२ को", ["low_conf"])}, path=path)
+
+    suggestion = memory.suggest_value("अर्को पृष्ठ ०-०९६२ बमोजिम", path=path)
+    assert suggestion is not None and suggestion["source"] == "memory:value"
+    assert suggestion["text"] == "अर्को पृष्ठ ०९६२ बमोजिम"
+    assert "value" in suggestion["why"]
+
+
+def test_value_memory_ignores_short_runs(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "दिन ३२", "action": "changed"}],
+        {0: ("दिन ३१", ["low_conf"])}, path=path)
+
+    assert memory.suggest_value("दिन ३१ मा", path=path) is None, \
+        "runs below VALUE_MIN_DIGITS are not memory"
+
+
+def test_value_feedback_suppresses(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "नं ०९६२", "action": "changed"}],
+        {0: ("नं ०-०९६२", ["low_conf"])}, path=path)
+    assert memory.suggest_value("नं ०-०९६२", path=path) is not None
+
+    for _ in range(2):  # the human rejected the suggestion and kept the reading
+        memory.record_corrections(
+            [{"index": 0, "corrected": "नं ०-०९६२", "action": "confirmed",
+              "suggested": "नं ०९६२"}],
+            {0: ("नं ०-०९६२", ["low_conf"])}, path=path)
+
+    assert memory.suggest_value("नं ०-०९६२", path=path) is None
+
+
+def test_augment_review_falls_back_to_value(tmp_path, monkeypatch):
+    path = _enable(monkeypatch, tmp_path)
+    memory.record_corrections(
+        [{"index": 0, "corrected": "नं ०९६२", "action": "changed"}],
+        {0: ("नं ०-०९६२", ["low_conf"])}, path=path)
+    review = [{"text": "नं ०-०९६२ बमोजिम", "flags": ["low_conf"]}]
+
+    assert memory.augment_review(review, path=path) == 1
+    assert review[0]["suggestions"][0]["source"] == "memory:value"
+
+
 def test_clear_and_stats(tmp_path, monkeypatch):
     path = _enable(monkeypatch, tmp_path)
     memory.record_corrections(

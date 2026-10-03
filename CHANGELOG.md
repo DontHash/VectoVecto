@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Value-level correction memory (track D follow-up, opt-in).** Corrections
+  align their digit runs positionally (equal run counts, digits within one
+  edit); a repeated wrong value (≥ 4 digits) is stored and substituted in
+  place on later tokens, with value-level accept/reject feedback. Replay over
+  the 10 beta sessions: **9/99 suggestions (9.1% coverage) at 9/9 digit-run
+  precision** — the dominant repeated fix (`०-०९६२` → `०९६२`, hand-corrected
+  10 times) lands on every later occurrence; full-text hits are 0 because
+  those lines carried other errors too. Line-level suggestions are preferred
+  when both fire. Recorded in [docs/PLAN.md](docs/PLAN.md) Appendix AL.
 - **Correction memory + suggestions (track D, opt-in).** The studio review
   queue renders candidate chips (`suggestions`; sources consensus/context/
   memory), batches identical readings with "apply to N identical", and — with

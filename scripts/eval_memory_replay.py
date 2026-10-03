@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """eval_memory_replay.py — offline replay of the local correction memory
-(track D2 of docs/HARNESS_PLAN.md) over the Appendix AI beta sessions.
+(track D of docs/HARNESS_PLAN.md) over the Appendix AI beta sessions.
 
 Memory accumulates from earlier pages; each page's queue is queried before it
-is fed back. A "hit" means the suggestion equals the human's actual outcome
-(the corrected text, or the original when the token was confirmed). This is
-product evidence, not a frozen-set gate: the beta pages are non-frozen by
-construction (`scripts/corrections_beta.py` refuses frozen page ids).
+is fed back. Three channels are measured:
+
+  line      exact reading / same-skeleton matching (whole-token suggestion)
+  value     a repeated wrong digit run substituted in place
+  combined  what `augment_review` actually offers (line first, then value)
+
+A "full hit" means the suggestion equals the human's actual outcome (the
+corrected text, or the original when the token was confirmed). A "run hit"
+means the suggestion's digit runs equal the human's digit runs - the value
+fix is right even if other words still differ (value channel only).
+
+This is product evidence, not a frozen-set gate: the beta pages are
+non-frozen by construction (`scripts/corrections_beta.py` refuses frozen ids).
 
 Usage:
     python scripts/eval_memory_replay.py --sessions-dir out/beta
@@ -17,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from typing import Dict, List, Optional
@@ -25,6 +35,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from veriscript.document import memory  # noqa: E402
+
+_RUN_RE = re.compile(
+    r"[0-9\u0966-\u096f](?:[0-9\u0966-\u096f.,:/-]*[0-9\u0966-\u096f])?")
+
+
+def _runs(text: str) -> List[str]:
+    return [m.group(0) for m in _RUN_RE.finditer(text or "")]
 
 
 def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
@@ -40,7 +57,10 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
                       if d.startswith("s")
                       and os.path.isdir(os.path.join(sessions_dir, d)))
     rows: List[Dict] = []
-    total = covered = hits = 0
+    totals = {"queued": 0,
+              "line_suggested": 0, "line_hits": 0,
+              "value_suggested": 0, "value_hits": 0, "value_run_hits": 0,
+              "combined_suggested": 0, "combined_hits": 0}
     for session in sessions:
         queue = json.load(open(os.path.join(sessions_dir, session, "queue.json"),
                                encoding="utf-8"))
@@ -48,27 +68,37 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
                                            "beta_corrections.json"),
                               encoding="utf-8"))
         applied = {e["index"]: e for e in corr.get("applied", [])}
-        s_covered = s_hits = 0
+        counts = dict.fromkeys(totals, 0)
         for item in queue:
-            total += 1
-            suggestion = memory.suggest(item.get("text", ""),
-                                        item.get("flags") or [],
-                                        path=memory_file)
-            if suggestion is None:
-                continue
-            covered += 1
-            s_covered += 1
+            totals["queued"] += 1
+            counts["queued"] += 1
+            text = item.get("text", "")
+            flags = item.get("flags") or []
+            line = memory.suggest(text, flags, path=memory_file)
+            value = memory.suggest_value(text, path=memory_file)
+            combined = line or value
             entry = applied.get(item["index"])
-            if entry is None:
-                continue
-            target = (entry.get("corrected", "")
-                      if entry.get("action") == "changed"
-                      else entry.get("original", item.get("text", "")))
-            if suggestion["text"].strip() == (target or "").strip():
-                hits += 1
-                s_hits += 1
-        rows.append({"session": session, "queued": len(queue),
-                     "suggested": s_covered, "hits": s_hits})
+            target = None
+            if entry is not None:
+                target = (entry.get("corrected", "")
+                          if entry.get("action") == "changed"
+                          else entry.get("original", text))
+
+            for channel, suggestion in (("line", line), ("value", value),
+                                        ("combined", combined)):
+                if suggestion is None:
+                    continue
+                totals[f"{channel}_suggested"] += 1
+                counts[f"{channel}_suggested"] += 1
+                if target is not None and \
+                        suggestion["text"].strip() == (target or "").strip():
+                    totals[f"{channel}_hits"] += 1
+                    counts[f"{channel}_hits"] += 1
+            if value is not None and target is not None:
+                if _runs(value["text"]) == _runs(target):
+                    totals["value_run_hits"] += 1
+                    counts["value_run_hits"] += 1
+        rows.append({"session": session, **counts})
 
         entries = [{"index": e["index"], "corrected": e.get("corrected", ""),
                     "action": e.get("action", "changed")}
@@ -79,14 +109,33 @@ def replay(sessions_dir: str, memory_file: Optional[str] = None) -> Dict:
         memory.record_corrections(entries, snaps, engine="rapidocr",
                                   lang="ne", path=memory_file)
 
+    def _rate(num: int, den: int) -> Optional[float]:
+        return round(num / den, 4) if den else None
+
     summary = {
         "sessions": len(rows),
-        "queued": total,
-        "suggested": covered,
-        "hits": hits,
-        "coverage": round(covered / total, 4) if total else None,
-        "precision": round(hits / covered, 4) if covered else None,
-        "resolved": round(hits / total, 4) if total else None,
+        "queued": totals["queued"],
+        "line": {"suggested": totals["line_suggested"],
+                 "hits": totals["line_hits"],
+                 "coverage": _rate(totals["line_suggested"],
+                                   totals["queued"]),
+                 "precision": _rate(totals["line_hits"],
+                                    totals["line_suggested"])},
+        "value": {"suggested": totals["value_suggested"],
+                  "hits": totals["value_hits"],
+                  "run_hits": totals["value_run_hits"],
+                  "coverage": _rate(totals["value_suggested"],
+                                    totals["queued"]),
+                  "precision": _rate(totals["value_hits"],
+                                     totals["value_suggested"]),
+                  "run_precision": _rate(totals["value_run_hits"],
+                                         totals["value_suggested"])},
+        "combined": {"suggested": totals["combined_suggested"],
+                     "hits": totals["combined_hits"],
+                     "coverage": _rate(totals["combined_suggested"],
+                                       totals["queued"]),
+                     "precision": _rate(totals["combined_hits"],
+                                        totals["combined_suggested"])},
     }
     return {"summary": summary, "sessions": rows}
 
@@ -100,12 +149,19 @@ def main() -> None:
     result = replay(args.sessions_dir)
     for row in result["sessions"]:
         print(f"  {row['session']}: queued {row['queued']}, "
-              f"suggested {row['suggested']}, hits {row['hits']}")
-    summary = result["summary"]
-    print(f"TOTAL queued {summary['queued']} | suggested "
-          f"{summary['suggested']} ({summary['coverage']:.1%}) | hits "
-          f"{summary['hits']} | precision {summary['precision']:.1%} | "
-          f"resolved {summary['resolved']:.1%}")
+              f"line {row['line_suggested']}/{row['line_hits']}, "
+              f"value {row['value_suggested']}/{row['value_hits']} "
+              f"(runs {row['value_run_hits']})")
+    s = result["summary"]
+    print(f"TOTAL queued {s['queued']}")
+    for channel in ("line", "value", "combined"):
+        c = s[channel]
+        extra = (f" run-precision {c['run_precision']:.1%}"
+                 if "run_precision" in c and c["run_precision"] is not None
+                 else "")
+        print(f"  {channel:<8}: suggested {c['suggested']} "
+              f"({c['coverage']:.1%}), full hits {c['hits']} "
+              f"(precision {c['precision']:.1%}){extra}")
     if args.json:
         os.makedirs(os.path.dirname(os.path.abspath(args.json)), exist_ok=True)
         with open(args.json, "w", encoding="utf-8") as f:

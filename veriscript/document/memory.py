@@ -12,12 +12,17 @@ The store is append-only JSONL:
   {"kind": "correction", "key": "<flags signature>", "original": ...,
    "corrected": ..., "flags": [...], "digits": "20810427", "shape": [4,2,2],
    "engine": ..., "lang": ..., "created": ...}
+  {"kind": "value", "value": "00962", "display": "०-०९६२",
+   "corrected": "०९६२", "created": ...}
   {"kind": "accept"|"reject", "key": <flags signature>,
    "digits": <digits of the original reading>, "corrected": <suggested text>,
    "created": ...}
+  {"kind": "value_accept"|"value_reject", "value": ..., "corrected": ...}
 
-Suggestion matching: same flags signature, exact digits first, else same
-digit length and Hamming distance <= 1. A record whose feedback is
+Suggestion matching: line level - same flags signature, exact full reading
+first, else same skeleton and Hamming <= 1; value level - a repeated wrong
+digit run (>= 4 digits, one edit from its correction) is substituted in place.
+Line-level is preferred when both exist. A record whose feedback is
 net-negative is suppressed. Suggestions are never auto-applied: the human
 confirms and the web layer records the accept/reject.
 """
@@ -38,6 +43,11 @@ MAX_EVENTS = 20000
 SUGGEST_LIMIT = 2
 NEAR_HAMMING = 1
 ACCEPT_FLOOR = 0.5
+VALUE_MIN_DIGITS = 4      # value-level memory only for distinctive runs
+VALUE_NEAR_HAMMING = 1
+
+_RUN_RE = re.compile(
+    r"[0-9\u0966-\u096f](?:[0-9\u0966-\u096f.,:/-]*[0-9\u0966-\u096f])?")
 
 
 def memory_enabled() -> bool:
@@ -83,6 +93,116 @@ def _shape(text: str) -> List[int]:
 
 def _hamming(a: str, b: str) -> int:
     return sum(1 for x, y in zip(a, b) if x != y)
+
+
+def _runs_with_spans(text: str) -> List[Tuple[str, int, int]]:
+    return [(m.group(0), m.start(), m.end())
+            for m in _RUN_RE.finditer(text or "")]
+
+
+def _edit_distance_le1(a: str, b: str) -> bool:
+    """True when one insertion/deletion/substitution turns `a` into `b`."""
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return _hamming(a, b) <= 1
+    if len(a) > len(b):
+        a, b = b, a
+    i = j = 0
+    skipped = False
+    while i < len(a) and j < len(b):
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+            continue
+        if skipped:
+            return False
+        skipped = True
+        j += 1
+    return True
+
+
+def _value_pairs(original: str, corrected: str) -> List[Tuple[str, str, str]]:
+    """(digits key, original display, corrected display) for aligned runs.
+
+    Pairs positionally only when both texts have the same number of digit
+    runs and the digits differ by at most one edit - a plausible misreading,
+    not a different number. Conservative on purpose: a value pair that is not
+    near-identical is not memory, it is a different fact.
+    """
+    runs_original = _runs_with_spans(original)
+    runs_corrected = _runs_with_spans(corrected)
+    if not runs_original or len(runs_original) != len(runs_corrected):
+        return []
+    pairs: List[Tuple[str, str, str]] = []
+    for (display_a, _sa, _ea), (display_b, _sb, _eb) in zip(runs_original,
+                                                            runs_corrected):
+        if display_a == display_b:
+            continue
+        digits_a, digits_b = _digits(display_a), _digits(display_b)
+        if len(digits_a) < VALUE_MIN_DIGITS or not digits_b:
+            continue
+        if _edit_distance_le1(digits_a, digits_b):
+            pairs.append((digits_a, display_a, display_b))
+    return pairs
+
+
+def _value_index(events: Sequence[Dict]) -> Dict[str, Dict[str, Dict]]:
+    """digits key -> corrected display -> {text, count, accepted, rejected}."""
+    index: Dict[str, Dict[str, Dict]] = {}
+    for event in events:
+        kind = event.get("kind")
+        if kind == "value":
+            value, corrected = event.get("value"), event.get("corrected")
+            if not value or not corrected:
+                continue
+            rec = index.setdefault(str(value), {}).setdefault(str(corrected), {
+                "text": str(corrected), "count": 0, "accepted": 0,
+                "rejected": 0})
+            rec["count"] += 1
+        elif kind in ("value_accept", "value_reject"):
+            value, corrected = event.get("value"), event.get("corrected")
+            rec = index.get(str(value), {}).get(str(corrected))
+            if rec is not None:
+                rec["accepted" if kind == "value_accept" else "rejected"] += 1
+    return index
+
+
+def _value_match(index: Dict[str, Dict[str, Dict]],
+                 digits: str) -> Optional[Dict]:
+    bucket = index.get(digits)
+    if bucket:
+        usable = [rec for rec in bucket.values() if _usable(rec)]
+        if usable:
+            return max(usable, key=lambda rec: rec["count"])
+    for value, candidates in index.items():
+        if (len(value) == len(digits)
+                and _hamming(value, digits) <= VALUE_NEAR_HAMMING):
+            usable = [rec for rec in candidates.values() if _usable(rec)]
+            if usable:
+                return max(usable, key=lambda rec: rec["count"])
+    return None
+
+
+def _value_suggest(index: Dict[str, Dict[str, Dict]],
+                   text: str) -> Optional[Dict]:
+    """Substitute the best-supported wrong value in `text`, if any."""
+    best: Optional[Tuple[int, Dict]] = None
+    for run, start, end in _runs_with_spans(text):
+        digits = _digits(run)
+        if len(digits) < VALUE_MIN_DIGITS:
+            continue
+        rec = _value_match(index, digits)
+        if rec is None or rec["text"] == run:
+            continue
+        suggestion = {
+            "text": text[:start] + rec["text"] + text[end:],
+            "source": "memory:value",
+            "why": f"value {run} corrected {rec['count']}x before",
+        }
+        if best is None or rec["count"] > best[0]:
+            best = (rec["count"], suggestion)
+    return best[1] if best else None
 
 
 def _iter_events(path: Optional[str] = None) -> List[Dict]:
@@ -206,15 +326,23 @@ def suggest(text: str, flags: Sequence[str],
 
 
 def augment_review(review: List[Dict], path: Optional[str] = None) -> int:
-    """Append memory suggestions to review rows in place. Returns rows gained."""
+    """Append memory suggestions to review rows in place. Returns rows gained.
+
+    Line-level (exact reading) first; when there is none, a value-level
+    suggestion substitutes the best-supported wrong digit run.
+    """
     if not memory_enabled() or not review:
         return 0
-    index = _index(_iter_events(path))
+    events = _iter_events(path)
+    index = _index(events)
+    values = _value_index(events)
     added = 0
     for item in review:
         if not isinstance(item, dict):
             continue
         match = _lookup(index, item.get("text") or "", item.get("flags") or [])
+        if match is None:
+            match = _value_suggest(values, item.get("text") or "")
         if match is None:
             continue
         suggestions = item.setdefault("suggestions", [])
@@ -225,6 +353,13 @@ def augment_review(review: List[Dict], path: Optional[str] = None) -> int:
         suggestions.append(match)
         added += 1
     return added
+
+
+def suggest_value(text: str, path: Optional[str] = None) -> Optional[Dict]:
+    """A value-level suggestion (one wrong digit run substituted), or None."""
+    if not memory_enabled():
+        return None
+    return _value_suggest(_value_index(_iter_events(path)), text)
 
 
 def record_corrections(entries: Sequence[Dict],
@@ -259,6 +394,11 @@ def record_corrections(entries: Sequence[Dict],
                      "digits": _digits(original), "shape": _shape(original),
                      "engine": engine, "lang": lang,
                      "created": _now()}, path=path)
+            for digits, display, replacement in _value_pairs(original,
+                                                             corrected):
+                _append({"kind": "value", "value": digits,
+                         "display": display, "corrected": replacement,
+                         "created": _now()}, path=path)
             written += 1
         suggested = entry.get("suggested")
         if suggested:
@@ -267,6 +407,12 @@ def record_corrections(entries: Sequence[Dict],
                      "digits": _digits(original),
                      "corrected": str(suggested), "created": _now()},
                     path=path)
+            for digits, _display, replacement in _value_pairs(
+                    original, str(suggested)):
+                _append({"kind": ("value_accept" if accepted
+                                  else "value_reject"),
+                         "value": digits, "corrected": replacement,
+                         "created": _now()}, path=path)
     _trim(path)
     return written
 
@@ -289,4 +435,5 @@ def stats(path: Optional[str] = None) -> Dict:
         "events": len(events),
         "corrections": sum(1 for e in events
                            if e.get("kind") == "correction"),
+        "values": sum(1 for e in events if e.get("kind") == "value"),
     }

@@ -2640,3 +2640,21 @@ plausible step (not started): digit-value-level memory (suggest a corrected
 date/amount inside a token) or a corpus with repeated line templates. No
 frozen metric can move: the memory is empty in frozen runs.
 
+**Follow-up, same day - value-level memory (implemented).** Corrections now
+align their digit runs positionally (equal run counts, digits within one
+edit); a repeated wrong run (>= 4 digits) is stored as a `value` event and
+substituted in place on later tokens, with value-level accept/reject
+feedback. Replay over the same 10 sessions:
+
+| channel | suggested | full hits | full precision | run precision |
+|---|---|---|---|---|
+| line | 1 (1.0%) | 1 | 100% | - |
+| value | **9 (9.1%)** | 0 | 0% | **100% (9/9)** |
+| combined (what the UI offers) | 9 (9.1%) | 1 | 11.1% | - |
+
+The corpus's dominant repeated error - `०-०९६२` -> `०९६२`, corrected by
+hand 10 times - is fixed on every later occurrence. Full-text hits are 0
+because those lines carried other errors too; the value channel's job is the
+value and it is right every time. Line-level is preferred when both fire.
+Still opt-in; real-use acceptance remains to be measured.
+

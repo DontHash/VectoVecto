@@ -305,6 +305,18 @@ stays opt-in and unproven; the plausible next step is digit-value-level
 memory, not more line matching. D1 costs nothing and helps corpora with
 duplicate rows.
 
+**Follow-up 2026-10-03 (value-level memory, same day).** Implemented:
+corrections align their digit runs positionally (equal run counts, digits
+within one edit); a repeated wrong run (>= 4 digits) is stored as a
+`value` event and substituted in place on later tokens, with value-level
+accept/reject feedback. Replay: **9/99 suggestions (9.1% coverage), 9/9
+digit-run precision (100%)** — the corpus's dominant repeated error
+(`०-०९६२` -> `०९६२`, corrected 10 times by hand) is fixed on every later
+occurrence. Full-text precision is 0 because those lines carried other
+errors too; the value channel's job is the value, and it is right every
+time. Line-level remains preferred when both fire. Still opt-in; real-use
+acceptance remains to be measured.
+
 ## 6. Sequencing
 
 | Step | Work | Size | Gate / exit |
