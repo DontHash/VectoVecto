@@ -24,6 +24,39 @@ renders one suggestion channel.
 | Correction loop v1: 99/99 tokens acted, 46 audited digit labels, no consumer yet | PLAN Appendix AI, CORRECTIONS |
 | `Token.alt_text` is a single last-writer-wins slot; `flags` can duplicate; calibration is not used in ranking | ocr.py:79, 861–875, 1044–1056 |
 
+## 0b. Step-0 baselines (reproduced 2026-10-03)
+
+All four frozen manifests verified by content hash before scoring
+(`eval_freeze.py --check`). Machine: this workstation, RapidOCR on DirectML
+(~0.8 s/page OCR). Raw JSON: `out/harness_baselines/` (gitignored); these are
+the reference numbers steps 1–2 gates compare against.
+
+| Set | Harness | Key numbers |
+|---|---|---|
+| `nepali_pdf_v2` hard-10 | `eval_flags --repass-digits --limit 10` | digit R@5 **0.3043** / R@10 **0.3478**; P@10 0.1250; 190 digit tokens |
+| `nepali_pdf_v2` full-41 | `eval_flags --repass-digits` | digit R@5 0.3333 / R@10 **0.3846**; P@10 0.2256; **156** digit errors (0.3164 of 493 digit tokens) |
+| `nepali_pdf_v2` hard-10 | `eval_document --pages 10 --methods pipeline` | CER **0.2550**, bagCER **0.3758**, digit coverage 0.2857, digit FA 0.3805, invented **665** (strict GT rule), 6.50 s/page |
+| `heidata_printed` full-69 | `eval_flags --repass-digits` | digit R@5 0.6788 / R@10 **0.8832**; P@10 **0.1754** |
+| `cornell_real` full-16 | `eval_date_flags --role other` (AH convention) | digit R@10 **0.2472**, P@10 **0.2588**, 89 digit errors |
+
+All numbers match the published appendices (AG hard-10 0.3478, AH v2 0.3846,
+cornell 0.2472/0.2588, letterpress 0.8832/0.1754, README hard-10 0.2550/0.3758),
+so the gate baselines are trustworthy on this machine.
+
+**Two conventions the new gate scripts must mirror** (both bit us in step 0):
+
+1. **P@10 denominator.** `eval_flags.py` accumulates top-K only on pages with
+   digit errors (cornell P@10 = 0.3235 there); `eval_number_split._queue_metrics`
+   — the AG/AH gate convention — sums top-K over **all** pages (cornell P@10 =
+   0.2588). The new gates must reuse `_queue_metrics` semantics so their P@10
+   clauses are comparable to the published baselines.
+2. **Cornell language.** The AH non-target clause ran cornell with the script
+   default `--lang ne`; with the sensible `--lang en` the numbers differ
+   (R@10 0.40). Non-target clauses must state the language they ran.
+
+Concrete quantities for the B reachability disclosure: v2 has **156** digit
+errors over 493 digit tokens (35/41 pages affected).
+
 ## 1. Invariants (unchanged, enforced by gates)
 
 1. **Flag/evidence only.** A and B never edit `Token.text`, `conf`, bboxes or
@@ -237,7 +270,7 @@ parity for memory is deferred.
 
 | Step | Work | Size | Gate / exit |
 |---|---|---|---|
-| 0 | Contract fields (`reads`, `suggestions`) + export/review plumbing + gate-script skeletons; reproduce baselines (`eval_flags.py --repass-digits`, `eval_document.py --pages 10`) | 1–2 d | baselines match EVALUATION |
+| 0 | Contract fields (`reads`, `suggestions`) + export/review plumbing + tests; reproduce frozen baselines (§0b). Gate scripts land with their features (steps 1–2) so they can never score a nonexistent flag. | **done 2026-10-03** | baselines match EVALUATION ✓ |
 | 1 | A: panel + `multi_read_conflict` + `scripts/eval_multi_read.py` | 3–5 d | A gate (all clauses) |
 | 2 | B: `reconcile.py` + `scripts/eval_context_reconcile.py` | 4–6 d | B gate, A off and on |
 | 3 | D1: repeat grouping + suggestion chips in the studio | 2–3 d | invariants + beta metrics |

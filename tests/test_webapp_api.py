@@ -407,3 +407,22 @@ def test_corrections_export_rejects_unknown_share(client, monkeypatch):
     r = client.post(f"/api/runs/{payload['run_id']}/corrections/export",
                     json={"corrections": [], "share": [7]})
     assert r.status_code == 400
+
+
+def test_collect_run_summary_passes_suggestions(tmp_path):
+    """Harness evidence is additive: the queue payload carries it through."""
+    import json
+
+    from vvweb.pipeline import collect_run_summary
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "ocr.json").write_text(json.dumps({
+        "review": [{"index": 0, "text": "१०", "flags": ["digit_uncertain"],
+                    "suggestions": [{"text": "२०", "source": "memory",
+                                     "why": "corrected 2x before"}]}],
+        "tokens": [{"text": "१०"}],
+    }), encoding="utf-8")
+
+    out = collect_run_summary(str(run_dir), "a" * 16)
+    assert out["review"][0]["suggestions"][0]["source"] == "memory"

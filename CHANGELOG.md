@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Harness evidence contract (step 0 of [docs/HARNESS_PLAN.md](docs/HARNESS_PLAN.md)).**
+  `Token` gains additive `reads` (independent re-reads: source/text/conf) and
+  `suggestions` (candidate labels: text/source/why); `ocr.json` serializes
+  them only when non-empty, review rows carry `suggestions`, the corrections
+  round-trip preserves both, and the studio queue payload passes them through.
+  No behavior change: nothing populates them yet and frozen baselines were
+  re-verified unchanged (hard-10 R@10 0.3478, v2 full-41 0.3846, letterpress
+  0.8832, cornell 0.2472, hard-10 CER 0.2550).
 - **The correction loop (Track 2): verify → fix → re-export.** Human
   corrections can now be applied to a run and re-exported as
   `corrected.pdf/.txt/.md/.json` with per-token provenance (`original_text`,

@@ -282,6 +282,20 @@ def write_combined_transcript_md(path: str, results, title: str) -> str:
     return path
 
 
+def _token_extras(tok) -> Dict:
+    """Optional harness evidence (docs/HARNESS_PLAN.md §2).
+
+    Serialized only when present so an untouched page's `ocr.json` does not
+    grow empty fields; consumers only ever watch the keys they know.
+    """
+    extras: Dict = {}
+    if getattr(tok, "reads", None):
+        extras["reads"] = tok.reads
+    if getattr(tok, "suggestions", None):
+        extras["suggestions"] = tok.suggestions
+    return extras
+
+
 def write_ocr_json(path: str, result: OCRResult) -> str:
     from veriscript.document.ocr import review_queue, token_risk
 
@@ -299,6 +313,7 @@ def write_ocr_json(path: str, result: OCRResult) -> str:
                 "risk": round(token_risk(t), 2),
                 "flags": t.flags,
                 "alt_text": t.alt_text,
+                **({"suggestions": t.suggestions} if t.suggestions else {}),
             }
             for t in review
         ],
@@ -315,6 +330,7 @@ def write_ocr_json(path: str, result: OCRResult) -> str:
                 "original_text": t.orig_text,
                 "text_source": t.text_source,
                 "corrected_by": t.corrected_by,
+                **_token_extras(t),
             }
             for t in result.tokens
         ],

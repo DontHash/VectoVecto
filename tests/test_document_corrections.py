@@ -108,6 +108,23 @@ def test_bbox_fallback_matches_when_index_is_stale():
     assert target.text == "मिति २०८१-०४-२८"
 
 
+def test_result_from_ocr_json_keeps_harness_evidence(tmp_path):
+    from veriscript.document.corrections import result_from_ocr_json
+    from veriscript.document.export import write_ocr_json
+
+    tok = _tok("२०८१-०४-३९", bbox=(20, 40, 180, 80), flags=("digit_conflict",))
+    tok.reads = [{"source": "panel:rot+1.5", "text": "२०८१-०४-३२",
+                  "conf": 91.0}]
+    tok.suggestions = [{"text": "२०८१-०४-३२", "source": "context",
+                        "why": "date column"}]
+    path = write_ocr_json(str(tmp_path / "page.json"), _result([tok]))
+
+    kept = result_from_ocr_json(path).tokens[0]
+    assert kept.reads[0]["source"] == "panel:rot+1.5"
+    assert kept.suggestions[0]["why"] == "date column"
+    assert kept.text == "२०८१-०४-३९", "evidence never edits the reading"
+
+
 def test_apply_and_export_writes_corrected_files_only(tmp_path):
     img = np.full((120, 400, 3), 255, np.uint8)
     tok = _tok("२०८१-०४-३९", bbox=(20, 40, 180, 80))

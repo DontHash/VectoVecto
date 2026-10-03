@@ -92,6 +92,30 @@ def test_ocr_json_review_queue_is_ranked(tmp_path):
     assert token_risk(toks[2]) == 0.0
 
 
+def test_ocr_json_carries_harness_evidence(tmp_path):
+    from veriscript.document.export import write_ocr_json
+    from veriscript.document.ocr import OCRResult
+
+    toks = [
+        Token(text="२०८१", conf=95, bbox=(0, 0, 60, 30), granularity="word",
+              flags=["digit_uncertain"],
+              reads=[{"source": "panel:otsu", "text": "२०८०", "conf": 88.0}],
+              suggestions=[{"text": "२०८१", "source": "panel:otsu",
+                            "why": "2 of 3 reads agree"}]),
+        Token(text="plain", conf=99, bbox=(0, 40, 60, 70), granularity="word"),
+    ]
+    payload = json.load(open(write_ocr_json(str(tmp_path / "r.json"),
+                                            OCRResult(text="x", tokens=toks,
+                                                      backend="rapidocr")),
+                            encoding="utf-8"))
+    first, second = payload["tokens"]
+    assert first["reads"][0]["source"] == "panel:otsu"
+    assert first["suggestions"][0]["text"] == "२०८१"
+    assert payload["review"][0]["suggestions"][0]["source"] == "panel:otsu"
+    assert "reads" not in second and "suggestions" not in second, \
+        "empty evidence must not bloat ocr.json"
+
+
 @pytest.mark.skipif("rapidocr" not in available_backends(), reason="rapidocr unavailable")
 def test_export_document_outputs_end_to_end(tmp_path):
     page, _gt = doc_data.render_synthetic_invoice(seed=31, dpi=200)

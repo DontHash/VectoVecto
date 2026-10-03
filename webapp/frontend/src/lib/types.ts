@@ -9,6 +9,13 @@ export type FlagName =
   | "script_mismatch"
   | (string & {});
 
+/** One candidate label for a flagged token (docs/HARNESS_PLAN.md §2). */
+export interface Suggestion {
+  text: string;
+  source: string;
+  why?: string;
+}
+
 export interface QueueItem {
   index: number | null;
   text: string;
@@ -17,6 +24,8 @@ export interface QueueItem {
   conf: number | null;
   risk: number | null;
   bbox: [number, number, number, number] | null;
+  /** Additive harness evidence; absent or empty on untouched runs. */
+  suggestions?: Suggestion[];
 }
 
 export interface RunMeta {

@@ -83,6 +83,12 @@ class Token:
     text_source: str = "backend"  # "backend" | "deva_crnn" | "split" | "human"
     orig_text: Optional[str] = None       # pre-correction reading (human review)
     corrected_by: Optional[str] = None    # "human" once reviewed in place
+    # Harness evidence (docs/HARNESS_PLAN.md §2), additive and never used to
+    # replace `text`. `reads` = independent re-reads
+    # [{"source", "text", "conf"}]; `suggestions` = candidate labels for the
+    # human [{"text", "source", "why"}]. Both serialize only when non-empty.
+    reads: List[Dict] = field(default_factory=list)
+    suggestions: List[Dict] = field(default_factory=list)
 
     @property
     def has_digits(self) -> bool:

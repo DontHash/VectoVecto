@@ -128,6 +128,7 @@ def collect_run_summary(run_dir: str, run_id: str) -> Dict:
                 "conf": item.get("conf"),
                 "risk": item.get("risk"),
                 "bbox": item.get("bbox"),
+                "suggestions": item.get("suggestions") or [],
             }
             review.append(entry)
             for flag in entry["flags"]:

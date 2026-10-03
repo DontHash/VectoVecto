@@ -254,7 +254,10 @@ def result_from_ocr_json(path: str) -> OCRResult:
             repass_conf=item.get("repass_conf"),
             text_source=item.get("text_source", "backend"),
             orig_text=item.get("original_text"),
-            corrected_by=item.get("corrected_by")))
+            corrected_by=item.get("corrected_by"),
+            reads=[r for r in (item.get("reads") or []) if isinstance(r, dict)],
+            suggestions=[s for s in (item.get("suggestions") or [])
+                         if isinstance(s, dict)]))
     return OCRResult(text="\n".join(t.text for t in tokens), tokens=tokens,
                      backend=payload.get("backend", "?"), meta={})
 
